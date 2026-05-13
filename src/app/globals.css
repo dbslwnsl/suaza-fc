@@ -3,24 +3,37 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* SUAZA design tokens */
+  --suaza-bg: #fafafa;
+  --suaza-ink: #121726;
+  --suaza-ink-muted: #737a8c;
+  --suaza-ink-faint: #8c94a6;
+  --suaza-button: #1d2e3e;
+  --suaza-accent: #ef3e3e;
+  --suaza-border: #d9d9d9;
+  --suaza-divider: #e0e3eb;
+  --suaza-placeholder: #b3b3b3;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-suaza-bg: var(--suaza-bg);
+  --color-suaza-ink: var(--suaza-ink);
+  --color-suaza-ink-muted: var(--suaza-ink-muted);
+  --color-suaza-ink-faint: var(--suaza-ink-faint);
+  --color-suaza-button: var(--suaza-button);
+  --color-suaza-accent: var(--suaza-accent);
+  --color-suaza-border: var(--suaza-border);
+  --color-suaza-divider: var(--suaza-divider);
+  --color-suaza-placeholder: var(--suaza-placeholder);
+  --font-sans: var(--font-noto-sans-kr);
+  --font-display: var(--font-inter);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-noto-sans-kr), Arial, Helvetica, sans-serif;
 }
