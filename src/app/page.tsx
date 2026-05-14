@@ -2,7 +2,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/lib/auth/actions";
-import { ROLE_BADGE, ROLE_LABEL } from "@/lib/members/positions";
+import {
+  TITLE_BADGE,
+  TITLE_LABEL,
+  type MemberTitle,
+} from "@/lib/members/positions";
 import {
   MATCH_STATUS_BADGE,
   MATCH_STATUS_LABEL,
@@ -36,7 +40,7 @@ export default async function Home() {
   ] = await Promise.all([
     supabase
       .from("profiles")
-      .select("name, nickname, role, positions")
+      .select("name, nickname, title, positions")
       .eq("id", user!.id)
       .single(),
     supabase
@@ -140,9 +144,9 @@ export default async function Home() {
                       {profile.name}
                     </span>
                     <span
-                      className={`text-xs px-2 py-0.5 rounded ${ROLE_BADGE[profile.role] ?? ROLE_BADGE.player}`}
+                      className={`text-xs px-2 py-0.5 rounded ${TITLE_BADGE[(profile.title as MemberTitle) ?? "player"]}`}
                     >
-                      {ROLE_LABEL[profile.role] ?? profile.role}
+                      {TITLE_LABEL[(profile.title as MemberTitle) ?? "player"]}
                     </span>
                   </div>
                   <span className="text-suaza-ink-muted text-[13px]">

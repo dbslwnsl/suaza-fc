@@ -2,9 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
+  MEMBER_TITLES,
   POSITIONS,
-  ROLE_BADGE,
-  ROLE_LABEL,
+  TITLE_BADGE,
+  TITLE_LABEL,
+  type MemberTitle,
   type Position,
 } from "@/lib/members/positions";
 import { updateProfile } from "./actions";
@@ -42,15 +44,15 @@ export default async function MemberDetailPage({
   ] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id, name, nickname, role, positions, jersey_number, birth_date")
+      .select(
+        "id, name, nickname, role, title, positions, jersey_number, birth_date",
+      )
       .eq("id", id)
       .single(),
     supabase.from("profiles").select("role").eq("id", user.id).single(),
     supabase
       .from("match_participations")
-      .select(
-        "goals, assists, custom_stats, match:matches(status)",
-      )
+      .select("goals, assists, custom_stats, match:matches(status)")
       .eq("player_id", id),
     supabase
       .from("stat_definitions")
@@ -64,10 +66,10 @@ export default async function MemberDetailPage({
   const isSelf = user.id === profile.id;
   const isManager = me?.role === "manager";
   const canEdit = isSelf || isManager;
-  const canEditRole = isManager;
   const positions = (profile.positions ?? []) as Position[];
+  const title = (profile.title ?? "player") as MemberTitle;
 
-  // 누적 통계: 종료된 경기만 집계
+  // 누적 통계 (종료된 경기만)
   const done = ((statsRaw ?? []) as unknown as ParticipationRow[]).filter(
     (s) => s.match?.status === "done",
   );
@@ -97,9 +99,9 @@ export default async function MemberDetailPage({
             {profile.name}
           </h1>
           <span
-            className={`text-xs px-2 py-0.5 rounded ${ROLE_BADGE[profile.role] ?? ROLE_BADGE.player}`}
+            className={`text-xs px-2 py-0.5 rounded ${TITLE_BADGE[title] ?? TITLE_BADGE.player}`}
           >
-            {ROLE_LABEL[profile.role] ?? profile.role}
+            {TITLE_LABEL[title] ?? title}
           </span>
         </header>
 
@@ -114,14 +116,12 @@ export default async function MemberDetailPage({
           </p>
         )}
 
-        {/* 누적 통계 */}
         <section className="grid grid-cols-3 sm:grid-cols-5 gap-2">
           {totals.map((t) => (
             <Stat key={t.label} label={t.label} value={t.value} />
           ))}
         </section>
 
-        {/* 프로필 정보 / 편집 */}
         {!canEdit ? (
           <ReadOnlyView profile={profile} positions={positions} />
         ) : (
@@ -189,16 +189,18 @@ export default async function MemberDetailPage({
               </Field>
             </div>
 
-            {canEditRole && (
-              <Field label="역할 (감독만 변경 가능)">
+            {isManager && (
+              <Field label="직책">
                 <select
-                  name="role"
-                  defaultValue={profile.role}
+                  name="title"
+                  defaultValue={title}
                   className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink bg-white focus:outline-none focus:border-suaza-button"
                 >
-                  <option value="player">선수</option>
-                  <option value="coach">코치</option>
-                  <option value="manager">감독</option>
+                  {MEMBER_TITLES.map((t) => (
+                    <option key={t} value={t}>
+                      {TITLE_LABEL[t]}
+                    </option>
+                  ))}
                 </select>
               </Field>
             )}
