@@ -17,7 +17,7 @@ export default async function LoginPage({
           <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden">
             <Image
               src="/suaza-emblem.png"
-              alt="SUAZA FC"
+              alt="수아자FC"
               fill
               sizes="64px"
               priority
@@ -25,10 +25,10 @@ export default async function LoginPage({
             />
           </div>
           <p className="font-display font-bold text-suaza-ink text-2xl sm:text-[28px] tracking-[2px]">
-            SUAZA
+            수아자FC
           </p>
           <p className="text-suaza-ink-muted text-xs sm:text-[13px] tracking-[1px]">
-            축구 동호회
+            수원센트럴아이파크자이
           </p>
         </div>
 

@@ -29,7 +29,7 @@
   --color-suaza-divider: var(--suaza-divider);
   --color-suaza-placeholder: var(--suaza-placeholder);
   --font-sans: var(--font-noto-sans-kr);
-  --font-display: var(--font-inter);
+  --font-display: var(--font-inter), var(--font-noto-sans-kr);
 }
 
 body {

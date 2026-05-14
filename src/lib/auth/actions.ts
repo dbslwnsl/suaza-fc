@@ -22,10 +22,19 @@ export async function login(formData: FormData) {
 export async function signup(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
+  const passwordConfirm = String(formData.get("passwordConfirm") ?? "");
   const name = String(formData.get("name") ?? "").trim();
+  const terms = formData.get("terms") === "on";
+  const privacy = formData.get("privacy") === "on";
 
   if (!name) {
     redirect(`/signup?error=${encodeURIComponent("이름을 입력해 주세요")}`);
+  }
+  if (password !== passwordConfirm) {
+    redirect(`/signup?error=${encodeURIComponent("비밀번호가 일치하지 않습니다")}`);
+  }
+  if (!terms || !privacy) {
+    redirect(`/signup?error=${encodeURIComponent("필수 약관에 동의해 주세요")}`);
   }
 
   const supabase = await createClient();

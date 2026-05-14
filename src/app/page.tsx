@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/lib/auth/actions";
@@ -9,7 +10,6 @@ export default async function Home() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // proxy 가 비로그인 사용자를 /login 으로 보내므로 여기서는 user 가 항상 존재.
   const { data: profile } = await supabase
     .from("profiles")
     .select("name, nickname, role, positions")
@@ -17,61 +17,153 @@ export default async function Home() {
     .single();
 
   return (
-    <main className="p-8 font-sans max-w-2xl mx-auto">
-      <header className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold">SUAZA FC ⚽</h1>
-        <form action={logout}>
-          <button
-            type="submit"
-            className="text-sm border rounded px-3 py-1.5 hover:bg-gray-100"
-          >
-            로그아웃
-          </button>
-        </form>
-      </header>
-
-      <section className="p-4 bg-gray-100 rounded space-y-1 mb-6">
-        {profile ? (
-          <>
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-lg">{profile.name}</span>
-              <span
-                className={`text-xs px-2 py-0.5 rounded ${ROLE_BADGE[profile.role] ?? ROLE_BADGE.player}`}
-              >
-                {ROLE_LABEL[profile.role] ?? profile.role}
-              </span>
+    <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
+      <div className="max-w-[960px] mx-auto flex flex-col gap-6">
+        {/* Top bar */}
+        <header className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="relative w-9 h-9 rounded-full overflow-hidden">
+              <Image
+                src="/suaza-emblem.png"
+                alt="수아자FC"
+                fill
+                sizes="36px"
+                priority
+                className="object-cover"
+              />
             </div>
-            <p className="text-sm text-gray-600">{user!.email}</p>
-            {profile.positions && profile.positions.length > 0 && (
-              <p className="text-sm">
-                <span className="text-gray-600">포지션:</span>{" "}
-                {profile.positions.join(" / ")}
-              </p>
-            )}
+            <span className="font-bold text-suaza-ink text-xl">수아자FC</span>
+          </div>
+          <form action={logout}>
+            <button
+              type="submit"
+              className="text-[13px] border border-suaza-border rounded-md px-3 py-1.5 text-suaza-ink hover:bg-gray-50 transition"
+            >
+              로그아웃
+            </button>
+          </form>
+        </header>
+
+        {/* User Profile Card */}
+        <section className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-6 rounded-xl border sm:border-0 border-suaza-border flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-4">
+            <div className="relative w-14 h-14 rounded-full overflow-hidden shrink-0">
+              <Image
+                src="/suaza-emblem.png"
+                alt={profile?.name ?? "프로필"}
+                fill
+                sizes="56px"
+                className="object-cover"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              {profile ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-suaza-ink text-lg">
+                      {profile.name}
+                    </span>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded ${ROLE_BADGE[profile.role] ?? ROLE_BADGE.player}`}
+                    >
+                      {ROLE_LABEL[profile.role] ?? profile.role}
+                    </span>
+                  </div>
+                  <span className="text-suaza-ink-muted text-[13px]">
+                    {user!.email}
+                  </span>
+                  {profile.positions && profile.positions.length > 0 && (
+                    <span className="text-suaza-ink-muted text-[13px]">
+                      포지션: {profile.positions.join(", ")}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span className="font-bold text-suaza-ink text-lg">
+                    {user!.email}
+                  </span>
+                  <span className="text-amber-700 text-[13px]">
+                    ⚠️ 프로필 정보가 없습니다.
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+          {profile && (
             <Link
               href={`/members/${user!.id}`}
-              className="inline-block mt-2 text-sm text-blue-600 hover:underline"
+              className="text-[13px] font-bold text-suaza-accent hover:underline"
             >
               내 프로필 수정 →
             </Link>
-          </>
-        ) : (
-          <p className="text-amber-700">
-            ⚠️ 프로필 정보가 없습니다. Supabase 마이그레이션 SQL이 적용되었는지
-            확인해 주세요.
-          </p>
-        )}
-      </section>
+          )}
+        </section>
 
-      <nav className="grid sm:grid-cols-2 gap-3">
-        <Link
-          href="/members"
-          className="p-4 border rounded-lg hover:bg-gray-50 transition"
-        >
-          <h2 className="font-semibold">회원 명단</h2>
-          <p className="text-sm text-gray-600">선수·코치·감독 목록</p>
-        </Link>
-      </nav>
+        {/* Menu Grid */}
+        <nav className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+          <MenuCard
+            href="/members"
+            title="회원 명단"
+            desc="선수·코치·감독 목록"
+          />
+          <MenuCard
+            href="/matches"
+            title="경기 일정 / 결과"
+            desc="예정·지난 경기"
+          />
+          <MenuCard
+            href="#"
+            title="사진 갤러리"
+            desc="경기·연습 사진"
+            comingSoon
+          />
+          <MenuCard
+            href="#"
+            title="게시판"
+            desc="공지·자유 게시판"
+            comingSoon
+          />
+        </nav>
+      </div>
     </main>
+  );
+}
+
+function MenuCard({
+  href,
+  title,
+  desc,
+  comingSoon,
+}: {
+  href: string;
+  title: string;
+  desc: string;
+  comingSoon?: boolean;
+}) {
+  const inner = (
+    <>
+      <div className="flex items-center gap-2 mb-1">
+        <h2 className="font-bold text-suaza-ink text-base">{title}</h2>
+        {comingSoon && (
+          <span className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+            준비 중
+          </span>
+        )}
+      </div>
+      <p className="text-suaza-ink-muted text-[13px]">{desc}</p>
+    </>
+  );
+
+  const className =
+    "bg-white sm:rounded-2xl rounded-xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 border sm:border-0 border-suaza-border transition";
+
+  if (comingSoon) {
+    return <div className={`${className} opacity-60 cursor-not-allowed`}>{inner}</div>;
+  }
+  return (
+    <Link href={href} className={`${className} hover:-translate-y-0.5 hover:shadow-[0_12px_40px_0_rgba(0,0,0,0.08)]`}>
+      {inner}
+    </Link>
   );
 }

@@ -9,6 +9,15 @@ import {
 } from "@/lib/members/positions";
 import { updateProfile } from "./actions";
 
+type StatDef = { key: string; label: string; sort_order: number };
+
+type ParticipationRow = {
+  goals: number;
+  assists: number;
+  custom_stats: Record<string, number> | null;
+  match: { status: string } | null;
+};
+
 export default async function MemberDetailPage({
   params,
   searchParams,
@@ -23,15 +32,31 @@ export default async function MemberDetailPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return null; // proxy 가 처리
+  if (!user) return null;
 
-  const [{ data: profile }, { data: me }] = await Promise.all([
+  const [
+    { data: profile },
+    { data: me },
+    { data: statsRaw },
+    { data: defs },
+  ] = await Promise.all([
     supabase
       .from("profiles")
       .select("id, name, nickname, role, positions, jersey_number, birth_date")
       .eq("id", id)
       .single(),
     supabase.from("profiles").select("role").eq("id", user.id).single(),
+    supabase
+      .from("match_participations")
+      .select(
+        "goals, assists, custom_stats, match:matches(status)",
+      )
+      .eq("player_id", id),
+    supabase
+      .from("stat_definitions")
+      .select("key, label, sort_order")
+      .order("sort_order", { ascending: true })
+      .order("key", { ascending: true }),
   ]);
 
   if (!profile) notFound();
@@ -40,126 +65,163 @@ export default async function MemberDetailPage({
   const isManager = me?.role === "manager";
   const canEdit = isSelf || isManager;
   const canEditRole = isManager;
-
   const positions = (profile.positions ?? []) as Position[];
 
+  // 누적 통계: 종료된 경기만 집계
+  const done = ((statsRaw ?? []) as unknown as ParticipationRow[]).filter(
+    (s) => s.match?.status === "done",
+  );
+  const totals: { label: string; value: number }[] = [
+    { label: "출전", value: done.length },
+    { label: "골", value: done.reduce((a, s) => a + (s.goals ?? 0), 0) },
+    { label: "어시", value: done.reduce((a, s) => a + (s.assists ?? 0), 0) },
+  ];
+  for (const d of (defs ?? []) as StatDef[]) {
+    totals.push({
+      label: d.label,
+      value: done.reduce((a, s) => a + (s.custom_stats?.[d.key] ?? 0), 0),
+    });
+  }
+
   return (
-    <main className="p-8 font-sans max-w-2xl mx-auto">
-      <header className="flex items-center gap-3 mb-6">
-        <Link
-          href="/members"
-          className="text-sm text-gray-500 hover:underline"
-        >
-          ← 명단
-        </Link>
-        <h1 className="text-2xl font-bold">{profile.name}</h1>
-        <span
-          className={`text-xs px-2 py-0.5 rounded ${ROLE_BADGE[profile.role] ?? ROLE_BADGE.player}`}
-        >
-          {ROLE_LABEL[profile.role] ?? profile.role}
-        </span>
-      </header>
-
-      {message && (
-        <p className="mb-4 p-3 bg-green-50 text-green-700 rounded text-sm">
-          {message}
-        </p>
-      )}
-      {error && (
-        <p className="mb-4 p-3 bg-red-50 text-red-700 rounded text-sm">
-          {error}
-        </p>
-      )}
-
-      {!canEdit ? (
-        <ReadOnlyView profile={profile} positions={positions} />
-      ) : (
-        <form
-          action={updateProfile.bind(null, profile.id)}
-          className="flex flex-col gap-4"
-        >
-          <Field label="이름">
-            <input
-              type="text"
-              name="name"
-              defaultValue={profile.name}
-              required
-              className="border rounded px-3 py-2 w-full"
-            />
-          </Field>
-
-          <Field label="별명">
-            <input
-              type="text"
-              name="nickname"
-              defaultValue={profile.nickname ?? ""}
-              className="border rounded px-3 py-2 w-full"
-            />
-          </Field>
-
-          <Field label="포지션 (복수 선택)">
-            <div className="flex gap-3 flex-wrap">
-              {POSITIONS.map((p) => (
-                <label
-                  key={p}
-                  className="flex items-center gap-1 px-3 py-1.5 border rounded cursor-pointer hover:bg-gray-50"
-                >
-                  <input
-                    type="checkbox"
-                    name="positions"
-                    value={p}
-                    defaultChecked={positions.includes(p)}
-                  />
-                  <span>{p}</span>
-                </label>
-              ))}
-            </div>
-          </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="등번호">
-              <input
-                type="number"
-                name="jersey_number"
-                defaultValue={profile.jersey_number ?? ""}
-                min={0}
-                max={999}
-                className="border rounded px-3 py-2 w-full"
-              />
-            </Field>
-            <Field label="생년월일">
-              <input
-                type="date"
-                name="birth_date"
-                defaultValue={profile.birth_date ?? ""}
-                className="border rounded px-3 py-2 w-full"
-              />
-            </Field>
-          </div>
-
-          {canEditRole && (
-            <Field label="역할 (감독만 변경 가능)">
-              <select
-                name="role"
-                defaultValue={profile.role}
-                className="border rounded px-3 py-2 w-full"
-              >
-                <option value="player">선수</option>
-                <option value="coach">코치</option>
-                <option value="manager">감독</option>
-              </select>
-            </Field>
-          )}
-
-          <button
-            type="submit"
-            className="mt-2 bg-black text-white rounded py-2 font-medium hover:bg-gray-800"
+    <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
+      <div className="max-w-[600px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
+        <header className="flex items-center gap-3 flex-wrap">
+          <Link
+            href="/members"
+            className="text-sm text-suaza-ink-muted hover:underline"
           >
-            저장
-          </button>
-        </form>
-      )}
+            ← 명단
+          </Link>
+          <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
+            {profile.name}
+          </h1>
+          <span
+            className={`text-xs px-2 py-0.5 rounded ${ROLE_BADGE[profile.role] ?? ROLE_BADGE.player}`}
+          >
+            {ROLE_LABEL[profile.role] ?? profile.role}
+          </span>
+        </header>
+
+        {message && (
+          <p className="-mt-2 p-3 bg-green-50 text-green-700 rounded-lg text-sm">
+            {message}
+          </p>
+        )}
+        {error && (
+          <p className="-mt-2 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
+            {error}
+          </p>
+        )}
+
+        {/* 누적 통계 */}
+        <section className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+          {totals.map((t) => (
+            <Stat key={t.label} label={t.label} value={t.value} />
+          ))}
+        </section>
+
+        {/* 프로필 정보 / 편집 */}
+        {!canEdit ? (
+          <ReadOnlyView profile={profile} positions={positions} />
+        ) : (
+          <form
+            action={updateProfile.bind(null, profile.id)}
+            className="flex flex-col gap-4"
+          >
+            <Field label="이름">
+              <input
+                type="text"
+                name="name"
+                defaultValue={profile.name}
+                required
+                className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
+              />
+            </Field>
+
+            <Field label="별명">
+              <input
+                type="text"
+                name="nickname"
+                defaultValue={profile.nickname ?? ""}
+                className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
+              />
+            </Field>
+
+            <Field label="포지션 (복수 선택)">
+              <div className="flex gap-2 flex-wrap">
+                {POSITIONS.map((p) => (
+                  <label
+                    key={p}
+                    className="flex items-center gap-2 px-3 py-1.5 border border-suaza-border rounded-lg cursor-pointer hover:bg-gray-50"
+                  >
+                    <input
+                      type="checkbox"
+                      name="positions"
+                      value={p}
+                      defaultChecked={positions.includes(p)}
+                      className="accent-suaza-button"
+                    />
+                    <span className="text-suaza-ink">{p}</span>
+                  </label>
+                ))}
+              </div>
+            </Field>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="등번호">
+                <input
+                  type="number"
+                  name="jersey_number"
+                  defaultValue={profile.jersey_number ?? ""}
+                  min={0}
+                  max={999}
+                  className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
+                />
+              </Field>
+              <Field label="생년월일">
+                <input
+                  type="date"
+                  name="birth_date"
+                  defaultValue={profile.birth_date ?? ""}
+                  className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
+                />
+              </Field>
+            </div>
+
+            {canEditRole && (
+              <Field label="역할 (감독만 변경 가능)">
+                <select
+                  name="role"
+                  defaultValue={profile.role}
+                  className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink bg-white focus:outline-none focus:border-suaza-button"
+                >
+                  <option value="player">선수</option>
+                  <option value="coach">코치</option>
+                  <option value="manager">감독</option>
+                </select>
+              </Field>
+            )}
+
+            <button
+              type="submit"
+              className="h-[52px] rounded-lg bg-suaza-button text-white text-base font-medium hover:opacity-90 transition mt-2"
+            >
+              저장
+            </button>
+          </form>
+        )}
+      </div>
     </main>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex flex-col items-center justify-center p-3 border border-suaza-border rounded-lg">
+      <span className="text-xs text-suaza-ink-muted">{label}</span>
+      <span className="text-xl font-bold text-suaza-ink">{value}</span>
+    </div>
   );
 }
 
@@ -171,8 +233,8 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-sm font-medium">{label}</span>
+    <label className="flex flex-col gap-2">
+      <span className="text-suaza-ink text-base">{label}</span>
       {children}
     </label>
   );
@@ -189,32 +251,28 @@ function ReadOnlyView({
   };
   positions: Position[];
 }) {
+  const rows: { label: string; value: string }[] = [];
+  if (profile.nickname) rows.push({ label: "별명", value: profile.nickname });
+  if (positions.length > 0)
+    rows.push({ label: "포지션", value: positions.join(" / ") });
+  if (profile.jersey_number != null)
+    rows.push({ label: "등번호", value: `#${profile.jersey_number}` });
+  if (profile.birth_date)
+    rows.push({ label: "생년월일", value: profile.birth_date });
+
+  if (rows.length === 0) {
+    return (
+      <p className="text-suaza-ink-muted text-sm">등록된 정보가 없습니다.</p>
+    );
+  }
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-      {profile.nickname && (
-        <>
-          <dt className="font-medium text-gray-600">별명</dt>
-          <dd>{profile.nickname}</dd>
-        </>
-      )}
-      {positions.length > 0 && (
-        <>
-          <dt className="font-medium text-gray-600">포지션</dt>
-          <dd>{positions.join(" / ")}</dd>
-        </>
-      )}
-      {profile.jersey_number != null && (
-        <>
-          <dt className="font-medium text-gray-600">등번호</dt>
-          <dd>#{profile.jersey_number}</dd>
-        </>
-      )}
-      {profile.birth_date && (
-        <>
-          <dt className="font-medium text-gray-600">생년월일</dt>
-          <dd>{profile.birth_date}</dd>
-        </>
-      )}
+      {rows.map((r) => (
+        <span key={r.label} className="contents">
+          <dt className="font-medium text-suaza-ink-muted">{r.label}</dt>
+          <dd className="text-suaza-ink">{r.value}</dd>
+        </span>
+      ))}
     </dl>
   );
 }
