@@ -100,70 +100,7 @@ export default async function Home() {
           )}
         </section>
 
-        {/* Menu Grid */}
-        <nav className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-          <MenuCard
-            href="/members"
-            title="회원 명단"
-            desc="선수·코치·감독 목록"
-          />
-          <MenuCard
-            href="/matches"
-            title="경기 일정 / 결과"
-            desc="예정·지난 경기"
-          />
-          <MenuCard
-            href="#"
-            title="사진 갤러리"
-            desc="경기·연습 사진"
-            comingSoon
-          />
-          <MenuCard
-            href="#"
-            title="게시판"
-            desc="공지·자유 게시판"
-            comingSoon
-          />
-        </nav>
       </div>
     </main>
-  );
-}
-
-function MenuCard({
-  href,
-  title,
-  desc,
-  comingSoon,
-}: {
-  href: string;
-  title: string;
-  desc: string;
-  comingSoon?: boolean;
-}) {
-  const inner = (
-    <>
-      <div className="flex items-center gap-2 mb-1">
-        <h2 className="font-bold text-suaza-ink text-base">{title}</h2>
-        {comingSoon && (
-          <span className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-600">
-            준비 중
-          </span>
-        )}
-      </div>
-      <p className="text-suaza-ink-muted text-[13px]">{desc}</p>
-    </>
-  );
-
-  const className =
-    "bg-white sm:rounded-2xl rounded-xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 border sm:border-0 border-suaza-border transition";
-
-  if (comingSoon) {
-    return <div className={`${className} opacity-60 cursor-not-allowed`}>{inner}</div>;
-  }
-  return (
-    <Link href={href} className={`${className} hover:-translate-y-0.5 hover:shadow-[0_12px_40px_0_rgba(0,0,0,0.08)]`}>
-      {inner}
-    </Link>
   );
 }

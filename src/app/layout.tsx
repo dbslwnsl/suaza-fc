@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
+import BottomTabs from "@/components/bottom-tabs";
+import { createClient } from "@/lib/supabase/server";
 
 const notoSansKR = Noto_Sans_KR({
   variable: "--font-noto-sans-kr",
@@ -19,17 +21,35 @@ export const metadata: Metadata = {
   description: "SUAZA FC 축구 동호회 회원 전용 사이트",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let isManager = false;
+  if (user) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    isManager = data?.role === "manager";
+  }
+
   return (
     <html
       lang="ko"
       className={`${notoSansKR.variable} ${inter.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <BottomTabs isManager={isManager} />
+      </body>
     </html>
   );
 }
