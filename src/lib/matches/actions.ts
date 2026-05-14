@@ -210,6 +210,61 @@ export async function removeParticipant(
 const ATTENDANCE_VALUES = ["attending", "absent", "undecided"] as const;
 type AttendanceStatus = (typeof ATTENDANCE_VALUES)[number];
 
+async function requireManager() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (me?.role !== "manager") {
+    throw new Error("매니저만 다른 회원의 출석을 변경할 수 있습니다");
+  }
+  return { supabase };
+}
+
+/**
+ * 매니저가 다른 회원의 출석 상태를 변경 (Drag&Drop 용).
+ * status === null 이면 row 삭제 (= 미투표).
+ */
+export async function setAttendanceFor(
+  matchId: string,
+  playerId: string,
+  status: AttendanceStatus | null,
+) {
+  const { supabase } = await requireManager();
+
+  if (status === null) {
+    const { error } = await supabase
+      .from("match_attendances")
+      .delete()
+      .eq("match_id", matchId)
+      .eq("player_id", playerId);
+    if (error) throw error;
+  } else {
+    if (!ATTENDANCE_VALUES.includes(status)) {
+      throw new Error("올바르지 않은 status 입니다");
+    }
+    const { error } = await supabase.from("match_attendances").upsert(
+      {
+        match_id: matchId,
+        player_id: playerId,
+        status,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "match_id,player_id" },
+    );
+    if (error) throw error;
+  }
+
+  revalidatePath(`/matches/${matchId}`);
+  revalidatePath("/");
+}
+
 export async function setAttendance(
   matchId: string,
   redirectTo: string,
@@ -226,18 +281,36 @@ export async function setAttendance(
     redirect(`${redirectTo}?error=${encodeURIComponent("올바르지 않은 값입니다")}`);
   }
 
-  const { error } = await supabase.from("match_attendances").upsert(
-    {
-      match_id: matchId,
-      player_id: user.id,
-      status: raw,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "match_id,player_id" },
-  );
+  // 토글 동작: 같은 status 가 이미 선택돼 있으면 row 삭제(=미투표)
+  const { data: existing } = await supabase
+    .from("match_attendances")
+    .select("status")
+    .eq("match_id", matchId)
+    .eq("player_id", user.id)
+    .maybeSingle();
 
-  if (error) {
-    redirect(`${redirectTo}?error=${encodeURIComponent(error.message)}`);
+  if (existing?.status === raw) {
+    const { error } = await supabase
+      .from("match_attendances")
+      .delete()
+      .eq("match_id", matchId)
+      .eq("player_id", user.id);
+    if (error) {
+      redirect(`${redirectTo}?error=${encodeURIComponent(error.message)}`);
+    }
+  } else {
+    const { error } = await supabase.from("match_attendances").upsert(
+      {
+        match_id: matchId,
+        player_id: user.id,
+        status: raw,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "match_id,player_id" },
+    );
+    if (error) {
+      redirect(`${redirectTo}?error=${encodeURIComponent(error.message)}`);
+    }
   }
 
   revalidatePath(`/matches/${matchId}`);

@@ -9,6 +9,7 @@ import {
   updateMatch,
   updateParticipant,
 } from "@/lib/matches/actions";
+import AttendanceManagerBoard from "@/components/attendance-manager-board";
 import {
   MATCH_STATUS,
   MATCH_STATUS_BADGE,
@@ -65,7 +66,7 @@ export default async function MatchDetailPage({
     { data: participationsRaw },
     { data: allMembers },
     { data: statDefs },
-    { data: attendances },
+    { data: attendancesRaw },
     { data: myAttendance },
   ] = await Promise.all([
     supabase.from("matches").select("*").eq("id", id).single(),
@@ -87,7 +88,7 @@ export default async function MatchDetailPage({
       .order("key", { ascending: true }),
     supabase
       .from("match_attendances")
-      .select("status")
+      .select("status, player:profiles(id, name, jersey_number)")
       .eq("match_id", id),
     supabase
       .from("match_attendances")
@@ -97,14 +98,25 @@ export default async function MatchDetailPage({
       .maybeSingle(),
   ]);
 
-  const attCounts = {
-    attending: 0,
-    absent: 0,
-    undecided: 0,
+  type VotePlayer = { id: string; name: string; jersey_number: number | null };
+  const byStatus: { attending: VotePlayer[]; absent: VotePlayer[]; undecided: VotePlayer[] } = {
+    attending: [],
+    absent: [],
+    undecided: [],
   };
-  for (const a of (attendances ?? []) as { status: keyof typeof attCounts }[]) {
-    attCounts[a.status] = (attCounts[a.status] ?? 0) + 1;
+  const votedIds = new Set<string>();
+  for (const row of ((attendancesRaw ?? []) as unknown as {
+    status: keyof typeof byStatus;
+    player: VotePlayer | null;
+  }[])) {
+    if (row.player && row.status in byStatus) {
+      byStatus[row.status].push(row.player);
+      votedIds.add(row.player.id);
+    }
   }
+  const nonVoters = ((allMembers ?? []) as VotePlayer[]).filter(
+    (m) => !votedIds.has(m.id),
+  );
   const myStatus = (myAttendance as { status: string } | null)?.status ?? null;
 
   if (!match) notFound();
@@ -171,7 +183,9 @@ export default async function MatchDetailPage({
             matchId={m.id}
             redirectTo={`/matches/${m.id}`}
             myStatus={myStatus}
-            counts={attCounts}
+            byStatus={byStatus}
+            nonVoters={nonVoters}
+            isManager={me?.role === "manager"}
           />
         )}
 
@@ -482,16 +496,30 @@ function ParticipationEditRow({
   );
 }
 
+type VotePlayer = {
+  id: string;
+  name: string;
+  jersey_number: number | null;
+};
+
 export function AttendanceVote({
   matchId,
   redirectTo,
   myStatus,
-  counts,
+  byStatus,
+  nonVoters,
+  isManager,
 }: {
   matchId: string;
   redirectTo: string;
   myStatus: string | null;
-  counts: { attending: number; absent: number; undecided: number };
+  byStatus: {
+    attending: VotePlayer[];
+    absent: VotePlayer[];
+    undecided: VotePlayer[];
+  };
+  nonVoters: VotePlayer[];
+  isManager?: boolean;
 }) {
   const opts: { value: string; label: string; activeClass: string }[] = [
     {
@@ -510,15 +538,11 @@ export function AttendanceVote({
       activeClass: "bg-gray-700 text-white border-gray-700",
     },
   ];
+
   return (
-    <section className="flex flex-col gap-2 p-4 border border-suaza-border rounded-lg">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="font-bold text-suaza-ink">출석 투표</h2>
-        <span className="text-xs text-suaza-ink-muted">
-          참석 {counts.attending} · 불참 {counts.absent} · 미정{" "}
-          {counts.undecided}
-        </span>
-      </div>
+    <section className="flex flex-col gap-3 p-4 border border-suaza-border rounded-lg">
+      <h2 className="font-bold text-suaza-ink">출석 투표</h2>
+
       <form action={setAttendance.bind(null, matchId, redirectTo)}>
         <div className="grid grid-cols-3 gap-2">
           {opts.map((o) => {
@@ -541,7 +565,81 @@ export function AttendanceVote({
           })}
         </div>
       </form>
+
+      {isManager ? (
+        <AttendanceManagerBoard
+          matchId={matchId}
+          byStatus={byStatus}
+          nonVoters={nonVoters}
+        />
+      ) : (
+        <div className="flex flex-col gap-2 pt-1">
+          <AttendanceRow
+            label="참석"
+            count={byStatus.attending.length}
+            badgeClass="bg-green-100 text-green-700"
+            members={byStatus.attending}
+          />
+          <AttendanceRow
+            label="불참"
+            count={byStatus.absent.length}
+            badgeClass="bg-red-100 text-red-700"
+            members={byStatus.absent}
+          />
+          <AttendanceRow
+            label="미정"
+            count={byStatus.undecided.length}
+            badgeClass="bg-gray-200 text-gray-700"
+            members={byStatus.undecided}
+          />
+          <div className="h-px bg-suaza-border my-1" />
+          <NonVoterRow members={nonVoters} />
+        </div>
+      )}
     </section>
+  );
+}
+
+function AttendanceRow({
+  label,
+  count,
+  badgeClass,
+  members,
+}: {
+  label: string;
+  count: number;
+  badgeClass: string;
+  members: VotePlayer[];
+}) {
+  const names = members.map((m) => m.name);
+  return (
+    <div className="flex items-start gap-2">
+      <span
+        className={`shrink-0 text-xs px-2 py-0.5 rounded font-medium ${badgeClass}`}
+      >
+        {label} {count}
+      </span>
+      <span className="text-sm text-suaza-ink-muted leading-relaxed break-keep">
+        {names.length > 0 ? names.join(", ") : "—"}
+      </span>
+    </div>
+  );
+}
+
+function NonVoterRow({ members }: { members: VotePlayer[] }) {
+  if (members.length === 0) {
+    return (
+      <p className="text-[11px] text-suaza-ink-faint">
+        모두 투표를 완료했어요 ✓
+      </p>
+    );
+  }
+  const names = members.map((m) => m.name).join(", ");
+  return (
+    <div className="flex flex-col gap-0.5 text-[11px] text-suaza-ink-faint">
+      <span className="font-medium">미투표 ({members.length})</span>
+      <span className="break-keep">{names}</span>
+    </div>
   );
 }
 

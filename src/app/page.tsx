@@ -40,7 +40,7 @@ export default async function Home() {
   ] = await Promise.all([
     supabase
       .from("profiles")
-      .select("name, nickname, title, positions")
+      .select("name, nickname, title, positions, role")
       .eq("id", user!.id)
       .single(),
     supabase
@@ -70,25 +70,48 @@ export default async function Home() {
   const last = lastMatch as Match | null;
   const notice = latestNotice as unknown as NoticeRow | null;
 
-  // 다가오는 경기 출석 상태/카운트
+  // 다가오는 경기 출석 데이터
+  type VotePlayer = { id: string; name: string; jersey_number: number | null };
   let myStatus: string | null = null;
-  const counts = { attending: 0, absent: 0, undecided: 0 };
+  const byStatus: {
+    attending: VotePlayer[];
+    absent: VotePlayer[];
+    undecided: VotePlayer[];
+  } = { attending: [], absent: [], undecided: [] };
+  let nonVoters: VotePlayer[] = [];
+
   if (upcoming) {
-    const [{ data: all }, { data: mine }] = await Promise.all([
-      supabase
-        .from("match_attendances")
-        .select("status")
-        .eq("match_id", upcoming.id),
-      supabase
-        .from("match_attendances")
-        .select("status")
-        .eq("match_id", upcoming.id)
-        .eq("player_id", user!.id)
-        .maybeSingle(),
-    ]);
-    for (const a of (all ?? []) as { status: keyof typeof counts }[]) {
-      counts[a.status] = (counts[a.status] ?? 0) + 1;
+    const [{ data: attRaw }, { data: mine }, { data: allMembers }] =
+      await Promise.all([
+        supabase
+          .from("match_attendances")
+          .select("status, player:profiles(id, name, jersey_number)")
+          .eq("match_id", upcoming.id),
+        supabase
+          .from("match_attendances")
+          .select("status")
+          .eq("match_id", upcoming.id)
+          .eq("player_id", user!.id)
+          .maybeSingle(),
+        supabase
+          .from("profiles")
+          .select("id, name, jersey_number")
+          .order("jersey_number", { ascending: true, nullsFirst: false }),
+      ]);
+
+    const votedIds = new Set<string>();
+    for (const row of (attRaw ?? []) as unknown as {
+      status: keyof typeof byStatus;
+      player: VotePlayer | null;
+    }[]) {
+      if (row.player && row.status in byStatus) {
+        byStatus[row.status].push(row.player);
+        votedIds.add(row.player.id);
+      }
     }
+    nonVoters = ((allMembers ?? []) as VotePlayer[]).filter(
+      (m) => !votedIds.has(m.id),
+    );
     myStatus = (mine as { status: string } | null)?.status ?? null;
   }
 
@@ -227,7 +250,9 @@ export default async function Home() {
               matchId={upcoming.id}
               redirectTo="/"
               myStatus={myStatus}
-              counts={counts}
+              byStatus={byStatus}
+              nonVoters={nonVoters}
+              isManager={profile?.role === "manager"}
             />
           </section>
         )}
