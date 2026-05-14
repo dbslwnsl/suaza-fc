@@ -148,7 +148,6 @@ export default async function SeasonView({
                   order={order}
                   year={year}
                   month={month}
-                  align="left"
                 />
                 <SortTh
                   label="출전"
@@ -329,7 +328,11 @@ function SortTh({
   return (
     <th
       className={`py-2 px-2 text-suaza-ink-muted font-medium border-b border-suaza-border ${
-        align === "left" ? "text-left" : "text-center min-w-[80px] w-[80px]"
+        align === "left"
+          ? "text-left"
+          : isNameCol
+            ? "text-center"
+            : "text-center min-w-[80px] w-[80px]"
       }`}
     >
       <Link
