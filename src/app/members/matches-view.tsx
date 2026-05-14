@@ -136,9 +136,14 @@ export default async function MatchesView({
               <tbody>
                 {members.map((m) => {
                   const row = cells.get(m.id);
+                  const isMe = m.id === myId;
                   return (
-                    <tr key={m.id}>
-                      <td className="sticky left-0 z-10 bg-white py-2 px-2 border-b border-r border-suaza-border whitespace-nowrap">
+                    <tr key={m.id} className={isMe ? "bg-red-50" : ""}>
+                      <td
+                        className={`sticky left-0 z-10 py-2 px-2 border-b border-r border-suaza-border whitespace-nowrap ${
+                          isMe ? "bg-red-50" : "bg-white"
+                        }`}
+                      >
                         <Link
                           href={`/members/${m.id}`}
                           className="inline-flex items-baseline gap-1.5 text-suaza-ink hover:underline"

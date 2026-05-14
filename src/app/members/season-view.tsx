@@ -188,8 +188,10 @@ export default async function SeasonView({
               </tr>
             </thead>
             <tbody>
-              {stats.map((s, i) => (
-                <tr key={s.player_id}>
+              {stats.map((s, i) => {
+                const isMe = s.player_id === myId;
+                return (
+                <tr key={s.player_id} className={isMe ? "bg-red-50" : ""}>
                   <Td className="text-suaza-ink-muted">
                     {showMedals ? (MEDALS[i] ?? i + 1) : i + 1}
                   </Td>
@@ -215,7 +217,8 @@ export default async function SeasonView({
                     </Td>
                   ))}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
