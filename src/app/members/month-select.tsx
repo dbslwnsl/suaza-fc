@@ -7,10 +7,12 @@ export default function MonthSelect({
   year,
   month,
   sort,
+  order,
 }: {
   year: number;
   month: number;
   sort?: string;
+  order?: "asc" | "desc";
 }) {
   const router = useRouter();
   const label = month >= 1 && month <= 12 ? `${month}월` : "전체";
@@ -33,7 +35,9 @@ export default function MonthSelect({
           p.set("tab", "season");
           p.set("year", String(year));
           if (m >= 1 && m <= 12) p.set("month", String(m));
-          if (sort && sort !== "goals") p.set("sort", sort);
+          if (sort && sort !== "name") p.set("sort", sort);
+          if (order === "asc" && sort && sort !== "name")
+            p.set("order", "asc");
           router.push(`/members?${p.toString()}`);
         }}
         className="absolute inset-0 opacity-0 cursor-pointer"

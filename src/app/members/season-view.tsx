@@ -9,21 +9,28 @@ import {
 } from "@/lib/stats/helpers";
 import MonthSelect from "./month-select";
 import { TAG_ACTIVE, TAG_DEFAULT, TAG_HOVER } from "@/lib/ui/tag-class";
+import { displayMemberName } from "@/lib/members/name";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
 export default async function SeasonView({
   year,
   years,
-  sort = "goals",
+  sort = "name",
   month = 0,
+  order = "desc",
 }: {
   year: number;
   years: number[];
   sort?: string;
   month?: number;
+  order?: "asc" | "desc";
 }) {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const myId = user?.id ?? null;
   const { from, to } = periodRange(year, month);
 
   // 1. 해당 연도 종료 경기
@@ -81,6 +88,11 @@ export default async function SeasonView({
 
   stats.sort((a, b) => {
     if (sort === "name") {
+      // 기본 정렬(가나다)에선 본인을 항상 맨 위로
+      if (myId) {
+        if (a.player_id === myId && b.player_id !== myId) return -1;
+        if (b.player_id === myId && a.player_id !== myId) return 1;
+      }
       return a.name.localeCompare(b.name, "ko");
     }
     let av: number, bv: number;
@@ -90,6 +102,9 @@ export default async function SeasonView({
     } else if (sort === "assists") {
       av = a.assists;
       bv = b.assists;
+    } else if (sort === "goals") {
+      av = a.goals;
+      bv = b.goals;
     } else if (defs.some((d) => d.key === sort)) {
       av = a.custom[sort] ?? 0;
       bv = b.custom[sort] ?? 0;
@@ -97,17 +112,23 @@ export default async function SeasonView({
       av = a.goals;
       bv = b.goals;
     }
-    if (bv !== av) return bv - av;
-    return (a.jersey_number ?? 9999) - (b.jersey_number ?? 9999);
+    if (av !== bv) return order === "asc" ? av - bv : bv - av;
+    return a.name.localeCompare(b.name, "ko");
   });
 
-  const showMedals = sort !== "name";
+  const showMedals = sort !== "name" && order === "desc";
 
   return (
     <section className="flex flex-col gap-4">
       <div className="flex items-center gap-3 flex-wrap text-sm">
-        <YearSelector year={year} years={years} sort={sort} month={month} />
-        <MonthSelect year={year} month={month} sort={sort} />
+        <YearSelector
+          year={year}
+          years={years}
+          sort={sort}
+          month={month}
+          order={order}
+        />
+        <MonthSelect year={year} month={month} sort={sort} order={order} />
       </div>
 
       {stats.length === 0 ? (
@@ -124,6 +145,7 @@ export default async function SeasonView({
                   label="선수"
                   sortKey="name"
                   current={sort}
+                  order={order}
                   year={year}
                   month={month}
                   align="left"
@@ -132,6 +154,7 @@ export default async function SeasonView({
                   label="출전"
                   sortKey="appearances"
                   current={sort}
+                  order={order}
                   year={year}
                   month={month}
                 />
@@ -139,6 +162,7 @@ export default async function SeasonView({
                   label="골"
                   sortKey="goals"
                   current={sort}
+                  order={order}
                   year={year}
                   month={month}
                 />
@@ -146,6 +170,7 @@ export default async function SeasonView({
                   label="어시"
                   sortKey="assists"
                   current={sort}
+                  order={order}
                   year={year}
                   month={month}
                 />
@@ -155,6 +180,7 @@ export default async function SeasonView({
                     label={d.label}
                     sortKey={d.key}
                     current={sort}
+                    order={order}
                     year={year}
                     month={month}
                   />
@@ -170,14 +196,12 @@ export default async function SeasonView({
                   <Td>
                     <Link
                       href={`/members/${s.player_id}`}
-                      className="text-suaza-ink hover:underline whitespace-nowrap"
+                      className="inline-flex items-baseline gap-1.5 text-suaza-ink hover:underline whitespace-nowrap"
                     >
-                      {s.jersey_number != null && (
-                        <span className="text-suaza-ink-muted text-xs mr-1">
-                          #{s.jersey_number}
-                        </span>
-                      )}
-                      <span className="font-medium">{s.name}</span>
+                      <span className="inline-block w-7 text-right text-suaza-ink-muted text-xs">
+                        {s.jersey_number != null ? `#${s.jersey_number}` : ""}
+                      </span>
+                      <span className="font-medium">{displayMemberName(s.name)}</span>
                     </Link>
                   </Td>
                   <Td className="text-center">{s.appearances}</Td>
@@ -205,11 +229,13 @@ function YearSelector({
   years,
   sort,
   month,
+  order,
 }: {
   year: number;
   years: number[];
   sort?: string;
   month?: number;
+  order?: "asc" | "desc";
 }) {
   if (years.length === 0) {
     return (
@@ -224,7 +250,8 @@ function YearSelector({
         params.set("year", String(y));
         if (month && month >= 1 && month <= 12)
           params.set("month", String(month));
-        if (sort && sort !== "goals") params.set("sort", sort);
+        if (sort && sort !== "name") params.set("sort", sort);
+        if (order === "asc") params.set("order", "asc");
         return (
           <Link
             key={y}
@@ -259,6 +286,7 @@ function SortTh({
   label,
   sortKey,
   current,
+  order,
   year,
   month,
   align = "center",
@@ -266,16 +294,35 @@ function SortTh({
   label: string;
   sortKey: string;
   current: string;
+  order: "asc" | "desc";
   year: number;
   month: number;
   align?: "left" | "center";
 }) {
   const active = current === sortKey;
+  const isNameCol = sortKey === "name";
+
+  // 데이터 컬럼: 클릭 시 desc → asc → default(name=가나다)
+  // 선수 컬럼: 항상 default 로 리셋
+  let nextSort = sortKey;
+  let nextOrder: "asc" | "desc" = "desc";
+  if (isNameCol) {
+    nextSort = "name";
+  } else if (active && order === "desc") {
+    nextOrder = "asc";
+  } else if (active && order === "asc") {
+    nextSort = "name";
+  }
+
   const params = new URLSearchParams();
   params.set("tab", "season");
   params.set("year", String(year));
   if (month >= 1 && month <= 12) params.set("month", String(month));
-  params.set("sort", sortKey);
+  if (nextSort !== "name") params.set("sort", nextSort);
+  if (nextOrder === "asc" && nextSort !== "name") params.set("order", "asc");
+
+  const arrow = active && !isNameCol ? (order === "asc" ? "▲" : "▼") : null;
+
   return (
     <th
       className={`py-2 px-2 text-suaza-ink-muted font-medium border-b border-suaza-border ${
@@ -285,11 +332,11 @@ function SortTh({
       <Link
         href={`/members?${params.toString()}`}
         className={`inline-flex items-center gap-0.5 whitespace-nowrap hover:text-suaza-ink ${
-          active ? "text-suaza-ink font-bold" : ""
+          active && !isNameCol ? "text-suaza-ink font-bold" : ""
         }`}
       >
         {label}
-        {active && <span className="text-[10px]">▼</span>}
+        {arrow && <span className="text-[10px]">{arrow}</span>}
       </Link>
     </th>
   );

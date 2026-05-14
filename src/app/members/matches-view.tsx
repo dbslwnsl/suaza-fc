@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { shortDate, yearRange } from "@/lib/stats/helpers";
+import { displayMemberName } from "@/lib/members/name";
 
 type MatchRow = {
   id: string;
@@ -34,6 +35,10 @@ export default async function MatchesView({
   years: number[];
 }) {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const myId = user?.id ?? null;
   const { from, to } = yearRange(year);
 
   const { data: matchesRaw } = await supabase
@@ -61,7 +66,14 @@ export default async function MatchesView({
   ]);
 
   const parts = (partsRaw ?? []) as ParticipationRow[];
-  const members = (membersRaw ?? []) as Member[];
+  const rawMembers = (membersRaw ?? []) as Member[];
+  // 본인을 항상 맨 위로
+  const members = myId
+    ? [
+        ...rawMembers.filter((m) => m.id === myId),
+        ...rawMembers.filter((m) => m.id !== myId),
+      ]
+    : rawMembers;
 
   // 인덱스: player_id -> match_id -> CellData
   const cells = new Map<string, Map<string, CellData>>();
@@ -129,14 +141,14 @@ export default async function MatchesView({
                       <td className="sticky left-0 z-10 bg-white py-2 px-2 border-b border-r border-suaza-border whitespace-nowrap">
                         <Link
                           href={`/members/${m.id}`}
-                          className="text-suaza-ink hover:underline"
+                          className="inline-flex items-baseline gap-1.5 text-suaza-ink hover:underline"
                         >
-                          {m.jersey_number != null && (
-                            <span className="text-suaza-ink-muted text-[10px] mr-1">
-                              #{m.jersey_number}
-                            </span>
-                          )}
-                          {m.name}
+                          <span className="inline-block w-6 text-right text-suaza-ink-muted text-[10px]">
+                            {m.jersey_number != null
+                              ? `#${m.jersey_number}`
+                              : ""}
+                          </span>
+                          <span>{displayMemberName(m.name)}</span>
                         </Link>
                       </td>
                       {matches.map((mt) => {

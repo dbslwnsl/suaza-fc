@@ -5,6 +5,7 @@ import {
   TITLE_LABEL,
   type MemberTitle,
 } from "@/lib/members/positions";
+import { displayMemberName } from "@/lib/members/name";
 
 type MemberRow = {
   id: string;
@@ -17,13 +18,24 @@ type MemberRow = {
 
 export default async function RosterView() {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const myId = user?.id ?? null;
 
   const { data: members } = await supabase
     .from("profiles")
     .select("id, name, nickname, title, positions, jersey_number")
     .order("name", { ascending: true });
 
-  const list = (members ?? []) as MemberRow[];
+  const raw = (members ?? []) as MemberRow[];
+  // 본인을 항상 맨 위로
+  const list = myId
+    ? [
+        ...raw.filter((m) => m.id === myId),
+        ...raw.filter((m) => m.id !== myId),
+      ]
+    : raw;
 
   return (
     <section className="flex flex-col gap-4">
@@ -43,7 +55,9 @@ export default async function RosterView() {
               >
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-suaza-ink">{m.name}</span>
+                    <span className="font-bold text-suaza-ink">
+                      {displayMemberName(m.name)}
+                    </span>
                     {m.nickname && (
                       <span className="text-sm text-suaza-ink-muted">
                         ({m.nickname})

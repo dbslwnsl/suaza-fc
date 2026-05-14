@@ -21,6 +21,7 @@ export default async function MembersPage({
     year?: string;
     sort?: string;
     month?: string;
+    order?: string;
   }>;
 }) {
   const sp = await searchParams;
@@ -84,6 +85,7 @@ export default async function MembersPage({
             years={years}
             sort={sp.sort}
             month={parseMonth(sp.month)}
+            order={sp.order === "asc" ? "asc" : "desc"}
           />
         )}
         {tab === "matches" && <MatchesView year={year} years={years} />}
