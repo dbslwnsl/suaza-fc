@@ -5,6 +5,7 @@ import {
   addParticipant,
   deleteMatch,
   removeParticipant,
+  setAttendance,
   updateMatch,
   updateParticipant,
 } from "@/lib/matches/actions";
@@ -64,6 +65,8 @@ export default async function MatchDetailPage({
     { data: participationsRaw },
     { data: allMembers },
     { data: statDefs },
+    { data: attendances },
+    { data: myAttendance },
   ] = await Promise.all([
     supabase.from("matches").select("*").eq("id", id).single(),
     supabase.from("profiles").select("role").eq("id", user.id).single(),
@@ -82,7 +85,27 @@ export default async function MatchDetailPage({
       .select("key, label, sort_order")
       .order("sort_order", { ascending: true })
       .order("key", { ascending: true }),
+    supabase
+      .from("match_attendances")
+      .select("status")
+      .eq("match_id", id),
+    supabase
+      .from("match_attendances")
+      .select("status")
+      .eq("match_id", id)
+      .eq("player_id", user.id)
+      .maybeSingle(),
   ]);
+
+  const attCounts = {
+    attending: 0,
+    absent: 0,
+    undecided: 0,
+  };
+  for (const a of (attendances ?? []) as { status: keyof typeof attCounts }[]) {
+    attCounts[a.status] = (attCounts[a.status] ?? 0) + 1;
+  }
+  const myStatus = (myAttendance as { status: string } | null)?.status ?? null;
 
   if (!match) notFound();
 
@@ -142,6 +165,15 @@ export default async function MatchDetailPage({
         >
           포메이션 보기 →
         </Link>
+
+        {m.status === "scheduled" && (
+          <AttendanceVote
+            matchId={m.id}
+            redirectTo={`/matches/${m.id}`}
+            myStatus={myStatus}
+            counts={attCounts}
+          />
+        )}
 
         {message && (
           <p className="-mt-2 p-3 bg-green-50 text-green-700 rounded-lg text-sm">
@@ -447,6 +479,69 @@ function ParticipationEditRow({
         </button>
       </form>
     </li>
+  );
+}
+
+export function AttendanceVote({
+  matchId,
+  redirectTo,
+  myStatus,
+  counts,
+}: {
+  matchId: string;
+  redirectTo: string;
+  myStatus: string | null;
+  counts: { attending: number; absent: number; undecided: number };
+}) {
+  const opts: { value: string; label: string; activeClass: string }[] = [
+    {
+      value: "attending",
+      label: "참석",
+      activeClass: "bg-green-600 text-white border-green-600",
+    },
+    {
+      value: "absent",
+      label: "불참",
+      activeClass: "bg-red-600 text-white border-red-600",
+    },
+    {
+      value: "undecided",
+      label: "미정",
+      activeClass: "bg-gray-700 text-white border-gray-700",
+    },
+  ];
+  return (
+    <section className="flex flex-col gap-2 p-4 border border-suaza-border rounded-lg">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-bold text-suaza-ink">출석 투표</h2>
+        <span className="text-xs text-suaza-ink-muted">
+          참석 {counts.attending} · 불참 {counts.absent} · 미정{" "}
+          {counts.undecided}
+        </span>
+      </div>
+      <form action={setAttendance.bind(null, matchId, redirectTo)}>
+        <div className="grid grid-cols-3 gap-2">
+          {opts.map((o) => {
+            const active = myStatus === o.value;
+            return (
+              <button
+                key={o.value}
+                type="submit"
+                name="status"
+                value={o.value}
+                className={`h-10 rounded-lg border text-sm font-medium transition ${
+                  active
+                    ? o.activeClass
+                    : "border-suaza-border text-suaza-ink hover:bg-gray-50"
+                }`}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+      </form>
+    </section>
   );
 }
 

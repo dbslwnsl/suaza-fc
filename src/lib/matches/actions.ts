@@ -202,3 +202,45 @@ export async function removeParticipant(
   revalidatePath(`/matches/${matchId}`);
   redirect(`/matches/${matchId}`);
 }
+
+// ─────────────────────────────────────────────────────────────
+// 출석 투표 (match_attendances)
+// ─────────────────────────────────────────────────────────────
+
+const ATTENDANCE_VALUES = ["attending", "absent", "undecided"] as const;
+type AttendanceStatus = (typeof ATTENDANCE_VALUES)[number];
+
+export async function setAttendance(
+  matchId: string,
+  redirectTo: string,
+  formData: FormData,
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const raw = String(formData.get("status") ?? "");
+  if (!ATTENDANCE_VALUES.includes(raw as AttendanceStatus)) {
+    redirect(`${redirectTo}?error=${encodeURIComponent("올바르지 않은 값입니다")}`);
+  }
+
+  const { error } = await supabase.from("match_attendances").upsert(
+    {
+      match_id: matchId,
+      player_id: user.id,
+      status: raw,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "match_id,player_id" },
+  );
+
+  if (error) {
+    redirect(`${redirectTo}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath(`/matches/${matchId}`);
+  revalidatePath("/");
+  redirect(redirectTo);
+}
