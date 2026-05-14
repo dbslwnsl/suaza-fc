@@ -2,10 +2,13 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
   aggregateSeason,
-  yearRange,
+  periodRange,
   type ParticipationRow,
+  type PlayerSeasonStat,
   type StatDef,
 } from "@/lib/stats/helpers";
+import MonthSelect from "./month-select";
+import { TAG_ACTIVE, TAG_DEFAULT, TAG_HOVER } from "@/lib/ui/tag-class";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
@@ -13,13 +16,15 @@ export default async function SeasonView({
   year,
   years,
   sort = "goals",
+  month = 0,
 }: {
   year: number;
   years: number[];
   sort?: string;
+  month?: number;
 }) {
   const supabase = await createClient();
-  const { from, to } = yearRange(year);
+  const { from, to } = periodRange(year, month);
 
   // 1. 해당 연도 종료 경기
   const { data: matchesRaw } = await supabase
@@ -49,9 +54,29 @@ export default async function SeasonView({
   ]);
 
   const defs = (defsRaw ?? []) as StatDef[];
-  const stats = aggregateSeason(
+  const aggregated = aggregateSeason(
     (partsRaw ?? []) as unknown as ParticipationRow[],
     defs,
+  );
+
+  // 모든 회원 명단을 받아 출전 없는 사람도 0 으로 채움
+  const { data: allMembersRaw } = await supabase
+    .from("profiles")
+    .select("id, name, jersey_number")
+    .order("name", { ascending: true });
+
+  const statsMap = new Map(aggregated.map((s) => [s.player_id, s]));
+  const stats: PlayerSeasonStat[] = (allMembersRaw ?? []).map(
+    (m) =>
+      statsMap.get(m.id) ?? {
+        player_id: m.id,
+        name: m.name,
+        jersey_number: m.jersey_number,
+        appearances: 0,
+        goals: 0,
+        assists: 0,
+        custom: {},
+      },
   );
 
   stats.sort((a, b) => {
@@ -80,11 +105,14 @@ export default async function SeasonView({
 
   return (
     <section className="flex flex-col gap-4">
-      <YearSelector year={year} years={years} tab="season" sort={sort} />
+      <div className="flex items-center gap-3 flex-wrap text-sm">
+        <YearSelector year={year} years={years} sort={sort} month={month} />
+        <MonthSelect year={year} month={month} sort={sort} />
+      </div>
 
       {stats.length === 0 ? (
         <p className="text-suaza-ink-muted text-sm">
-          {year}년 종료된 경기 기록이 없습니다.
+          등록된 회원이 없습니다.
         </p>
       ) : (
         <div className="overflow-x-auto -mx-2 sm:mx-0">
@@ -97,11 +125,30 @@ export default async function SeasonView({
                   sortKey="name"
                   current={sort}
                   year={year}
+                  month={month}
                   align="left"
                 />
-                <SortTh label="출전" sortKey="appearances" current={sort} year={year} />
-                <SortTh label="골" sortKey="goals" current={sort} year={year} />
-                <SortTh label="어시" sortKey="assists" current={sort} year={year} />
+                <SortTh
+                  label="출전"
+                  sortKey="appearances"
+                  current={sort}
+                  year={year}
+                  month={month}
+                />
+                <SortTh
+                  label="골"
+                  sortKey="goals"
+                  current={sort}
+                  year={year}
+                  month={month}
+                />
+                <SortTh
+                  label="어시"
+                  sortKey="assists"
+                  current={sort}
+                  year={year}
+                  month={month}
+                />
                 {defs.map((d) => (
                   <SortTh
                     key={d.key}
@@ -109,6 +156,7 @@ export default async function SeasonView({
                     sortKey={d.key}
                     current={sort}
                     year={year}
+                    month={month}
                   />
                 ))}
               </tr>
@@ -155,45 +203,38 @@ export default async function SeasonView({
 function YearSelector({
   year,
   years,
-  tab,
   sort,
+  month,
 }: {
   year: number;
   years: number[];
-  tab: "season" | "matches";
   sort?: string;
+  month?: number;
 }) {
   if (years.length === 0) {
     return (
-      <div className="flex items-center gap-2 text-sm">
-        <span className="text-suaza-ink-muted">기록된 연도가 없습니다.</span>
-      </div>
+      <span className="text-suaza-ink-muted">기록된 연도가 없습니다.</span>
     );
   }
   return (
-    <div className="flex items-center gap-2 flex-wrap text-sm">
-      <span className="text-suaza-ink-muted">연도:</span>
-      <div className="flex gap-1 flex-wrap">
-        {years.map((y) => {
-          const params = new URLSearchParams();
-          params.set("tab", tab);
-          params.set("year", String(y));
-          if (sort && sort !== "goals") params.set("sort", sort);
-          return (
-            <Link
-              key={y}
-              href={`/members?${params.toString()}`}
-              className={`px-2.5 py-1 rounded text-xs transition ${
-                y === year
-                  ? "bg-suaza-button text-white"
-                  : "border border-suaza-border text-suaza-ink hover:bg-gray-50"
-              }`}
-            >
-              {y}
-            </Link>
-          );
-        })}
-      </div>
+    <div className="flex items-center gap-1 flex-wrap">
+      {years.map((y) => {
+        const params = new URLSearchParams();
+        params.set("tab", "season");
+        params.set("year", String(y));
+        if (month && month >= 1 && month <= 12)
+          params.set("month", String(month));
+        if (sort && sort !== "goals") params.set("sort", sort);
+        return (
+          <Link
+            key={y}
+            href={`/members?${params.toString()}`}
+            className={`${y === year ? TAG_ACTIVE : `${TAG_DEFAULT} ${TAG_HOVER}`} transition`}
+          >
+            {y}
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -219,15 +260,22 @@ function SortTh({
   sortKey,
   current,
   year,
+  month,
   align = "center",
 }: {
   label: string;
   sortKey: string;
   current: string;
   year: number;
+  month: number;
   align?: "left" | "center";
 }) {
   const active = current === sortKey;
+  const params = new URLSearchParams();
+  params.set("tab", "season");
+  params.set("year", String(year));
+  if (month >= 1 && month <= 12) params.set("month", String(month));
+  params.set("sort", sortKey);
   return (
     <th
       className={`py-2 px-2 text-suaza-ink-muted font-medium border-b border-suaza-border ${
@@ -235,7 +283,7 @@ function SortTh({
       }`}
     >
       <Link
-        href={`/members?tab=season&year=${year}&sort=${sortKey}`}
+        href={`/members?${params.toString()}`}
         className={`inline-flex items-center gap-0.5 whitespace-nowrap hover:text-suaza-ink ${
           active ? "text-suaza-ink font-bold" : ""
         }`}

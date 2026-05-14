@@ -26,6 +26,17 @@ export function yearRange(year: number) {
   };
 }
 
+/**
+ * month: 1~12 면 해당 월, 그 외 값(0 / null)은 연도 전체.
+ */
+export function periodRange(year: number, month: number) {
+  if (month < 1 || month > 12) return yearRange(year);
+  return {
+    from: new Date(year, month - 1, 1).toISOString(),
+    to: new Date(year, month, 1).toISOString(),
+  };
+}
+
 export function aggregateSeason(
   rows: ParticipationRow[],
   defs: StatDef[],

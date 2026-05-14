@@ -96,7 +96,7 @@ export default async function Home() {
         supabase
           .from("profiles")
           .select("id, name, jersey_number")
-          .order("jersey_number", { ascending: true, nullsFirst: false }),
+          .order("name", { ascending: true }),
       ]);
 
     const votedIds = new Set<string>();
@@ -112,6 +112,9 @@ export default async function Home() {
     nonVoters = ((allMembers ?? []) as VotePlayer[]).filter(
       (m) => !votedIds.has(m.id),
     );
+    for (const key of ["attending", "absent", "undecided"] as const) {
+      byStatus[key].sort((a, b) => a.name.localeCompare(b.name, "ko"));
+    }
     myStatus = (mine as { status: string } | null)?.status ?? null;
   }
 

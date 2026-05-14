@@ -80,7 +80,7 @@ export default async function MatchDetailPage({
     supabase
       .from("profiles")
       .select("id, name, jersey_number")
-      .order("jersey_number", { ascending: true, nullsFirst: false }),
+      .order("name", { ascending: true }),
     supabase
       .from("stat_definitions")
       .select("key, label, sort_order")
@@ -117,6 +117,9 @@ export default async function MatchDetailPage({
   const nonVoters = ((allMembers ?? []) as VotePlayer[]).filter(
     (m) => !votedIds.has(m.id),
   );
+  for (const key of ["attending", "absent", "undecided"] as const) {
+    byStatus[key].sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  }
   const myStatus = (myAttendance as { status: string } | null)?.status ?? null;
 
   if (!match) notFound();
@@ -129,11 +132,9 @@ export default async function MatchDetailPage({
 
   const participations = ((participationsRaw ?? []) as unknown as Participation[])
     .slice()
-    .sort((a, b) => {
-      const aj = a.player?.jersey_number ?? 9999;
-      const bj = b.player?.jersey_number ?? 9999;
-      return aj - bj;
-    });
+    .sort((a, b) =>
+      (a.player?.name ?? "").localeCompare(b.player?.name ?? "", "ko"),
+    );
 
   const participatedIds = new Set(participations.map((p) => p.player_id));
   const availableMembers = ((allMembers ?? []) as MemberOpt[]).filter(

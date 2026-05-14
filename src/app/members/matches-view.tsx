@@ -42,7 +42,7 @@ export default async function MatchesView({
     .eq("status", "done")
     .gte("match_date", from)
     .lt("match_date", to)
-    .order("match_date", { ascending: true });
+    .order("match_date", { ascending: false });
 
   const matches = (matchesRaw ?? []) as MatchRow[];
   const matchIds = matches.map((m) => m.id);
@@ -57,16 +57,11 @@ export default async function MatchesView({
     supabase
       .from("profiles")
       .select("id, name, jersey_number")
-      .order("jersey_number", { ascending: true, nullsFirst: false })
       .order("name", { ascending: true }),
   ]);
 
   const parts = (partsRaw ?? []) as ParticipationRow[];
   const members = (membersRaw ?? []) as Member[];
-
-  // 출전 있는 선수만
-  const playedIds = new Set(parts.map((p) => p.player_id));
-  const playedMembers = members.filter((m) => playedIds.has(m.id));
 
   // 인덱스: player_id -> match_id -> CellData
   const cells = new Map<string, Map<string, CellData>>();
@@ -91,14 +86,9 @@ export default async function MatchesView({
         <p className="text-suaza-ink-muted text-sm">
           {year}년 종료된 경기가 없습니다.
         </p>
-      ) : playedMembers.length === 0 ? (
-        <p className="text-suaza-ink-muted text-sm">기록된 출전이 없습니다.</p>
       ) : (
         <>
           <Legend />
-          <p className="text-xs text-suaza-ink-faint">
-            ← 가로로 스크롤해서 모든 경기를 확인하세요
-          </p>
           <div className="overflow-x-auto -mx-2 sm:mx-0">
             <table className="text-xs sm:text-sm border-separate border-spacing-0">
               <thead>
@@ -132,7 +122,7 @@ export default async function MatchesView({
                 </tr>
               </thead>
               <tbody>
-                {playedMembers.map((m) => {
+                {members.map((m) => {
                   const row = cells.get(m.id);
                   return (
                     <tr key={m.id}>
@@ -212,23 +202,20 @@ function YearSelector({ year, years }: { year: number; years: number[] }) {
     );
   }
   return (
-    <div className="flex items-center gap-2 flex-wrap text-sm">
-      <span className="text-suaza-ink-muted">연도:</span>
-      <div className="flex gap-1 flex-wrap">
-        {years.map((y) => (
-          <Link
-            key={y}
-            href={`/members?tab=matches&year=${y}`}
-            className={`px-2.5 py-1 rounded text-xs transition ${
-              y === year
-                ? "bg-suaza-button text-white"
-                : "border border-suaza-border text-suaza-ink hover:bg-gray-50"
-            }`}
-          >
-            {y}
-          </Link>
-        ))}
-      </div>
+    <div className="flex gap-1 flex-wrap">
+      {years.map((y) => (
+        <Link
+          key={y}
+          href={`/members?tab=matches&year=${y}`}
+          className={`px-2.5 py-1 rounded text-xs transition ${
+            y === year
+              ? "bg-suaza-button text-white"
+              : "border border-suaza-border text-suaza-ink hover:bg-gray-50"
+          }`}
+        >
+          {y}
+        </Link>
+      ))}
     </div>
   );
 }

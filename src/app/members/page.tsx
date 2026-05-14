@@ -16,7 +16,12 @@ const TAB_LABEL: Record<Tab, string> = {
 export default async function MembersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; year?: string; sort?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    year?: string;
+    sort?: string;
+    month?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const tab: Tab = (TABS as readonly string[]).includes(sp.tab ?? "")
@@ -74,10 +79,20 @@ export default async function MembersPage({
 
         {tab === "roster" && <RosterView />}
         {tab === "season" && (
-          <SeasonView year={year} years={years} sort={sp.sort} />
+          <SeasonView
+            year={year}
+            years={years}
+            sort={sp.sort}
+            month={parseMonth(sp.month)}
+          />
         )}
         {tab === "matches" && <MatchesView year={year} years={years} />}
       </div>
     </main>
   );
+}
+
+function parseMonth(raw?: string): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 1 && n <= 12 ? n : 0;
 }
