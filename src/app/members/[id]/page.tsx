@@ -112,7 +112,7 @@ export default async function MemberDetailPage({
         )}
 
         <section className="flex items-center">
-          <div className="flex-1 flex justify-center">
+          <div className="flex-1 flex justify-start sm:justify-center">
             <AvatarUpload
               profileId={profile.id}
               src={avatarSrc}
