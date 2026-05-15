@@ -6,8 +6,10 @@ import { createClient } from "@/lib/supabase/server";
 import {
   MEMBER_TITLES,
   POSITIONS,
+  PREFERRED_FEET,
   type MemberTitle,
   type Position,
+  type PreferredFoot,
 } from "@/lib/members/positions";
 
 type UpdateInput = {
@@ -16,6 +18,7 @@ type UpdateInput = {
   positions: Position[];
   jersey_number: number | null;
   birth_date: string | null;
+  preferred_foot: PreferredFoot | null;
   title?: MemberTitle;
 };
 
@@ -49,6 +52,10 @@ export async function updateProfile(profileId: string, formData: FormData) {
   const jerseyRaw = String(formData.get("jersey_number") ?? "").trim();
   const birthRaw = String(formData.get("birth_date") ?? "").trim();
   const nickname = String(formData.get("nickname") ?? "").trim();
+  const footRaw = String(formData.get("preferred_foot") ?? "");
+  const preferred_foot = (PREFERRED_FEET as readonly string[]).includes(footRaw)
+    ? (footRaw as PreferredFoot)
+    : null;
 
   const update: UpdateInput = {
     name: String(formData.get("name") ?? "").trim(),
@@ -56,6 +63,7 @@ export async function updateProfile(profileId: string, formData: FormData) {
     positions,
     jersey_number: jerseyRaw ? Number(jerseyRaw) : null,
     birth_date: birthRaw || null,
+    preferred_foot,
   };
 
   if (!update.name) {

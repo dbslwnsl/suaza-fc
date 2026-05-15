@@ -5,6 +5,7 @@ import {
   TITLE_LABEL,
   type MemberTitle,
   type Position,
+  type PreferredFoot,
 } from "@/lib/members/positions";
 import ProfileEditForm from "./profile-edit-form";
 import AvatarUpload from "./avatar-upload";
@@ -43,7 +44,7 @@ export default async function MemberDetailPage({
     supabase
       .from("profiles")
       .select(
-        "id, name, nickname, role, title, positions, jersey_number, birth_date, avatar_url",
+        "id, name, nickname, role, title, positions, jersey_number, birth_date, avatar_url, preferred_foot",
       )
       .eq("id", id)
       .single(),
@@ -138,6 +139,7 @@ export default async function MemberDetailPage({
               positions,
               jersey_number: profile.jersey_number ?? null,
               birth_date: profile.birth_date ?? null,
+              preferred_foot: (profile.preferred_foot ?? null) as PreferredFoot | null,
               title,
             }}
           />

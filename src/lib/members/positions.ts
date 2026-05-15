@@ -2,6 +2,31 @@
 export const POSITIONS = ["GK", "DF", "MF", "FW"] as const;
 export type Position = (typeof POSITIONS)[number];
 
+export const POSITION_LABEL: Record<Position, string> = {
+  GK: "골키퍼",
+  DF: "수비수",
+  MF: "미드필더",
+  FW: "공격수",
+};
+
+// 포지션별 고유 색상 (선택 강조 / 배지 / 그래프 등에 일관 적용)
+export const POSITION_COLOR: Record<Position, string> = {
+  GK: "#FCC733",
+  DF: "#338CF2",
+  MF: "#33BD73",
+  FW: "#EF3E3E",
+};
+
+// 주발
+export const PREFERRED_FEET = ["left", "right", "both"] as const;
+export type PreferredFoot = (typeof PREFERRED_FEET)[number];
+
+export const FOOT_LABEL: Record<PreferredFoot, string> = {
+  left: "왼발",
+  right: "오른발",
+  both: "양발",
+};
+
 // 동호회 직책 (enum public.member_title 순서와 일치)
 export const MEMBER_TITLES = [
   "president",
@@ -21,7 +46,7 @@ export const TITLE_LABEL: Record<MemberTitle, string> = {
   auditor: "감사",
   head_coach: "감독",
   coach: "코치",
-  player: "선수",
+  player: "회원",
 };
 
 export const TITLE_BADGE: Record<MemberTitle, string> = {
