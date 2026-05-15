@@ -117,7 +117,6 @@ export default async function MemberDetailPage({
               src={avatarSrc}
               name={profile.name}
               canEdit={canEdit}
-              hasCustomAvatar={!!profile.avatar_url}
             />
           </div>
           <div className="grid grid-cols-[repeat(3,auto)] gap-x-1 gap-y-2">

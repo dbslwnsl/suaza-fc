@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRef, useState, useTransition } from "react";
-import { deleteAvatar, uploadAvatar } from "./actions";
+import { uploadAvatar } from "./actions";
 
 const MAX_DIMENSION = 512;
 const JPEG_QUALITY = 0.85;
@@ -12,13 +12,11 @@ export default function AvatarUpload({
   src,
   name,
   canEdit,
-  hasCustomAvatar,
 }: {
   profileId: string;
   src: string;
   name: string;
   canEdit: boolean;
-  hasCustomAvatar: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isPending, startTransition] = useTransition();
@@ -121,19 +119,11 @@ export default function AvatarUpload({
             onClick={() => inputRef.current?.click()}
             className="block w-full px-3 py-2 text-sm text-left hover:bg-gray-50 text-suaza-ink"
           >
-            이미지 업로드
+            <span className="block">이미지 업로드</span>
+            <span className="block text-[10px] text-suaza-ink-faint mt-0.5">
+              512×512 권장
+            </span>
           </button>
-          {hasCustomAvatar && (
-            <form action={deleteAvatar.bind(null, profileId)}>
-              <button
-                type="submit"
-                className="block w-full px-3 py-2 text-sm text-left hover:bg-red-50 text-red-600 border-t border-suaza-border"
-                onClick={() => setMenuOpen(false)}
-              >
-                기본 이미지로
-              </button>
-            </form>
-          )}
           <button
             type="button"
             onClick={() => setMenuOpen(false)}
