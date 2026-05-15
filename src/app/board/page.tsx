@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import PageHeader from "@/components/page-header";
 import { formatPostDate } from "@/lib/board/helpers";
 
 type Post = {
@@ -29,17 +30,17 @@ export default async function BoardPage({
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[600px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
-        <header className="flex items-center justify-between gap-3 flex-wrap">
-          <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
-            게시판
-          </h1>
-          <Link
-            href="/board/new"
-            className="text-sm bg-suaza-button text-white rounded-lg px-3.5 py-2 font-medium hover:opacity-90"
-          >
-            + 새 글
-          </Link>
-        </header>
+        <PageHeader
+          title="게시판"
+          right={
+            <Link
+              href="/board/new"
+              className="text-sm bg-suaza-button text-white rounded-lg px-3.5 py-2 font-medium hover:opacity-90"
+            >
+              + 새 글
+            </Link>
+          }
+        />
 
         {message && (
           <p className="-mt-2 p-3 bg-green-50 text-green-700 rounded-lg text-sm">
