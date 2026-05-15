@@ -40,7 +40,7 @@ export default async function Home() {
   ] = await Promise.all([
     supabase
       .from("profiles")
-      .select("name, nickname, title, positions, role")
+      .select("name, nickname, title, positions, role, avatar_url")
       .eq("id", user!.id)
       .single(),
     supabase
@@ -153,9 +153,9 @@ export default async function Home() {
         {/* Profile Card */}
         <section className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-6 rounded-xl border sm:border-0 border-suaza-border flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-4">
-            <div className="relative w-14 h-14 rounded-full overflow-hidden shrink-0">
+            <div className="relative w-14 h-14 rounded-full overflow-hidden shrink-0 bg-gray-100">
               <Image
-                src="/suaza-emblem.png"
+                src={profile?.avatar_url || "/suaza-emblem.png"}
                 alt={profile?.name ?? "프로필"}
                 fill
                 sizes="56px"
