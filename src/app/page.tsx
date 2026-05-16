@@ -201,7 +201,7 @@ export default async function Home() {
               href={`/members/${user!.id}`}
               className="text-[13px] font-bold text-suaza-accent hover:underline"
             >
-              내 프로필 수정 →
+              프로필 수정
             </Link>
           )}
         </section>
