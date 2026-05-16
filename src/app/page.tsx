@@ -3,9 +3,13 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/lib/auth/actions";
 import {
+  FOOT_LABEL,
+  POSITION_COLOR,
   TITLE_BADGE,
   TITLE_LABEL,
   type MemberTitle,
+  type Position,
+  type PreferredFoot,
 } from "@/lib/members/positions";
 import {
   MATCH_STATUS_BADGE,
@@ -26,6 +30,22 @@ type NoticeRow = {
   author: { name: string } | null;
 };
 
+function PositionBadge({ position }: { position: Position }) {
+  const color = POSITION_COLOR[position];
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold"
+      style={{ color, backgroundColor: `${color}1A` }}
+    >
+      <span
+        className="w-1.5 h-1.5 rounded-full"
+        style={{ backgroundColor: color }}
+      />
+      {position}
+    </span>
+  );
+}
+
 export default async function Home() {
   const supabase = await createClient();
   const {
@@ -37,10 +57,13 @@ export default async function Home() {
     { data: latestNotice },
     { data: upcomingMatch },
     { data: lastMatch },
+    { data: partsRaw },
   ] = await Promise.all([
     supabase
       .from("profiles")
-      .select("name, nickname, title, positions, role, avatar_url")
+      .select(
+        "name, nickname, title, positions, role, avatar_url, jersey_number, preferred_foot",
+      )
       .eq("id", user!.id)
       .single(),
     supabase
@@ -64,6 +87,10 @@ export default async function Home() {
       .order("match_date", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from("match_participations")
+      .select("goals, assists, custom_stats, match:matches(status)")
+      .eq("player_id", user!.id),
   ]);
 
   const upcoming = upcomingMatch as Match | null;
@@ -122,6 +149,36 @@ export default async function Home() {
     ? getResult(last.our_score, last.opponent_score)
     : null;
 
+  // 누적 통계 (종료 경기만)
+  type Part = {
+    goals: number;
+    assists: number;
+    custom_stats: Record<string, number> | null;
+    match: { status: string } | null;
+  };
+  const done = ((partsRaw ?? []) as unknown as Part[]).filter(
+    (p) => p.match?.status === "done",
+  );
+  const homeStats: { label: string; value: number }[] = [
+    { label: "출전", value: done.length },
+    { label: "골", value: done.reduce((a, p) => a + (p.goals ?? 0), 0) },
+    { label: "어시", value: done.reduce((a, p) => a + (p.assists ?? 0), 0) },
+    {
+      label: "클린시트",
+      value: done.reduce(
+        (a, p) => a + (p.custom_stats?.clean_sheets ?? 0),
+        0,
+      ),
+    },
+    {
+      label: "포인트",
+      value: done.reduce((a, p) => a + (p.custom_stats?.points ?? 0), 0),
+    },
+  ];
+
+  const positions = (profile?.positions ?? []) as Position[];
+  const foot = (profile?.preferred_foot ?? null) as PreferredFoot | null;
+
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[600px] mx-auto flex flex-col gap-4">
@@ -151,38 +208,74 @@ export default async function Home() {
         </header>
 
         {/* Profile Card */}
-        <section className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-6 rounded-xl border sm:border-0 border-suaza-border flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-4">
-            <div className="relative w-14 h-14 rounded-full overflow-hidden shrink-0 bg-gray-100">
-              <Image
-                src={profile?.avatar_url || "/suaza-emblem.png"}
-                alt={profile?.name ?? "프로필"}
-                fill
-                sizes="56px"
-                className="object-cover"
-              />
+        <section className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-6 rounded-xl border sm:border-0 border-suaza-border flex flex-col gap-4">
+          <div className="flex items-start gap-4">
+            <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden shrink-0 bg-gray-100 flex items-center justify-center">
+              {profile?.avatar_url ? (
+                <Image
+                  src={profile.avatar_url}
+                  alt={profile?.name ?? "프로필"}
+                  fill
+                  sizes="(min-width: 640px) 96px, 80px"
+                  className="object-cover"
+                />
+              ) : (
+                <span className="text-2xl sm:text-3xl font-bold text-suaza-ink">
+                  {profile?.name?.charAt(0) ?? "?"}
+                </span>
+              )}
             </div>
-            <div className="flex flex-col gap-1">
+
+            <div className="flex-1 flex flex-col gap-1.5 min-w-0">
               {profile ? (
                 <>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-suaza-ink text-lg">
+                  <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
+                    <span className="font-bold text-suaza-ink text-lg leading-tight">
                       {profile.name}
                     </span>
+                    {profile.jersey_number != null && (
+                      <span
+                        className="font-bold text-lg leading-tight"
+                        style={{ color: "#338CF2" }}
+                      >
+                        #{profile.jersey_number}
+                      </span>
+                    )}
+                    {profile.nickname && (
+                      <span className="hidden pointer-fine:inline text-suaza-ink-muted text-sm">
+                        ({profile.nickname})
+                      </span>
+                    )}
                     <span
-                      className={`text-xs px-2 py-0.5 rounded ${TITLE_BADGE[(profile.title as MemberTitle) ?? "player"]}`}
+                      className={`text-xs px-2 py-0.5 rounded-full font-medium ${TITLE_BADGE[(profile.title as MemberTitle) ?? "player"]}`}
                     >
                       {TITLE_LABEL[(profile.title as MemberTitle) ?? "player"]}
                     </span>
                   </div>
-                  <span className="text-suaza-ink-muted text-[13px]">
+
+                  {(positions.length > 0 || foot) && (
+                    <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
+                      {positions.map((p) => (
+                        <PositionBadge key={p} position={p} />
+                      ))}
+                      {foot && (
+                        <>
+                          {positions.length > 0 && (
+                            <span className="hidden pointer-fine:inline text-suaza-ink-faint">
+                              ·
+                            </span>
+                          )}
+                          <span className="hidden pointer-fine:inline text-sm text-suaza-ink-muted">
+                            {FOOT_LABEL[foot]}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  <span className="text-suaza-ink-muted text-xs">
                     {user!.email}
                   </span>
-                  {profile.positions && profile.positions.length > 0 && (
-                    <span className="text-suaza-ink-muted text-[13px]">
-                      포지션: {profile.positions.join(", ")}
-                    </span>
-                  )}
                 </>
               ) : (
                 <>
@@ -195,14 +288,38 @@ export default async function Home() {
                 </>
               )}
             </div>
+
+            {profile && (
+              <Link
+                href={`/members/${user!.id}`}
+                className="text-xs sm:text-sm font-bold text-suaza-accent bg-red-50 hover:bg-red-100 transition px-3 py-1.5 rounded-lg whitespace-nowrap shrink-0"
+              >
+                프로필 수정 ›
+              </Link>
+            )}
           </div>
+
           {profile && (
-            <Link
-              href={`/members/${user!.id}`}
-              className="text-[13px] font-bold text-suaza-accent hover:underline"
-            >
-              프로필 수정
-            </Link>
+            <>
+              <div className="h-px bg-suaza-border" />
+              <div className="grid grid-cols-5">
+                {homeStats.map((s, i) => (
+                  <div
+                    key={s.label}
+                    className={`flex flex-col items-center gap-1 ${
+                      i > 0 ? "border-l border-suaza-border" : ""
+                    }`}
+                  >
+                    <span className="text-xl sm:text-2xl font-bold text-suaza-ink">
+                      {s.value}
+                    </span>
+                    <span className="text-[11px] sm:text-xs text-suaza-ink-muted">
+                      {s.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </section>
 
