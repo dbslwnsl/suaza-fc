@@ -294,7 +294,10 @@ export default async function Home() {
                 href={`/members/${user!.id}`}
                 className="text-xs sm:text-sm font-bold text-suaza-accent bg-red-50 hover:bg-red-100 transition px-3 py-1.5 rounded-lg whitespace-nowrap shrink-0"
               >
-                프로필 수정 ›
+                <span className="pointer-fine:hidden">수정</span>
+                <span className="hidden pointer-fine:inline">
+                  프로필 수정 ›
+                </span>
               </Link>
             )}
           </div>
