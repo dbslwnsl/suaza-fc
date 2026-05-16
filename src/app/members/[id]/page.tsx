@@ -1,3 +1,5 @@
+import Image from "next/image";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -90,6 +92,19 @@ export default async function MemberDetailPage({
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[600px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
         <header className="flex items-center gap-3 flex-wrap">
+          <Link
+            href="/"
+            aria-label="홈으로"
+            className="relative w-9 h-9 rounded-full overflow-hidden block hover:opacity-80 transition shrink-0"
+          >
+            <Image
+              src="/suaza-emblem.png"
+              alt="홈"
+              fill
+              sizes="36px"
+              className="object-cover"
+            />
+          </Link>
           <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
             {profile.name}
           </h1>
