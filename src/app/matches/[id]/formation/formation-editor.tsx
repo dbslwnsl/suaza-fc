@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { saveFormation } from "@/lib/formations/actions";
 import {
@@ -66,7 +66,12 @@ export default function FormationEditor({
   const [query, setQuery] = useState("");
   const [openSlot, setOpenSlot] = useState<number | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [swapSourceIdx, setSwapSourceIdx] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setSwapSourceIdx(null);
+  }, [activeIdx]);
 
   const current = quarters[activeIdx] ?? quarters[0];
   const slots = useMemo(() => buildSlots(current.shape), [current.shape]);
@@ -337,18 +342,36 @@ export default function FormationEditor({
 
       {/* 메인 영역 */}
       <div className="desktop:relative desktop:flex-1 desktop:min-h-0">
-        <div className="desktop:pr-[360px] desktop:h-full">
+        <div className="relative desktop:pr-[360px] desktop:h-full">
           <Pitch
             slots={slots}
             assignments={current.assignments}
             byId={byId}
             readonly={readonly}
             draggingId={draggingId}
+            swapSourceIdx={swapSourceIdx}
             onSlotClick={(i) => !readonly && setOpenSlot(i)}
             onSlotDrop={handleSlotDrop}
             onDragStart={(id) => setDraggingId(id)}
             onDragEnd={() => setDraggingId(null)}
+            onSwapSourceChange={setSwapSourceIdx}
+            onSwapSlots={(a, b) => swapSlots(a, b)}
           />
+
+          {swapSourceIdx !== null && (
+            <div className="absolute left-3 right-3 top-3 z-10 flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-amber-50/95 border border-amber-200 shadow-sm">
+              <span className="text-xs sm:text-sm text-amber-800 font-medium">
+                교환할 다른 위치를 탭하세요
+              </span>
+              <button
+                type="button"
+                onClick={() => setSwapSourceIdx(null)}
+                className="shrink-0 text-xs text-amber-800 hover:underline px-1"
+              >
+                취소
+              </button>
+            </div>
+          )}
         </div>
 
         <aside className="hidden desktop:flex desktop:absolute desktop:top-0 desktop:right-0 desktop:bottom-0 desktop:w-[340px] flex-col bg-white rounded-2xl border border-suaza-border p-4 gap-3 min-h-0">
@@ -454,23 +477,81 @@ function Pitch({
   byId,
   readonly,
   draggingId,
+  swapSourceIdx,
   onSlotClick,
   onSlotDrop,
   onDragStart,
   onDragEnd,
+  onSwapSourceChange,
+  onSwapSlots,
 }: {
   slots: SlotDef[];
   assignments: (string | null)[];
   byId: Map<string, EditorMember>;
   readonly: boolean;
   draggingId: string | null;
+  swapSourceIdx: number | null;
   onSlotClick: (i: number) => void;
   onSlotDrop: (targetIdx: number, playerId: string, sourceIdx?: number) => void;
   onDragStart?: (playerId: string) => void;
   onDragEnd?: () => void;
+  onSwapSourceChange: (i: number | null) => void;
+  onSwapSlots: (a: number, b: number) => void;
 }) {
   const [hoverSlot, setHoverSlot] = useState<number | null>(null);
   const isDropMode = !readonly && draggingId != null;
+  const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lpFired = useRef(false);
+  const lpStart = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (lpTimer.current) clearTimeout(lpTimer.current);
+    };
+  }, []);
+
+  function startLongPress(i: number, e: React.PointerEvent) {
+    if (readonly) return;
+    lpFired.current = false;
+    lpStart.current = { x: e.clientX, y: e.clientY };
+    if (lpTimer.current) clearTimeout(lpTimer.current);
+    lpTimer.current = setTimeout(() => {
+      lpFired.current = true;
+      onSwapSourceChange(i);
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        try {
+          navigator.vibrate(40);
+        } catch {}
+      }
+    }, 450);
+  }
+
+  function cancelLongPress() {
+    if (lpTimer.current) {
+      clearTimeout(lpTimer.current);
+      lpTimer.current = null;
+    }
+  }
+
+  function checkLongPressMove(e: React.PointerEvent) {
+    if (!lpTimer.current || !lpStart.current) return;
+    const dx = e.clientX - lpStart.current.x;
+    const dy = e.clientY - lpStart.current.y;
+    if (dx * dx + dy * dy > 100) cancelLongPress();
+  }
+
+  function handleSlotClick(i: number) {
+    if (lpFired.current) {
+      lpFired.current = false;
+      return;
+    }
+    if (swapSourceIdx != null) {
+      if (swapSourceIdx !== i) onSwapSlots(swapSourceIdx, i);
+      onSwapSourceChange(null);
+      return;
+    }
+    onSlotClick(i);
+  }
 
   return (
     <div className="relative w-full aspect-[3/4] desktop:aspect-auto desktop:h-full desktop:min-h-[360px] bg-gradient-to-b from-emerald-600 to-emerald-700 rounded-2xl overflow-hidden shadow-lg">
@@ -503,13 +584,20 @@ function Pitch({
         const isEmpty = !player;
         const showDropHint = isDropMode && isEmpty;
         const canDrag = !readonly && !!pid;
+        const isSwapSource = swapSourceIdx === i;
         return (
           <div
             key={s.index}
-            className="absolute -translate-x-1/2 -translate-y-1/2"
+            className="absolute -translate-x-1/2 -translate-y-1/2 touch-none"
             style={{ left: `${s.x * 100}%`, top: `${s.y * 100}%` }}
             draggable={canDrag}
+            onPointerDown={(e) => startLongPress(i, e)}
+            onPointerMove={checkLongPressMove}
+            onPointerUp={cancelLongPress}
+            onPointerCancel={cancelLongPress}
+            onPointerLeave={cancelLongPress}
             onDragStart={(e) => {
+              cancelLongPress();
               if (!canDrag || !pid) return;
               e.dataTransfer.setData("text/plain", pid);
               e.dataTransfer.setData(
@@ -546,7 +634,7 @@ function Pitch({
             <button
               type="button"
               disabled={readonly}
-              onClick={() => onSlotClick(i)}
+              onClick={() => handleSlotClick(i)}
               className={`flex flex-col items-center gap-1 group ${
                 readonly ? "cursor-default" : "cursor-pointer"
               } ${canDrag ? "cursor-grab active:cursor-grabbing" : ""}`}
@@ -556,6 +644,7 @@ function Pitch({
                 role={s.role}
                 hovered={isHover}
                 hint={showDropHint}
+                selected={isSwapSource}
               />
               <span className="text-[11px] sm:text-xs text-white font-medium drop-shadow whitespace-nowrap max-w-[80px] truncate">
                 {player?.name ?? (
@@ -575,19 +664,24 @@ function PlayerCircle({
   role,
   hovered,
   hint,
+  selected,
 }: {
   player: EditorMember | null | undefined;
   role: SlotRole;
   hovered: boolean;
   hint: boolean;
+  selected?: boolean;
 }) {
   const color = POSITION_COLOR[role];
+  const stateRing = selected
+    ? "ring-4 ring-amber-300/90 scale-110 animate-pulse"
+    : hovered
+      ? "ring-4 ring-white/60 scale-110"
+      : "";
   if (player) {
     return (
       <div
-        className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white border-[3px] flex items-center justify-center text-[11px] font-bold shadow-md transition ${
-          hovered ? "ring-4 ring-white/60 scale-110" : ""
-        }`}
+        className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white border-[3px] flex items-center justify-center text-[11px] font-bold shadow-md transition ${stateRing}`}
         style={{ borderColor: color }}
       >
         <span style={{ color }}>{role}</span>
@@ -596,9 +690,7 @@ function PlayerCircle({
   }
   return (
     <div
-      className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full border-2 border-dashed flex items-center justify-center transition group-hover:bg-white/10 ${
-        hovered ? "ring-4 ring-white/60 scale-110" : ""
-      } ${hint ? "animate-pulse" : ""}`}
+      className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full border-2 border-dashed flex items-center justify-center transition group-hover:bg-white/10 ${stateRing} ${hint ? "animate-pulse" : ""}`}
       style={{ borderColor: color, backgroundColor: `${color}33` }}
     >
       <span className="text-white/85 text-lg leading-none font-light">+</span>
