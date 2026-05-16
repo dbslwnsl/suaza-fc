@@ -150,7 +150,8 @@ export async function addParticipant(matchId: string, formData: FormData) {
   }
 
   // 새로 추가 또는 이전에 archive 된 row 재활성화.
-  // 어느 경우든 통계는 0 으로 초기화 (이전 기록 복원 X).
+  // 통계는 0 으로 초기화 (이전 기록 복원 X).
+  // 단, 출석은 자동으로 1 점 (참가 = 출석).
   const { error } = await supabase
     .from("match_participations")
     .upsert(
@@ -160,7 +161,7 @@ export async function addParticipant(matchId: string, formData: FormData) {
         archived_at: null,
         goals: 0,
         assists: 0,
-        custom_stats: {},
+        custom_stats: { attendance: 1 },
       },
       { onConflict: "match_id,player_id" },
     );

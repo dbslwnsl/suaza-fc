@@ -35,6 +35,7 @@ type Stats = {
   assists: number;
   clean_sheets: number;
   referee_count: number;
+  attendance: number;
 };
 
 export type ParticipationData = {
@@ -55,6 +56,7 @@ const STAT_META: {
   color: string;
   bg: string;
   weight: number;
+  locked?: boolean;
 }[] = [
   {
     key: "goals",
@@ -88,6 +90,15 @@ const STAT_META: {
     bg: "rgba(245,158,11,0.10)",
     weight: 1,
   },
+  {
+    key: "attendance",
+    label: "출석",
+    icon: "✓",
+    color: "#14B8A6",
+    bg: "rgba(20,184,166,0.10)",
+    weight: 1,
+    locked: true,
+  },
 ];
 
 function readStats(p: ParticipationData): Stats {
@@ -96,13 +107,17 @@ function readStats(p: ParticipationData): Stats {
     assists: p.assists ?? 0,
     clean_sheets: p.custom_stats?.clean_sheets ?? 0,
     referee_count: p.custom_stats?.referee_count ?? 0,
+    // 출석은 active participation 이면 기본 1점
+    attendance: p.custom_stats?.attendance ?? 1,
   };
 }
 
 function calcPoints(s: Stats): number {
-  return (
-    s.goals * 3 + s.assists * 2 + s.clean_sheets * 2 + s.referee_count * 1
-  );
+  let sum = 0;
+  for (const meta of STAT_META) {
+    sum += s[meta.key] * meta.weight;
+  }
+  return sum;
 }
 
 export default function ParticipationBoard({
@@ -164,6 +179,8 @@ export default function ParticipationBoard({
 
   // 클릭 시 optimistic UI + 백그라운드 서버 저장
   const updateStat = (id: string, key: StatKey, delta: number) => {
+    // 출석은 고정 1점 (UI 가 막아주지만 안전장치)
+    if (key === "attendance") return;
     setEdited((prev) => {
       const next = new Map(prev);
       let cur = next.get(id);
@@ -356,7 +373,7 @@ function SelectedPlayerCard({
         <PointStar points={points} />
       </div>
 
-      <div className="grid grid-cols-2 desktop:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 desktop:grid-cols-5 gap-2">
         {STAT_META.map((s) => (
           <StatBox
             key={s.key}
@@ -414,6 +431,7 @@ function StatBox({
   onInc: () => void;
 }) {
   const contribution = value * meta.weight;
+  const locked = meta.locked === true;
   return (
     <div
       className="border-2 rounded-xl p-3 flex flex-col gap-2 bg-white"
@@ -434,13 +452,34 @@ function StatBox({
           +{contribution}pt
         </span>
       </div>
-      <div className="flex items-center gap-1">
-        <StatButton onClick={onDec} disabled={disabled || value === 0} label="−" />
-        <span className="flex-1 text-center text-lg font-bold text-suaza-ink">
-          {value}
-        </span>
-        <StatButton onClick={onInc} disabled={disabled} label="+" active={value > 0} color={meta.color} />
-      </div>
+      {locked ? (
+        <div className="flex items-center justify-center py-1">
+          <span
+            className="text-lg font-bold"
+            style={{ color: value > 0 ? meta.color : "var(--suaza-ink)" }}
+          >
+            {value}
+          </span>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1">
+          <StatButton
+            onClick={onDec}
+            disabled={disabled || value === 0}
+            label="−"
+          />
+          <span className="flex-1 text-center text-lg font-bold text-suaza-ink">
+            {value}
+          </span>
+          <StatButton
+            onClick={onInc}
+            disabled={disabled}
+            label="+"
+            active={value > 0}
+            color={meta.color}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -551,6 +590,8 @@ function StatChip({
   disabled?: boolean;
 }) {
   const active = value > 0;
+  const locked = meta.locked === true;
+  const interactive = !disabled && !locked;
   const [popoverOpen, setPopoverOpen] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressFired = useRef(false);
@@ -562,7 +603,7 @@ function StatChip({
     }
   };
   const startTimer = () => {
-    if (disabled) return;
+    if (!interactive) return;
     longPressFired.current = false;
     cancelTimer();
     longPressTimer.current = setTimeout(() => {
@@ -571,6 +612,7 @@ function StatChip({
     }, 450);
   };
   const handleClick = () => {
+    if (!interactive) return;
     if (longPressFired.current) {
       longPressFired.current = false;
       return;
@@ -591,7 +633,10 @@ function StatChip({
         onTouchCancel={cancelTimer}
         onContextMenu={(e) => e.preventDefault()}
         disabled={disabled}
-        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border-2 text-xs transition hover:opacity-80 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:opacity-60 select-none"
+        aria-disabled={locked}
+        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border-2 text-xs transition select-none disabled:opacity-60 disabled:cursor-not-allowed ${
+          locked ? "cursor-default" : "hover:opacity-80"
+        }`}
         style={
           active
             ? {
@@ -617,7 +662,7 @@ function StatChip({
             onTouchStart={() => setPopoverOpen(false)}
           />
           <div
-            className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-40 flex items-stretch rounded-lg overflow-hidden shadow-lg select-none"
+            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-40 flex items-stretch rounded-lg overflow-hidden shadow-lg select-none"
             style={{
               backgroundColor: meta.bg,
               border: `2px solid ${meta.color}`,
