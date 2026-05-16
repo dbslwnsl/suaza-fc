@@ -151,7 +151,7 @@ export default async function MemberDetailPage({
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="w-20 h-20 flex flex-col items-center justify-center gap-1 px-1 py-2 border border-suaza-border rounded-lg">
+    <div className="w-[66px] h-[66px] pointer-fine:w-20 pointer-fine:h-20 flex flex-col items-center justify-center gap-1 px-1 py-2 border border-suaza-border rounded-lg">
       <span className="text-[11px] text-suaza-ink-muted whitespace-nowrap">
         {label}
       </span>
