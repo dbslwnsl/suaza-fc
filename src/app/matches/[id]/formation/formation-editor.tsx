@@ -503,6 +503,10 @@ function Pitch({
   const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lpFired = useRef(false);
   const lpStart = useRef<{ x: number; y: number } | null>(null);
+  const lpSourceIdx = useRef<number | null>(null);
+  const dragMoved = useRef(false);
+  const dragOverIdx = useRef<number | null>(null);
+  const suppressClick = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -510,14 +514,34 @@ function Pitch({
     };
   }, []);
 
+  function findSlotIdxFromPoint(x: number, y: number): number | null {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    let cur: HTMLElement | null = el;
+    while (cur) {
+      const attr = cur.dataset?.slotIdx;
+      if (attr != null) return parseInt(attr, 10);
+      cur = cur.parentElement;
+    }
+    return null;
+  }
+
   function startLongPress(i: number, e: React.PointerEvent) {
     if (readonly) return;
+    suppressClick.current = false;
     lpFired.current = false;
+    dragMoved.current = false;
+    dragOverIdx.current = null;
+    lpSourceIdx.current = i;
     lpStart.current = { x: e.clientX, y: e.clientY };
+    const target = e.currentTarget as HTMLElement;
+    const ptrId = e.pointerId;
     if (lpTimer.current) clearTimeout(lpTimer.current);
     lpTimer.current = setTimeout(() => {
       lpFired.current = true;
       onSwapSourceChange(i);
+      try {
+        target.setPointerCapture(ptrId);
+      } catch {}
       if (typeof navigator !== "undefined" && "vibrate" in navigator) {
         try {
           navigator.vibrate(40);
@@ -533,16 +557,58 @@ function Pitch({
     }
   }
 
-  function checkLongPressMove(e: React.PointerEvent) {
-    if (!lpTimer.current || !lpStart.current) return;
-    const dx = e.clientX - lpStart.current.x;
-    const dy = e.clientY - lpStart.current.y;
-    if (dx * dx + dy * dy > 100) cancelLongPress();
+  function onSlotPointerMove(e: React.PointerEvent) {
+    // 롱프레스 발화 전 — 일정 거리 움직이면 타이머 취소(스크롤로 간주)
+    if (lpTimer.current && lpStart.current) {
+      const dx = e.clientX - lpStart.current.x;
+      const dy = e.clientY - lpStart.current.y;
+      if (dx * dx + dy * dy > 100) cancelLongPress();
+    }
+    // 롱프레스 발화 후 드래그 추적
+    if (lpFired.current && lpStart.current) {
+      const dx = e.clientX - lpStart.current.x;
+      const dy = e.clientY - lpStart.current.y;
+      if (dx * dx + dy * dy > 25) dragMoved.current = true;
+      if (dragMoved.current) {
+        const idx = findSlotIdxFromPoint(e.clientX, e.clientY);
+        dragOverIdx.current = idx;
+        setHoverSlot(
+          idx != null && idx !== lpSourceIdx.current ? idx : null,
+        );
+      }
+    }
+  }
+
+  function onSlotPointerUp(e: React.PointerEvent) {
+    if (lpFired.current) {
+      const source = lpSourceIdx.current;
+      if (dragMoved.current) {
+        if (
+          source != null &&
+          dragOverIdx.current != null &&
+          dragOverIdx.current !== source
+        ) {
+          onSwapSlots(source, dragOverIdx.current);
+        }
+        onSwapSourceChange(null);
+      }
+      // 롱프레스 발화 후의 click 이벤트는 모두 무시
+      suppressClick.current = true;
+
+      lpFired.current = false;
+      dragMoved.current = false;
+      dragOverIdx.current = null;
+      setHoverSlot(null);
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+    }
+    cancelLongPress();
   }
 
   function handleSlotClick(i: number) {
-    if (lpFired.current) {
-      lpFired.current = false;
+    if (suppressClick.current) {
+      suppressClick.current = false;
       return;
     }
     if (swapSourceIdx != null) {
@@ -591,11 +657,11 @@ function Pitch({
             className="absolute -translate-x-1/2 -translate-y-1/2 touch-none"
             style={{ left: `${s.x * 100}%`, top: `${s.y * 100}%` }}
             draggable={canDrag}
+            data-slot-idx={i}
             onPointerDown={(e) => startLongPress(i, e)}
-            onPointerMove={checkLongPressMove}
-            onPointerUp={cancelLongPress}
-            onPointerCancel={cancelLongPress}
-            onPointerLeave={cancelLongPress}
+            onPointerMove={onSlotPointerMove}
+            onPointerUp={onSlotPointerUp}
+            onPointerCancel={onSlotPointerUp}
             onDragStart={(e) => {
               cancelLongPress();
               if (!canDrag || !pid) return;
