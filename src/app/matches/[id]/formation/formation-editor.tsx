@@ -645,13 +645,14 @@ function Pitch({
         return (
           <div
             key={s.index}
-            className={`absolute -translate-x-1/2 -translate-y-1/2 touch-none select-none ${
+            className={`absolute -translate-x-1/2 -translate-y-1/2 select-none ${
               isDragSource ? "opacity-30" : ""
             }`}
             style={{
               left: `${s.x * 100}%`,
               top: `${s.y * 100}%`,
               WebkitTouchCallout: "none",
+              touchAction: pitchDrag ? "none" : "manipulation",
             }}
             draggable={canDrag}
             data-slot-idx={i}
@@ -1071,7 +1072,8 @@ function AttendingStrip({
               }}
               onDragEnd={() => onDragEnd?.()}
               onClick={() => onTap(m.id, placed)}
-              className={`shrink-0 inline-flex items-center gap-1.5 h-8 pl-2 pr-2.5 rounded-full border text-xs font-medium transition touch-none ${
+              style={{ touchAction: "manipulation" }}
+              className={`shrink-0 inline-flex items-center gap-1.5 h-8 pl-2 pr-2.5 rounded-full border text-xs font-medium transition ${
                 placed
                   ? "bg-emerald-50 border-emerald-200 text-emerald-700"
                   : "bg-white border-suaza-border text-suaza-ink hover:bg-suaza-bg"
