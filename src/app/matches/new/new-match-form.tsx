@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { createMatch } from "@/lib/matches/actions";
+import { createMatch, updateMatch } from "@/lib/matches/actions";
 
 type Status = "scheduled" | "done" | "canceled";
 type MatchType = "vs" | "intra";
@@ -34,27 +34,53 @@ const STATUS_OPTS: {
   { value: "canceled", label: "취소", desc: "취소된 경기", color: "#9CA3AF" },
 ];
 
+type Initial = {
+  opponent: string;
+  matchDate: string; // ISO from DB
+  location: string | null;
+  status: Status;
+  notes: string | null;
+};
+
 export default function NewMatchForm({
+  mode = "create",
+  matchId,
+  initial,
   recentOpponents,
   recentLocations,
 }: {
+  mode?: "create" | "edit";
+  matchId?: string;
+  initial?: Initial;
   recentOpponents: string[];
   recentLocations: string[];
 }) {
-  const [matchType, setMatchType] = useState<MatchType>("intra");
-  const [opponent, setOpponent] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [location, setLocation] = useState("");
-  const [status, setStatus] = useState<Status>("scheduled");
-  const [notes, setNotes] = useState("");
+  const isEdit = mode === "edit";
+  const initialIsIntra = initial?.opponent === "자체전";
+
+  const [matchType, setMatchType] = useState<MatchType>(
+    initial ? (initialIsIntra ? "intra" : "vs") : "intra",
+  );
+  const [opponent, setOpponent] = useState(
+    initial && !initialIsIntra ? initial.opponent : "",
+  );
+  const [date, setDate] = useState(
+    initial ? isoToLocalDate(initial.matchDate) : "",
+  );
+  const [time, setTime] = useState(
+    initial ? isoToLocalTime(initial.matchDate) : "",
+  );
+  const [location, setLocation] = useState(initial?.location ?? "");
+  const [status, setStatus] = useState<Status>(initial?.status ?? "scheduled");
+  const [notes, setNotes] = useState(initial?.notes ?? "");
   const opponentInputRef = useRef<HTMLInputElement>(null);
 
   const matchDate = date && time ? `${date}T${time}` : "";
   const effectiveOpponent = matchType === "intra" ? "자체전" : opponent;
 
-  // 클라이언트 마운트 후 오늘 날짜 + 현재 시간(30분 단위 반올림) 기본값
+  // 생성 모드일 때만 오늘 날짜 + 현재 시간(30분 단위 반올림) 기본값
   useEffect(() => {
+    if (isEdit) return;
     const now = new Date();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, "0");
@@ -71,10 +97,15 @@ export default function NewMatchForm({
     }
     const timeStr = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
     setTime((cur) => cur || timeStr);
-  }, []);
+  }, [isEdit]);
+
+  const formAction =
+    isEdit && matchId ? updateMatch.bind(null, matchId) : createMatch;
+  const cancelHref = isEdit && matchId ? `/matches/${matchId}` : "/matches";
+  const submitLabel = isEdit ? "저장" : "경기 등록";
 
   return (
-    <form action={createMatch} className="flex flex-col gap-6">
+    <form action={formAction} className="flex flex-col gap-6">
       <input type="hidden" name="opponent" value={effectiveOpponent} />
       <input type="hidden" name="match_date" value={matchDate} />
       <input type="hidden" name="location" value={location} />
@@ -210,7 +241,7 @@ export default function NewMatchForm({
         <div className="grid grid-cols-3 gap-2">
           {STATUS_OPTS.map((opt) => {
             const on = status === opt.value;
-            const disabled = opt.value !== "scheduled";
+            const disabled = !isEdit && opt.value !== "scheduled";
             return (
               <button
                 key={opt.value}
@@ -269,7 +300,7 @@ export default function NewMatchForm({
       {/* 버튼 */}
       <div className="flex gap-2 mt-2">
         <Link
-          href="/matches"
+          href={cancelHref}
           className="flex-1 h-[52px] rounded-lg bg-gray-100 text-suaza-ink-muted text-base font-medium flex items-center justify-center hover:bg-gray-200 transition"
         >
           취소
@@ -278,7 +309,7 @@ export default function NewMatchForm({
           type="submit"
           className="flex-1 h-[52px] rounded-lg bg-suaza-accent text-white text-base font-medium hover:opacity-90 transition"
         >
-          경기 등록
+          {submitLabel}
         </button>
       </div>
     </form>
@@ -287,6 +318,18 @@ export default function NewMatchForm({
 
 const inputCls =
   "w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button";
+
+function isoToLocalDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function isoToLocalTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
 
 function MatchTypeCard({
   selected,

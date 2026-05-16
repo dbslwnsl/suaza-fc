@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* desktop: 화면 폭 >= 768px AND 정밀 포인터(마우스/트랙패드/스타일러스)
+   하나라도 안 맞으면 모바일로 간주됨 (좁은 데스크톱 창, 터치 디바이스 등) */
+@custom-variant desktop {
+  @media (width >= 48rem) and (pointer: fine) {
+    @slot;
+  }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
