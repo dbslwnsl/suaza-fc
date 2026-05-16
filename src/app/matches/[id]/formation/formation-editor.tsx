@@ -66,12 +66,7 @@ export default function FormationEditor({
   const [query, setQuery] = useState("");
   const [openSlot, setOpenSlot] = useState<number | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [swapSourceIdx, setSwapSourceIdx] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    setSwapSourceIdx(null);
-  }, [activeIdx]);
 
   const current = quarters[activeIdx] ?? quarters[0];
   const slots = useMemo(() => buildSlots(current.shape), [current.shape]);
@@ -349,29 +344,12 @@ export default function FormationEditor({
             byId={byId}
             readonly={readonly}
             draggingId={draggingId}
-            swapSourceIdx={swapSourceIdx}
             onSlotClick={(i) => !readonly && setOpenSlot(i)}
             onSlotDrop={handleSlotDrop}
             onDragStart={(id) => setDraggingId(id)}
             onDragEnd={() => setDraggingId(null)}
-            onSwapSourceChange={setSwapSourceIdx}
             onSwapSlots={(a, b) => swapSlots(a, b)}
           />
-
-          {swapSourceIdx !== null && (
-            <div className="absolute left-3 right-3 top-3 z-10 flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-amber-50/95 border border-amber-200 shadow-sm">
-              <span className="text-xs sm:text-sm text-amber-800 font-medium">
-                교환할 다른 위치를 탭하세요
-              </span>
-              <button
-                type="button"
-                onClick={() => setSwapSourceIdx(null)}
-                className="shrink-0 text-xs text-amber-800 hover:underline px-1"
-              >
-                취소
-              </button>
-            </div>
-          )}
         </div>
 
         <aside className="hidden desktop:flex desktop:absolute desktop:top-0 desktop:right-0 desktop:bottom-0 desktop:w-[340px] flex-col bg-white rounded-2xl border border-suaza-border p-4 gap-3 min-h-0">
@@ -477,12 +455,10 @@ function Pitch({
   byId,
   readonly,
   draggingId,
-  swapSourceIdx,
   onSlotClick,
   onSlotDrop,
   onDragStart,
   onDragEnd,
-  onSwapSourceChange,
   onSwapSlots,
 }: {
   slots: SlotDef[];
@@ -490,22 +466,23 @@ function Pitch({
   byId: Map<string, EditorMember>;
   readonly: boolean;
   draggingId: string | null;
-  swapSourceIdx: number | null;
   onSlotClick: (i: number) => void;
   onSlotDrop: (targetIdx: number, playerId: string, sourceIdx?: number) => void;
   onDragStart?: (playerId: string) => void;
   onDragEnd?: () => void;
-  onSwapSourceChange: (i: number | null) => void;
   onSwapSlots: (a: number, b: number) => void;
 }) {
   const [hoverSlot, setHoverSlot] = useState<number | null>(null);
+  const [pitchDrag, setPitchDrag] = useState<{
+    sourceIdx: number;
+    playerId: string;
+    x: number;
+    y: number;
+    targetIdx: number | null;
+  } | null>(null);
   const isDropMode = !readonly && draggingId != null;
   const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lpFired = useRef(false);
   const lpStart = useRef<{ x: number; y: number } | null>(null);
-  const lpSourceIdx = useRef<number | null>(null);
-  const dragMoved = useRef(false);
-  const dragOverIdx = useRef<number | null>(null);
   const suppressClick = useRef(false);
 
   useEffect(() => {
@@ -527,18 +504,23 @@ function Pitch({
 
   function startLongPress(i: number, e: React.PointerEvent) {
     if (readonly) return;
+    const pid = assignments[i];
+    if (!pid) return; // 빈 슬롯에서는 드래그 시작 불가
     suppressClick.current = false;
-    lpFired.current = false;
-    dragMoved.current = false;
-    dragOverIdx.current = null;
-    lpSourceIdx.current = i;
     lpStart.current = { x: e.clientX, y: e.clientY };
     const target = e.currentTarget as HTMLElement;
     const ptrId = e.pointerId;
+    const startX = e.clientX;
+    const startY = e.clientY;
     if (lpTimer.current) clearTimeout(lpTimer.current);
     lpTimer.current = setTimeout(() => {
-      lpFired.current = true;
-      onSwapSourceChange(i);
+      setPitchDrag({
+        sourceIdx: i,
+        playerId: pid,
+        x: startX,
+        y: startY,
+        targetIdx: null,
+      });
       try {
         target.setPointerCapture(ptrId);
       } catch {}
@@ -564,41 +546,26 @@ function Pitch({
       const dy = e.clientY - lpStart.current.y;
       if (dx * dx + dy * dy > 100) cancelLongPress();
     }
-    // 롱프레스 발화 후 드래그 추적
-    if (lpFired.current && lpStart.current) {
-      const dx = e.clientX - lpStart.current.x;
-      const dy = e.clientY - lpStart.current.y;
-      if (dx * dx + dy * dy > 25) dragMoved.current = true;
-      if (dragMoved.current) {
-        const idx = findSlotIdxFromPoint(e.clientX, e.clientY);
-        dragOverIdx.current = idx;
-        setHoverSlot(
-          idx != null && idx !== lpSourceIdx.current ? idx : null,
-        );
-      }
+    // 드래그 중 — 손가락 따라 ghost 이동 + 타겟 추적
+    if (pitchDrag) {
+      const tIdx = findSlotIdxFromPoint(e.clientX, e.clientY);
+      setPitchDrag({
+        ...pitchDrag,
+        x: e.clientX,
+        y: e.clientY,
+        targetIdx: tIdx != null && tIdx !== pitchDrag.sourceIdx ? tIdx : null,
+      });
     }
   }
 
   function onSlotPointerUp(e: React.PointerEvent) {
-    if (lpFired.current) {
-      const source = lpSourceIdx.current;
-      if (dragMoved.current) {
-        if (
-          source != null &&
-          dragOverIdx.current != null &&
-          dragOverIdx.current !== source
-        ) {
-          onSwapSlots(source, dragOverIdx.current);
-        }
-        onSwapSourceChange(null);
+    if (pitchDrag) {
+      // 다른 슬롯 위에서 손을 뗀 경우만 교환, 아니면 취소
+      if (pitchDrag.targetIdx != null) {
+        onSwapSlots(pitchDrag.sourceIdx, pitchDrag.targetIdx);
       }
-      // 롱프레스 발화 후의 click 이벤트는 모두 무시
+      setPitchDrag(null);
       suppressClick.current = true;
-
-      lpFired.current = false;
-      dragMoved.current = false;
-      dragOverIdx.current = null;
-      setHoverSlot(null);
       try {
         (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
       } catch {}
@@ -609,11 +576,6 @@ function Pitch({
   function handleSlotClick(i: number) {
     if (suppressClick.current) {
       suppressClick.current = false;
-      return;
-    }
-    if (swapSourceIdx != null) {
-      if (swapSourceIdx !== i) onSwapSlots(swapSourceIdx, i);
-      onSwapSourceChange(null);
       return;
     }
     onSlotClick(i);
@@ -646,16 +608,23 @@ function Pitch({
       {slots.map((s, i) => {
         const pid = assignments[i];
         const player = pid ? byId.get(pid) : null;
-        const isHover = hoverSlot === i;
+        const isDragSource = pitchDrag?.sourceIdx === i;
+        const isDragTarget = pitchDrag?.targetIdx === i;
+        const isHover = isDragTarget || hoverSlot === i;
         const isEmpty = !player;
         const showDropHint = isDropMode && isEmpty;
         const canDrag = !readonly && !!pid;
-        const isSwapSource = swapSourceIdx === i;
         return (
           <div
             key={s.index}
-            className="absolute -translate-x-1/2 -translate-y-1/2 touch-none"
-            style={{ left: `${s.x * 100}%`, top: `${s.y * 100}%` }}
+            className={`absolute -translate-x-1/2 -translate-y-1/2 touch-none select-none ${
+              isDragSource ? "opacity-30" : ""
+            }`}
+            style={{
+              left: `${s.x * 100}%`,
+              top: `${s.y * 100}%`,
+              WebkitTouchCallout: "none",
+            }}
             draggable={canDrag}
             data-slot-idx={i}
             onPointerDown={(e) => startLongPress(i, e)}
@@ -710,7 +679,6 @@ function Pitch({
                 role={s.role}
                 hovered={isHover}
                 hint={showDropHint}
-                selected={isSwapSource}
               />
               <span className="text-[11px] sm:text-xs text-white font-medium drop-shadow whitespace-nowrap max-w-[80px] truncate">
                 {player?.name ?? (
@@ -721,6 +689,21 @@ function Pitch({
           </div>
         );
       })}
+
+      {/* 드래그 ghost — 손가락 따라옴 */}
+      {pitchDrag && (
+        <div
+          className="fixed z-50 pointer-events-none -translate-x-1/2 -translate-y-1/2 drop-shadow-xl"
+          style={{ left: pitchDrag.x, top: pitchDrag.y }}
+        >
+          <PlayerCircle
+            player={byId.get(pitchDrag.playerId)}
+            role={slots[pitchDrag.sourceIdx].role}
+            hovered
+            hint={false}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -730,20 +713,14 @@ function PlayerCircle({
   role,
   hovered,
   hint,
-  selected,
 }: {
   player: EditorMember | null | undefined;
   role: SlotRole;
   hovered: boolean;
   hint: boolean;
-  selected?: boolean;
 }) {
   const color = POSITION_COLOR[role];
-  const stateRing = selected
-    ? "ring-4 ring-amber-300/90 scale-110 animate-pulse"
-    : hovered
-      ? "ring-4 ring-white/60 scale-110"
-      : "";
+  const stateRing = hovered ? "ring-4 ring-white/60 scale-110" : "";
   if (player) {
     return (
       <div
