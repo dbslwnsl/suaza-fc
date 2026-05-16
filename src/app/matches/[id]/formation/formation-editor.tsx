@@ -66,7 +66,44 @@ export default function FormationEditor({
   const [query, setQuery] = useState("");
   const [openSlot, setOpenSlot] = useState<number | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+  const [, startTransition] = useTransition();
+  const initialMount = useRef(true);
+  const saveDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (readonly) return;
+    if (initialMount.current) {
+      initialMount.current = false;
+      return;
+    }
+    if (saveDebounce.current) clearTimeout(saveDebounce.current);
+    saveDebounce.current = setTimeout(() => {
+      setSaveStatus("saving");
+      startTransition(async () => {
+        const payload: SaveFormationPayload = {
+          quarters: quarters.map((q) => ({
+            id: q.id,
+            shape: q.shape,
+            player_ids: q.assignments,
+          })),
+        };
+        try {
+          const result = await saveFormation(matchId, payload);
+          if (result?.error) setSaveStatus("error");
+          else setSaveStatus("saved");
+        } catch {
+          setSaveStatus("error");
+        }
+        setTimeout(() => setSaveStatus("idle"), 1500);
+      });
+    }, 500);
+    return () => {
+      if (saveDebounce.current) clearTimeout(saveDebounce.current);
+    };
+  }, [quarters, matchId, readonly]);
 
   const current = quarters[activeIdx] ?? quarters[0];
   const slots = useMemo(() => buildSlots(current.shape), [current.shape]);
@@ -225,18 +262,6 @@ export default function FormationEditor({
     setActiveIdx(quarters.length);
   }
 
-  function onSave() {
-    const payload: SaveFormationPayload = {
-      quarters: quarters.map((q) => ({
-        id: q.id,
-        shape: q.shape,
-        player_ids: q.assignments,
-      })),
-    };
-    startTransition(() => {
-      saveFormation(matchId, payload);
-    });
-  }
 
   return (
     <div className="flex flex-col gap-5 desktop:flex-1 desktop:min-h-0">
@@ -306,30 +331,21 @@ export default function FormationEditor({
           </span>
         </span>
         {!readonly && (
-          <div className="flex-1 flex justify-end gap-2">
+          <div className="flex-1 flex items-center justify-end gap-2">
+            <SaveStatusBadge status={saveStatus} />
             <button
               type="button"
               onClick={resetCurrent}
-              disabled={isPending}
-              className="h-9 px-3 rounded-lg border border-suaza-border text-sm font-medium text-suaza-ink bg-white hover:bg-suaza-bg disabled:opacity-50"
+              className="h-9 px-3 rounded-lg border border-suaza-border text-sm font-medium text-suaza-ink bg-white hover:bg-suaza-bg"
             >
               초기화
             </button>
             <button
               type="button"
               onClick={autoPlace}
-              disabled={isPending}
-              className="h-9 px-3 rounded-lg border border-suaza-border text-sm font-medium text-suaza-ink bg-white hover:bg-suaza-bg disabled:opacity-50"
+              className="h-9 px-3 rounded-lg border border-suaza-border text-sm font-medium text-suaza-ink bg-white hover:bg-suaza-bg"
             >
               자동 배치
-            </button>
-            <button
-              type="button"
-              onClick={onSave}
-              disabled={isPending}
-              className="h-9 px-3 rounded-lg bg-suaza-button text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50"
-            >
-              {isPending ? "저장 중" : "저장"}
             </button>
           </div>
         )}
@@ -349,6 +365,7 @@ export default function FormationEditor({
             onDragStart={(id) => setDraggingId(id)}
             onDragEnd={() => setDraggingId(null)}
             onSwapSlots={(a, b) => swapSlots(a, b)}
+            onUnassignSlot={(i) => assignSlot(i, null)}
           />
         </div>
 
@@ -368,32 +385,27 @@ export default function FormationEditor({
           <SearchInput value={query} onChange={setQuery} />
           <FilterTabs value={filter} onChange={setFilter} />
           {!readonly && (
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={resetCurrent}
-                disabled={isPending}
-                className="h-9 rounded-lg border border-suaza-border text-sm font-medium text-suaza-ink hover:bg-suaza-bg transition disabled:opacity-50"
-              >
-                초기화
-              </button>
-              <button
-                type="button"
-                onClick={autoPlace}
-                disabled={isPending}
-                className="h-9 rounded-lg bg-suaza-bg text-sm font-medium text-suaza-ink hover:bg-suaza-border/60 transition disabled:opacity-50"
-              >
-                자동 배치
-              </button>
-              <button
-                type="button"
-                onClick={onSave}
-                disabled={isPending}
-                className="h-9 rounded-lg bg-suaza-button text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
-              >
-                {isPending ? "저장 중" : "저장"}
-              </button>
-            </div>
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={resetCurrent}
+                  className="h-9 rounded-lg border border-suaza-border text-sm font-medium text-suaza-ink hover:bg-suaza-bg transition"
+                >
+                  초기화
+                </button>
+                <button
+                  type="button"
+                  onClick={autoPlace}
+                  className="h-9 rounded-lg bg-suaza-bg text-sm font-medium text-suaza-ink hover:bg-suaza-border/60 transition"
+                >
+                  자동 배치
+                </button>
+              </div>
+              <div className="flex justify-end">
+                <SaveStatusBadge status={saveStatus} />
+              </div>
+            </>
           )}
           <div className="flex-1 min-h-0 overflow-y-auto -mx-2 px-2">
             <PlayerList
@@ -460,6 +472,7 @@ function Pitch({
   onDragStart,
   onDragEnd,
   onSwapSlots,
+  onUnassignSlot,
 }: {
   slots: SlotDef[];
   assignments: (string | null)[];
@@ -471,7 +484,9 @@ function Pitch({
   onDragStart?: (playerId: string) => void;
   onDragEnd?: () => void;
   onSwapSlots: (a: number, b: number) => void;
+  onUnassignSlot: (i: number) => void;
 }) {
+  const pitchRef = useRef<HTMLDivElement | null>(null);
   const [hoverSlot, setHoverSlot] = useState<number | null>(null);
   const [pitchDrag, setPitchDrag] = useState<{
     sourceIdx: number;
@@ -560,9 +575,19 @@ function Pitch({
 
   function onSlotPointerUp(e: React.PointerEvent) {
     if (pitchDrag) {
-      // 다른 슬롯 위에서 손을 뗀 경우만 교환, 아니면 취소
       if (pitchDrag.targetIdx != null) {
+        // 다른 슬롯 위에서 손을 뗌 → 교환
         onSwapSlots(pitchDrag.sourceIdx, pitchDrag.targetIdx);
+      } else {
+        // 경기장 밖이면 선수 제거, 안이면 취소
+        const rect = pitchRef.current?.getBoundingClientRect();
+        const outside =
+          !rect ||
+          e.clientX < rect.left ||
+          e.clientX > rect.right ||
+          e.clientY < rect.top ||
+          e.clientY > rect.bottom;
+        if (outside) onUnassignSlot(pitchDrag.sourceIdx);
       }
       setPitchDrag(null);
       suppressClick.current = true;
@@ -582,7 +607,10 @@ function Pitch({
   }
 
   return (
-    <div className="relative w-full aspect-[3/4] desktop:aspect-auto desktop:h-full desktop:min-h-[360px] bg-gradient-to-b from-emerald-600 to-emerald-700 rounded-2xl overflow-hidden shadow-lg">
+    <div
+      ref={pitchRef}
+      className="relative w-full aspect-[3/4] desktop:aspect-auto desktop:h-full desktop:min-h-[360px] bg-gradient-to-b from-emerald-600 to-emerald-700 rounded-2xl overflow-hidden shadow-lg"
+    >
       {/* 잔디 줄무늬 */}
       <div className="absolute inset-0 opacity-20">
         {Array.from({ length: 8 }).map((_, i) => (
@@ -705,6 +733,27 @@ function Pitch({
         </div>
       )}
     </div>
+  );
+}
+
+function SaveStatusBadge({
+  status,
+}: {
+  status: "idle" | "saving" | "saved" | "error";
+}) {
+  if (status === "idle") return null;
+  const map = {
+    saving: { label: "저장 중...", cls: "bg-suaza-bg text-suaza-ink-muted" },
+    saved: { label: "저장됨", cls: "bg-emerald-50 text-emerald-700" },
+    error: { label: "저장 실패", cls: "bg-red-50 text-red-700" },
+  } as const;
+  const meta = map[status];
+  return (
+    <span
+      className={`shrink-0 h-7 inline-flex items-center px-2.5 rounded-full text-[11px] font-medium ${meta.cls}`}
+    >
+      {meta.label}
+    </span>
   );
 }
 
@@ -1038,9 +1087,7 @@ function AttendingStrip({
               >
                 {placed ? "✓" : (m.jersey_number ?? "·")}
               </span>
-              <span className={placed ? "line-through decoration-emerald-400/60" : ""}>
-                {m.name}
-              </span>
+              <span>{m.name}</span>
             </button>
           );
         })}

@@ -25,15 +25,13 @@ async function requireStaff() {
 export async function saveFormation(
   matchId: string,
   payload: SaveFormationPayload,
-) {
+): Promise<{ ok?: true; error?: string }> {
   const { supabase, userId } = await requireStaff();
   const input = (payload?.quarters ?? []).filter(
     (q) => q && typeof q.shape === "string" && q.shape.trim(),
   );
   if (input.length === 0) {
-    redirect(
-      `/matches/${matchId}/formation?error=${encodeURIComponent("저장할 포메이션이 없습니다")}`,
-    );
+    return { error: "저장할 포메이션이 없습니다" };
   }
 
   const cleaned: SavedQuarter[] = input.map((q) => {
@@ -49,24 +47,18 @@ export async function saveFormation(
       shape: first.shape,
       positions: {
         quarters: cleaned,
-        player_ids: first.player_ids, // 하위 호환
+        player_ids: first.player_ids,
       },
       created_by: userId,
     },
     { onConflict: "match_id" },
   );
 
-  if (error) {
-    redirect(
-      `/matches/${matchId}/formation?error=${encodeURIComponent(error.message)}`,
-    );
-  }
+  if (error) return { error: error.message };
 
   revalidatePath(`/matches/${matchId}/formation`);
   revalidatePath(`/matches/${matchId}`);
-  redirect(
-    `/matches/${matchId}/formation?message=${encodeURIComponent("저장되었습니다")}`,
-  );
+  return { ok: true };
 }
 
 export async function deleteFormation(matchId: string) {
