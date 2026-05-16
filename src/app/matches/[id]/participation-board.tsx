@@ -11,7 +11,6 @@ import {
 import {
   addParticipant,
   incrementStat,
-  removeParticipant,
   setAttendanceFor,
   unrecordParticipant,
 } from "@/lib/matches/actions";
@@ -76,7 +75,7 @@ const STAT_META: {
   },
   {
     key: "clean_sheets",
-    label: "클린시트",
+    label: "클린",
     icon: "🛡️",
     color: "#338CF2",
     bg: "rgba(51,140,242,0.10)",
@@ -366,39 +365,65 @@ function SelectedPlayerCard({
   onChange: (key: StatKey, delta: number) => void;
 }) {
   const points = calcPoints(stats);
+  const attendanceMeta = STAT_META.find((s) => s.key === "attendance");
   return (
     <div className="border-2 border-suaza-accent bg-red-50/40 rounded-2xl p-4 desktop:p-5 flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <PlayerInfo player={p.player} large />
-        <PointStar points={points} />
+        <div className="flex items-center gap-1.5">
+          {attendanceMeta && stats.attendance > 0 && (
+            <span
+              className="desktop:hidden inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold"
+              style={{
+                color: attendanceMeta.color,
+                backgroundColor: attendanceMeta.bg,
+              }}
+              title={`${attendanceMeta.label} +${stats.attendance * attendanceMeta.weight}pt`}
+              aria-label={`${attendanceMeta.label} ${stats.attendance}`}
+            >
+              {attendanceMeta.icon}
+            </span>
+          )}
+          <PointStar points={points} />
+          {isStaff && (
+            <form action={unrecordParticipant.bind(null, p.id, matchId)}>
+              <button
+                type="submit"
+                aria-label="내 기록 제외"
+                className="w-6 h-6 inline-flex items-center justify-center rounded text-suaza-ink-faint hover:text-red-600 hover:bg-red-50 transition text-sm leading-none"
+              >
+                ✕
+              </button>
+            </form>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 desktop:grid-cols-5 gap-2">
-        {STAT_META.map((s) => (
-          <StatBox
-            key={s.key}
-            meta={s}
-            value={stats[s.key]}
-            disabled={!canEditStats}
-            onDec={() => onChange(s.key, -1)}
-            onInc={() => onChange(s.key, +1)}
-          />
-        ))}
+        {STAT_META.map((s) =>
+          s.locked ? (
+            <div key={s.key} className="hidden desktop:block">
+              <StatBox
+                meta={s}
+                value={stats[s.key]}
+                disabled={!canEditStats}
+                onDec={() => onChange(s.key, -1)}
+                onInc={() => onChange(s.key, +1)}
+              />
+            </div>
+          ) : (
+            <StatBox
+              key={s.key}
+              meta={s}
+              value={stats[s.key]}
+              disabled={!canEditStats}
+              onDec={() => onChange(s.key, -1)}
+              onInc={() => onChange(s.key, +1)}
+            />
+          ),
+        )}
       </div>
 
-      {isStaff && (
-        <form
-          action={removeParticipant.bind(null, p.id, matchId)}
-          className="self-end"
-        >
-          <button
-            type="submit"
-            className="text-xs text-red-600 hover:underline"
-          >
-            제외
-          </button>
-        </form>
-      )}
     </div>
   );
 }
@@ -717,7 +742,7 @@ function PlayerInfo({
     ? POSITION_COLOR[primary]
     : "var(--suaza-border)";
 
-  const size = large ? "w-14 h-14" : "w-11 h-11";
+  const size = large ? "w-11 h-11 desktop:w-14 desktop:h-14" : "w-11 h-11";
   const textSize = large ? "text-base" : "text-base";
   const numberSize = large ? "text-base" : "text-sm";
 
