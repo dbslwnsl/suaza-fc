@@ -54,7 +54,8 @@ export default async function MemberDetailPage({
     supabase
       .from("match_participations")
       .select("goals, assists, custom_stats, match:matches(status)")
-      .eq("player_id", id),
+      .eq("player_id", id)
+      .is("archived_at", null),
     supabase
       .from("stat_definitions")
       .select("key, label, sort_order")

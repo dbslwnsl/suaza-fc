@@ -1,4 +1,9 @@
-export const MATCH_STATUS = ["scheduled", "done", "canceled"] as const;
+export const MATCH_STATUS = [
+  "scheduled",
+  "in_progress",
+  "done",
+  "canceled",
+] as const;
 export type MatchStatus = (typeof MATCH_STATUS)[number];
 
 export type Match = {
@@ -17,15 +22,36 @@ export type Match = {
 
 export const MATCH_STATUS_LABEL: Record<MatchStatus, string> = {
   scheduled: "예정",
+  in_progress: "진행중",
   done: "종료",
   canceled: "취소",
 };
 
 export const MATCH_STATUS_BADGE: Record<MatchStatus, string> = {
   scheduled: "bg-blue-50 text-blue-700",
+  in_progress: "bg-amber-50 text-amber-700",
   done: "bg-gray-100 text-gray-700",
   canceled: "bg-red-50 text-red-700",
 };
+
+export const MATCH_STATUS_DOT_COLOR: Record<MatchStatus, string> = {
+  scheduled: "#3B82F6",
+  in_progress: "#F59E0B",
+  done: "#22C55E",
+  canceled: "#9CA3AF",
+};
+
+/**
+ * 경기가 "시작됨" 상태인지.
+ * - status 가 in_progress/done 이면 시작됨
+ * - status 가 scheduled 라도 현재 시각이 match_date 를 지났으면 시작된 것으로 간주
+ */
+export function isMatchStarted(m: Pick<Match, "status" | "match_date">): boolean {
+  if (m.status === "in_progress" || m.status === "done") return true;
+  if (m.status === "scheduled" && new Date(m.match_date) <= new Date())
+    return true;
+  return false;
+}
 
 export type Result = "win" | "draw" | "lose";
 

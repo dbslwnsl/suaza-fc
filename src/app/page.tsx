@@ -90,7 +90,8 @@ export default async function Home() {
     supabase
       .from("match_participations")
       .select("goals, assists, custom_stats, match:matches(status)")
-      .eq("player_id", user!.id),
+      .eq("player_id", user!.id)
+      .is("archived_at", null),
   ]);
 
   const upcoming = upcomingMatch as Match | null;

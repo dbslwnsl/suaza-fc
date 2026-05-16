@@ -3,24 +3,25 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
-  addParticipant,
   deleteMatch,
-  removeParticipant,
   setAttendance,
-  updateParticipant,
+  startMatch,
 } from "@/lib/matches/actions";
 import AttendanceManagerBoard from "@/components/attendance-manager-board";
 import NewMatchForm from "@/app/matches/new/new-match-form";
+import ParticipationBoard, {
+  type ParticipationData,
+} from "./participation-board";
 import {
   MATCH_STATUS_BADGE,
+  MATCH_STATUS_DOT_COLOR,
   MATCH_STATUS_LABEL,
   RESULT_BADGE,
   RESULT_LABEL,
   getResult,
+  isMatchStarted,
   type Match,
 } from "@/lib/matches/helpers";
-
-type StatDef = { key: string; label: string; sort_order: number };
 
 type Participation = {
   id: string;
@@ -33,13 +34,9 @@ type Participation = {
     id: string;
     name: string;
     jersey_number: number | null;
+    positions: string[] | null;
+    title: string | null;
   } | null;
-};
-
-type MemberOpt = {
-  id: string;
-  name: string;
-  jersey_number: number | null;
 };
 
 export default async function MatchDetailPage({
@@ -63,7 +60,6 @@ export default async function MatchDetailPage({
     { data: me },
     { data: participationsRaw },
     { data: allMembers },
-    { data: statDefs },
     { data: attendancesRaw },
     { data: myAttendance },
   ] = await Promise.all([
@@ -76,21 +72,19 @@ export default async function MatchDetailPage({
     supabase
       .from("match_participations")
       .select(
-        "id, match_id, player_id, goals, assists, custom_stats, player:profiles(id, name, jersey_number)",
+        "id, match_id, player_id, goals, assists, custom_stats, player:profiles(id, name, jersey_number, positions, title)",
       )
-      .eq("match_id", id),
+      .eq("match_id", id)
+      .is("archived_at", null),
     supabase
       .from("profiles")
-      .select("id, name, jersey_number")
+      .select("id, name, jersey_number, positions, title")
       .order("name", { ascending: true }),
     supabase
-      .from("stat_definitions")
-      .select("key, label, sort_order")
-      .order("sort_order", { ascending: true })
-      .order("key", { ascending: true }),
-    supabase
       .from("match_attendances")
-      .select("status, player:profiles(id, name, jersey_number)")
+      .select(
+        "status, player:profiles(id, name, jersey_number, positions, title)",
+      )
       .eq("match_id", id),
     supabase
       .from("match_attendances")
@@ -100,7 +94,13 @@ export default async function MatchDetailPage({
       .maybeSingle(),
   ]);
 
-  type VotePlayer = { id: string; name: string; jersey_number: number | null };
+  type VotePlayer = {
+    id: string;
+    name: string;
+    jersey_number: number | null;
+    positions?: string[] | null;
+    title?: string | null;
+  };
   const byStatus: {
     attending: VotePlayer[];
     absent: VotePlayer[];
@@ -131,7 +131,6 @@ export default async function MatchDetailPage({
   const editing = edit === "1" && isStaff;
   const result =
     m.status === "done" ? getResult(m.our_score, m.opponent_score) : null;
-  const defs = (statDefs ?? []) as StatDef[];
   const totalMembers = (allMembers ?? []).length;
 
   const participations = ((participationsRaw ?? []) as unknown as Participation[])
@@ -141,9 +140,6 @@ export default async function MatchDetailPage({
     );
 
   const participatedIds = new Set(participations.map((p) => p.player_id));
-  const availableMembers = ((allMembers ?? []) as MemberOpt[]).filter(
-    (mem) => !participatedIds.has(mem.id),
-  );
 
   // D-day 계산
   const matchTs = new Date(m.match_date).getTime();
@@ -169,6 +165,7 @@ export default async function MatchDetailPage({
   const deadlineStr = `${deadline.getMonth() + 1}/${deadline.getDate()}`;
 
   const isIntra = m.opponent === "자체전";
+  const isStarted = isMatchStarted(m);
 
   // 편집 모드: 경기 등록 화면과 동일한 레이아웃
   if (editing) {
@@ -266,10 +263,10 @@ export default async function MatchDetailPage({
           </p>
         )}
 
-        <VSCard m={m} isIntra={isIntra} isStaff={isStaff} />
+        <VSCard m={m} isIntra={isIntra} isStaff={isStaff} isStarted={isStarted} />
 
             <div className="grid grid-cols-1 desktop:grid-cols-2 gap-4">
-              {m.status === "scheduled" && (
+              {m.status !== "canceled" && (
                 <AttendanceCard
                   matchId={m.id}
                   redirectTo={`/matches/${m.id}`}
@@ -280,20 +277,31 @@ export default async function MatchDetailPage({
                   myName={me?.name ?? null}
                   totalMembers={totalMembers}
                   deadlineStr={deadlineStr}
+                  locked={isStarted}
                 />
               )}
-              <ParticipationCard
-                isPast={m.status === "done"}
+              <ParticipationBoard
+                matchId={m.id}
                 isStaff={isStaff}
                 isManager={me?.role === "manager"}
-                participations={participations}
-                availableMembers={availableMembers}
-                defs={defs}
-                matchId={m.id}
+                myUserId={user.id}
+                isStarted={isStarted}
+                isMyselfAttending={myStatus === "attending"}
+                myProfile={
+                  ((allMembers ?? []) as unknown as ParticipationData["player"][]).find(
+                    (mm) => mm?.id === user.id,
+                  ) ?? null
+                }
+                participations={
+                  participations as unknown as ParticipationData[]
+                }
+                attendingMembers={
+                  byStatus.attending.filter(
+                    (a) => !participatedIds.has(a.id),
+                  ) as unknown as ParticipationData["player"][]
+                }
               />
             </div>
-
-            <MatchInfoSummary m={m} isStaff={isStaff} />
 
             {isStaff && (
               <form action={deleteMatch.bind(null, m.id)} className="flex justify-center mt-4">
@@ -319,13 +327,38 @@ function VSCard({
   m,
   isIntra,
   isStaff,
+  isStarted,
 }: {
   m: Match;
   isIntra: boolean;
   isStaff: boolean;
+  isStarted: boolean;
 }) {
   return (
     <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4">
+      {/* 경기 유형 + 상태 라벨 */}
+      <div className="flex items-center justify-center gap-2">
+        <span
+          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+            isIntra
+              ? "bg-amber-50 text-amber-700"
+              : "bg-red-50 text-suaza-accent"
+          }`}
+        >
+          <span>{isIntra ? "⚽" : "🆚"}</span>
+          {isIntra ? "자체전" : "상대전"}
+        </span>
+        <span
+          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${MATCH_STATUS_BADGE[m.status]}`}
+        >
+          <span
+            className="w-1.5 h-1.5 rounded-full"
+            style={{ backgroundColor: statusDotColor(m.status) }}
+          />
+          {MATCH_STATUS_LABEL[m.status]}
+        </span>
+      </div>
+
       <div className="grid grid-cols-3 items-center gap-3">
         {isIntra ? (
           <>
@@ -363,7 +396,22 @@ function VSCard({
         )}
       </div>
 
-      <div className="flex items-center justify-center gap-2">
+      <div className="flex items-center justify-center gap-2 flex-wrap">
+        {isStaff && m.status === "scheduled" && (
+          <form action={startMatch.bind(null, m.id)}>
+            <button
+              type="submit"
+              className="text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 transition px-4 py-1.5 rounded-lg inline-flex items-center gap-1"
+            >
+              ▶ 경기 시작
+              {isStarted && (
+                <span className="text-[10px] font-normal opacity-80">
+                  (시각 경과)
+                </span>
+              )}
+            </button>
+          </form>
+        )}
         {isStaff && (
           <Link
             href={`/matches/${m.id}?edit=1`}
@@ -474,6 +522,7 @@ function AttendanceCard({
   myName,
   totalMembers,
   deadlineStr,
+  locked,
 }: {
   matchId: string;
   redirectTo: string;
@@ -488,6 +537,7 @@ function AttendanceCard({
   myName: string | null;
   totalMembers: number;
   deadlineStr: string;
+  locked?: boolean;
 }) {
   const counts = {
     attending: byStatus.attending.length,
@@ -513,42 +563,50 @@ function AttendanceCard({
       </div>
 
       {/* My response */}
-      <div className="bg-red-50/50 rounded-xl p-3 flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <span className="w-7 h-7 rounded-full bg-suaza-accent text-white text-xs font-bold flex items-center justify-center shrink-0">
-            {myName?.charAt(0) ?? "?"}
-          </span>
-          <span className="text-sm font-medium text-suaza-ink">
-            <span className="desktop:hidden">내 응답을 알려주세요</span>
-            <span className="hidden desktop:inline">
-              {myName ? `${myName} 님의 응답을 알려주세요` : "응답을 알려주세요"}
-            </span>
-          </span>
+      {locked ? (
+        <div className="bg-gray-50 rounded-xl p-3 text-center text-xs text-suaza-ink-muted">
+          🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다
         </div>
-        <form action={setAttendance.bind(null, matchId, redirectTo)}>
-          <div className="grid grid-cols-3 gap-2">
-            <AttendanceVoteButton
-              value="attending"
-              label="참석"
-              icon="✓"
-              active={myStatus === "attending"}
-              activeClass="bg-green-600 text-white border-green-600"
-            />
-            <AttendanceVoteButton
-              value="absent"
-              label="불참"
-              active={myStatus === "absent"}
-              activeClass="bg-red-600 text-white border-red-600"
-            />
-            <AttendanceVoteButton
-              value="undecided"
-              label="미정"
-              active={myStatus === "undecided"}
-              activeClass="bg-gray-700 text-white border-gray-700"
-            />
+      ) : (
+        <div className="bg-red-50/50 rounded-xl p-3 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <span className="w-7 h-7 rounded-full bg-suaza-accent text-white text-xs font-bold flex items-center justify-center shrink-0">
+              {myName?.charAt(0) ?? "?"}
+            </span>
+            <span className="text-sm font-medium text-suaza-ink">
+              <span className="desktop:hidden">내 응답을 알려주세요</span>
+              <span className="hidden desktop:inline">
+                {myName
+                  ? `${myName} 님의 응답을 알려주세요`
+                  : "응답을 알려주세요"}
+              </span>
+            </span>
           </div>
-        </form>
-      </div>
+          <form action={setAttendance.bind(null, matchId, redirectTo)}>
+            <div className="grid grid-cols-3 gap-2">
+              <AttendanceVoteButton
+                value="attending"
+                label="참석"
+                icon="✓"
+                active={myStatus === "attending"}
+                activeClass="bg-green-600 text-white border-green-600"
+              />
+              <AttendanceVoteButton
+                value="absent"
+                label="불참"
+                active={myStatus === "absent"}
+                activeClass="bg-red-600 text-white border-red-600"
+              />
+              <AttendanceVoteButton
+                value="undecided"
+                label="미정"
+                active={myStatus === "undecided"}
+                activeClass="bg-gray-700 text-white border-gray-700"
+              />
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Stats row */}
       <div className="grid grid-cols-4 gap-2 py-2">
@@ -559,7 +617,7 @@ function AttendanceCard({
       </div>
 
       {/* Member pills */}
-      {isManager ? (
+      {isManager && !locked ? (
         <>
           <h3 className="text-sm font-bold text-suaza-ink">멤버별 응답</h3>
           <AttendanceManagerBoard
@@ -700,266 +758,14 @@ function MemberGroup({
 }
 
 // ───────────────────────────────────────────────────────────
-// Participation Card
-// ───────────────────────────────────────────────────────────
-
-function ParticipationCard({
-  isPast,
-  isStaff,
-  isManager,
-  participations,
-  availableMembers,
-  defs,
-  matchId,
-}: {
-  isPast: boolean;
-  isStaff: boolean;
-  isManager: boolean;
-  participations: Participation[];
-  availableMembers: MemberOpt[];
-  defs: StatDef[];
-  matchId: string;
-}) {
-  return (
-    <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="font-bold text-suaza-ink text-lg">선수별 기록</h2>
-        {isStaff && isManager && (
-          <Link
-            href="/settings/stats"
-            className="text-xs text-suaza-accent hover:underline"
-          >
-            항목 관리 ›
-          </Link>
-        )}
-      </div>
-
-      {!isPast && participations.length === 0 ? (
-        <div className="bg-gray-50 rounded-xl p-6 flex flex-col items-center gap-2 text-center">
-          <span className="text-3xl">⚽</span>
-          <span className="font-bold text-suaza-ink">경기 종료 후 입력</span>
-          <span className="text-xs text-suaza-ink-muted">
-            골 · 도움 · 클린시트 등<span className="hidden desktop:inline"><br />경기가 끝나면 등록할 수 있어요</span>
-          </span>
-        </div>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {participations.map((p) =>
-            isStaff ? (
-              <ParticipationEditRow
-                key={p.id}
-                p={p}
-                matchId={matchId}
-                defs={defs}
-              />
-            ) : (
-              <ParticipationReadRow key={p.id} p={p} defs={defs} />
-            ),
-          )}
-        </ul>
-      )}
-
-      {isStaff && availableMembers.length > 0 && (
-        <form action={addParticipant.bind(null, matchId)} className="flex gap-2">
-          <select
-            name="player_id"
-            required
-            defaultValue=""
-            className="flex-1 px-3 py-2 rounded-lg border border-dashed border-suaza-border text-sm text-suaza-ink-muted bg-white focus:outline-none focus:border-suaza-button"
-          >
-            <option value="" disabled>
-              + 미리 출전 선수 추가
-            </option>
-            {availableMembers.map((mem) => (
-              <option key={mem.id} value={mem.id}>
-                {mem.jersey_number != null ? `#${mem.jersey_number} ` : ""}
-                {mem.name}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            className="text-sm bg-suaza-button text-white rounded-lg px-3 font-medium hover:opacity-90"
-          >
-            추가
-          </button>
-        </form>
-      )}
-    </section>
-  );
-}
-
-// ───────────────────────────────────────────────────────────
-// Match Info Summary
-// ───────────────────────────────────────────────────────────
-
-function MatchInfoSummary({ m, isStaff }: { m: Match; isStaff: boolean }) {
-  const items: { label: string; value: React.ReactNode }[] = [
-    { label: "상대팀", value: m.opponent },
-    { label: "일시", value: formatMatchDateShort(m.match_date) },
-    { label: "장소", value: m.location || "—" },
-    {
-      label: "상태",
-      value: (
-        <span className="inline-flex items-center gap-1">
-          <span
-            className="w-1.5 h-1.5 rounded-full"
-            style={{ backgroundColor: statusDotColor(m.status) }}
-          />
-          {MATCH_STATUS_LABEL[m.status]}
-        </span>
-      ),
-    },
-  ];
-
-  return (
-    <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="font-bold text-suaza-ink text-lg">경기 정보</h2>
-        {isStaff && (
-          <Link
-            href={`/matches/${m.id}?edit=1`}
-            className="text-xs text-suaza-accent hover:underline font-medium"
-          >
-            수정 ›
-          </Link>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 desktop:grid-cols-4 gap-4 text-sm">
-        {items.map((it) => (
-          <div key={it.label} className="flex flex-col gap-1">
-            <span className="text-xs text-suaza-ink-muted">{it.label}</span>
-            <span className="font-bold text-suaza-ink">{it.value}</span>
-          </div>
-        ))}
-      </div>
-
-      {m.notes && (
-        <div className="flex flex-col gap-1">
-          <span className="text-xs text-suaza-ink-muted">메모</span>
-          <p className="text-sm text-suaza-ink whitespace-pre-wrap">
-            {m.notes}
-          </p>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ParticipationReadRow({
-  p,
-  defs,
-}: {
-  p: Participation;
-  defs: StatDef[];
-}) {
-  const stats: string[] = [];
-  if (p.goals) stats.push(`골 ${p.goals}`);
-  if (p.assists) stats.push(`어시 ${p.assists}`);
-  for (const d of defs) {
-    const v = p.custom_stats?.[d.key];
-    if (v) stats.push(`${d.label} ${v}`);
-  }
-  return (
-    <li className="border border-suaza-border rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
-      <span className="font-medium text-suaza-ink">
-        {p.player?.jersey_number != null ? `#${p.player.jersey_number} ` : ""}
-        {p.player?.name ?? "(알 수 없음)"}
-      </span>
-      <span className="text-sm text-suaza-ink-muted">
-        {stats.length > 0 ? stats.join(" · ") : "기록 없음"}
-      </span>
-    </li>
-  );
-}
-
-function ParticipationEditRow({
-  p,
-  matchId,
-  defs,
-}: {
-  p: Participation;
-  matchId: string;
-  defs: StatDef[];
-}) {
-  return (
-    <li className="border border-suaza-border rounded-lg p-3 flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-suaza-ink">
-          {p.player?.jersey_number != null ? `#${p.player.jersey_number} ` : ""}
-          {p.player?.name ?? "(알 수 없음)"}
-        </span>
-        <form action={removeParticipant.bind(null, p.id, matchId)}>
-          <button
-            type="submit"
-            className="text-xs text-red-600 hover:underline"
-            aria-label="출전 명단에서 제외"
-          >
-            제외
-          </button>
-        </form>
-      </div>
-      <form
-        action={updateParticipant.bind(null, p.id, matchId)}
-        className="flex flex-col gap-2"
-      >
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <NumberField name="goals" label="골" defaultValue={p.goals} />
-          <NumberField name="assists" label="어시" defaultValue={p.assists} />
-          {defs.map((d) => (
-            <NumberField
-              key={d.key}
-              name={`custom__${d.key}`}
-              label={d.label}
-              defaultValue={p.custom_stats?.[d.key] ?? ""}
-            />
-          ))}
-        </div>
-        <button
-          type="submit"
-          className="self-end text-sm bg-suaza-button text-white rounded-md px-3 py-1.5 font-medium hover:opacity-90"
-        >
-          저장
-        </button>
-      </form>
-    </li>
-  );
-}
-
-function NumberField({
-  name,
-  label,
-  defaultValue,
-}: {
-  name: string;
-  label: string;
-  defaultValue: number | string;
-}) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs text-suaza-ink-muted">{label}</span>
-      <input
-        type="number"
-        name={name}
-        defaultValue={defaultValue}
-        min={0}
-        className="w-full px-2 py-1.5 rounded-md border border-suaza-border text-sm text-suaza-ink focus:outline-none focus:border-suaza-button"
-      />
-    </label>
-  );
-}
-
-// ───────────────────────────────────────────────────────────
 // Helpers
 // ───────────────────────────────────────────────────────────
 
 function statusDotColor(status: string) {
-  return status === "scheduled"
-    ? "#3B82F6"
-    : status === "done"
-      ? "#22C55E"
-      : "#9CA3AF";
+  return (
+    MATCH_STATUS_DOT_COLOR[status as keyof typeof MATCH_STATUS_DOT_COLOR] ??
+    "#9CA3AF"
+  );
 }
 
 function formatMatchDateLong(iso: string) {
@@ -971,12 +777,6 @@ function formatMatchDateLong(iso: string) {
 function formatMatchTime(iso: string) {
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-function formatMatchDateShort(iso: string) {
-  const d = new Date(iso);
-  const days = ["일", "월", "화", "수", "목", "금", "토"];
-  return `${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")} (${days[d.getDay()]}) ${formatMatchTime(iso)}`;
 }
 
 // ───────────────────────────────────────────────────────────

@@ -115,6 +115,19 @@ export async function updateMatch(matchId: string, formData: FormData) {
   redirect(`/matches/${matchId}?message=${encodeURIComponent("저장되었습니다")}`);
 }
 
+export async function startMatch(matchId: string) {
+  const { supabase } = await requireStaff();
+  const { error } = await supabase
+    .from("matches")
+    .update({ status: "in_progress" })
+    .eq("id", matchId);
+  if (error) {
+    redirect(`/matches/${matchId}?error=${encodeURIComponent(error.message)}`);
+  }
+  revalidatePath(`/matches/${matchId}`);
+  redirect(`/matches/${matchId}`);
+}
+
 export async function deleteMatch(matchId: string) {
   const { supabase } = await requireStaff();
   const { error } = await supabase.from("matches").delete().eq("id", matchId);
@@ -136,9 +149,21 @@ export async function addParticipant(matchId: string, formData: FormData) {
     redirect(`/matches/${matchId}?error=${encodeURIComponent("선수를 선택해 주세요")}`);
   }
 
+  // 새로 추가 또는 이전에 archive 된 row 재활성화.
+  // 어느 경우든 통계는 0 으로 초기화 (이전 기록 복원 X).
   const { error } = await supabase
     .from("match_participations")
-    .insert({ match_id: matchId, player_id: playerId });
+    .upsert(
+      {
+        match_id: matchId,
+        player_id: playerId,
+        archived_at: null,
+        goals: 0,
+        assists: 0,
+        custom_stats: {},
+      },
+      { onConflict: "match_id,player_id" },
+    );
 
   if (error) {
     redirect(`/matches/${matchId}?error=${encodeURIComponent(error.message)}`);
@@ -185,18 +210,155 @@ export async function updateParticipant(
   redirect(`/matches/${matchId}?message=${encodeURIComponent("기록이 저장되었습니다")}`);
 }
 
+/**
+ * 단일 stat 키를 delta 만큼 증감. 실시간 자동 저장용.
+ * - goals/assists 는 컬럼, 그 외(clean_sheets/referee_count 등)는 custom_stats jsonb 의 키.
+ */
+export async function incrementStat(
+  participationId: string,
+  matchId: string,
+  key: "goals" | "assists" | "clean_sheets" | "referee_count",
+  delta: number,
+) {
+  const { supabase } = await requireStaff();
+
+  const { data: p, error: getErr } = await supabase
+    .from("match_participations")
+    .select("goals, assists, custom_stats")
+    .eq("id", participationId)
+    .single();
+
+  if (getErr || !p) return;
+
+  let goals = p.goals ?? 0;
+  let assists = p.assists ?? 0;
+  const custom_stats: Record<string, number> = {
+    ...((p.custom_stats as Record<string, number> | null) ?? {}),
+  };
+
+  if (key === "goals") {
+    goals = Math.max(0, goals + delta);
+  } else if (key === "assists") {
+    assists = Math.max(0, assists + delta);
+  } else {
+    custom_stats[key] = Math.max(0, (custom_stats[key] ?? 0) + delta);
+  }
+
+  await supabase
+    .from("match_participations")
+    .update({ goals, assists, custom_stats })
+    .eq("id", participationId);
+
+  revalidatePath(`/matches/${matchId}`);
+}
+
+export async function saveParticipations(
+  matchId: string,
+  edits: {
+    id: string;
+    goals: number;
+    assists: number;
+    custom_stats: Record<string, number>;
+  }[],
+) {
+  const { supabase } = await requireStaff();
+
+  for (const e of edits) {
+    const { error } = await supabase
+      .from("match_participations")
+      .update({
+        goals: e.goals,
+        assists: e.assists,
+        custom_stats: e.custom_stats,
+      })
+      .eq("id", e.id)
+      .eq("match_id", matchId);
+    if (error) {
+      throw new Error(error.message);
+    }
+  }
+
+  revalidatePath(`/matches/${matchId}`);
+  revalidatePath("/members");
+}
+
 export async function removeParticipant(
   participationId: string,
   matchId: string,
 ) {
   const { supabase } = await requireStaff();
+  // soft-delete: archived_at 만 설정. 통계는 보존되어 재추가 시 복원됨.
+  // 트리거가 attendance 도 'absent' 로 변경 (선수가 출석 카드에서도 제외됨).
   const { error } = await supabase
     .from("match_participations")
-    .delete()
+    .update({ archived_at: new Date().toISOString() })
     .eq("id", participationId);
 
   if (error) {
     redirect(`/matches/${matchId}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath(`/matches/${matchId}`);
+  redirect(`/matches/${matchId}`);
+}
+
+/**
+ * 기록 중인 선수에서만 빼고 출석은 'attending' 으로 유지.
+ * → 결과적으로 '+기록 시작' 후보 칩으로 돌아감.
+ */
+export async function unrecordParticipant(
+  participationId: string,
+  matchId: string,
+) {
+  const { supabase } = await requireStaff();
+
+  const { data: p, error: getErr } = await supabase
+    .from("match_participations")
+    .select("player_id")
+    .eq("id", participationId)
+    .single();
+
+  if (getErr || !p) {
+    redirect(
+      `/matches/${matchId}?error=${encodeURIComponent("참가자를 찾을 수 없습니다")}`,
+    );
+  }
+
+  // 1. 참가 row archive + 통계 초기화 (재추가 시 0 으로 시작)
+  // 트리거가 attendance 를 absent 로 변경하지만 아래에서 되돌림.
+  const { error: archiveErr } = await supabase
+    .from("match_participations")
+    .update({
+      archived_at: new Date().toISOString(),
+      goals: 0,
+      assists: 0,
+      custom_stats: {},
+    })
+    .eq("id", participationId);
+
+  if (archiveErr) {
+    redirect(
+      `/matches/${matchId}?error=${encodeURIComponent(archiveErr.message)}`,
+    );
+  }
+
+  // 2. attendance 를 attending 으로 복원
+  const { error: attErr } = await supabase
+    .from("match_attendances")
+    .upsert(
+      {
+        match_id: matchId,
+        player_id: p.player_id,
+        status: "attending",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "match_id,player_id" },
+    );
+
+  if (attErr) {
+    redirect(
+      `/matches/${matchId}?error=${encodeURIComponent(attErr.message)}`,
+    );
   }
 
   revalidatePath(`/matches/${matchId}`);

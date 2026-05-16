@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { createMatch, updateMatch } from "@/lib/matches/actions";
 
-type Status = "scheduled" | "done" | "canceled";
+type Status = "scheduled" | "in_progress" | "done" | "canceled";
 type MatchType = "vs" | "intra";
 
 const TIME_OPTIONS: string[] = (() => {
@@ -29,6 +29,12 @@ const STATUS_OPTS: {
     label: "예정",
     desc: "아직 안 한 경기",
     color: "#3B82F6",
+  },
+  {
+    value: "in_progress",
+    label: "진행중",
+    desc: "지금 경기 중",
+    color: "#F59E0B",
   },
   { value: "done", label: "완료", desc: "끝난 경기", color: "#22C55E" },
   { value: "canceled", label: "취소", desc: "취소된 경기", color: "#9CA3AF" },
@@ -238,7 +244,7 @@ export default function NewMatchForm({
       {/* 경기 상태 — 새 경기 등록이므로 예정만 가능 */}
       <div className="flex flex-col gap-2">
         <span className="text-suaza-ink text-base font-medium">경기 상태</span>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 desktop:grid-cols-4 gap-2">
           {STATUS_OPTS.map((opt) => {
             const on = status === opt.value;
             const disabled = !isEdit && opt.value !== "scheduled";

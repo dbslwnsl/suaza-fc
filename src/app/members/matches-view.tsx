@@ -58,7 +58,8 @@ export default async function MatchesView({
       : supabase
           .from("match_participations")
           .select("match_id, player_id, goals, assists, custom_stats")
-          .in("match_id", matchIds),
+          .in("match_id", matchIds)
+          .is("archived_at", null),
     supabase
       .from("profiles")
       .select("id, name, jersey_number")
