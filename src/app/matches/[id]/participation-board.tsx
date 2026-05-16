@@ -813,12 +813,12 @@ function PointStar({ points, small }: { points: number; small?: boolean }) {
   }
   return (
     <span
-      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-base font-bold ${
+      className={`inline-flex items-center gap-1 px-2 py-0.5 desktop:px-3 desktop:py-1.5 rounded-full text-sm desktop:text-base font-bold ${
         muted ? "bg-gray-100 text-suaza-ink-faint" : "bg-suaza-accent text-white"
       }`}
     >
       <span>{muted ? "☆" : "★"}</span>
-      {points} <span className="text-xs font-normal">pt</span>
+      {points} <span className="text-[10px] desktop:text-xs font-normal">pt</span>
     </span>
   );
 }
