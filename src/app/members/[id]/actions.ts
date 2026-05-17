@@ -17,6 +17,7 @@ type UpdateInput = {
   jersey_number: number | null;
   birth_date: string | null;
   title?: MemberTitle;
+  profile_completed: boolean;
 };
 
 export async function updateProfile(profileId: string, formData: FormData) {
@@ -56,6 +57,7 @@ export async function updateProfile(profileId: string, formData: FormData) {
     positions,
     jersey_number: jerseyRaw ? Number(jerseyRaw) : null,
     birth_date: birthRaw || null,
+    profile_completed: true,
   };
 
   if (!update.name) {
