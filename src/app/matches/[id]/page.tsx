@@ -1,28 +1,27 @@
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
-  addParticipant,
   deleteMatch,
-  removeParticipant,
   setAttendance,
-  updateMatch,
-  updateParticipant,
+  startMatch,
 } from "@/lib/matches/actions";
 import AttendanceManagerBoard from "@/components/attendance-manager-board";
+import NewMatchForm from "@/app/matches/new/new-match-form";
+import ParticipationBoard, {
+  type ParticipationData,
+} from "./participation-board";
 import {
-  MATCH_STATUS,
   MATCH_STATUS_BADGE,
+  MATCH_STATUS_DOT_COLOR,
   MATCH_STATUS_LABEL,
   RESULT_BADGE,
   RESULT_LABEL,
-  formatMatchDate,
   getResult,
-  isoToLocalDatetime,
+  isMatchStarted,
   type Match,
 } from "@/lib/matches/helpers";
-
-type StatDef = { key: string; label: string; sort_order: number };
 
 type Participation = {
   id: string;
@@ -35,13 +34,9 @@ type Participation = {
     id: string;
     name: string;
     jersey_number: number | null;
+    positions: string[] | null;
+    title: string | null;
   } | null;
-};
-
-type MemberOpt = {
-  id: string;
-  name: string;
-  jersey_number: number | null;
 };
 
 export default async function MatchDetailPage({
@@ -49,10 +44,10 @@ export default async function MatchDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; message?: string }>;
+  searchParams: Promise<{ error?: string; message?: string; edit?: string }>;
 }) {
   const { id } = await params;
-  const { error, message } = await searchParams;
+  const { error, message, edit } = await searchParams;
 
   const supabase = await createClient();
   const {
@@ -65,30 +60,31 @@ export default async function MatchDetailPage({
     { data: me },
     { data: participationsRaw },
     { data: allMembers },
-    { data: statDefs },
     { data: attendancesRaw },
     { data: myAttendance },
   ] = await Promise.all([
     supabase.from("matches").select("*").eq("id", id).single(),
-    supabase.from("profiles").select("role").eq("id", user.id).single(),
+    supabase
+      .from("profiles")
+      .select("role, name")
+      .eq("id", user.id)
+      .single(),
     supabase
       .from("match_participations")
       .select(
-        "id, match_id, player_id, goals, assists, custom_stats, player:profiles(id, name, jersey_number)",
+        "id, match_id, player_id, goals, assists, custom_stats, player:profiles(id, name, jersey_number, positions, title)",
       )
-      .eq("match_id", id),
+      .eq("match_id", id)
+      .is("archived_at", null),
     supabase
       .from("profiles")
-      .select("id, name, jersey_number")
+      .select("id, name, jersey_number, positions, title")
       .order("name", { ascending: true }),
     supabase
-      .from("stat_definitions")
-      .select("key, label, sort_order")
-      .order("sort_order", { ascending: true })
-      .order("key", { ascending: true }),
-    supabase
       .from("match_attendances")
-      .select("status, player:profiles(id, name, jersey_number)")
+      .select(
+        "status, player:profiles(id, name, jersey_number, positions, title)",
+      )
       .eq("match_id", id),
     supabase
       .from("match_attendances")
@@ -98,17 +94,23 @@ export default async function MatchDetailPage({
       .maybeSingle(),
   ]);
 
-  type VotePlayer = { id: string; name: string; jersey_number: number | null };
-  const byStatus: { attending: VotePlayer[]; absent: VotePlayer[]; undecided: VotePlayer[] } = {
-    attending: [],
-    absent: [],
-    undecided: [],
+  type VotePlayer = {
+    id: string;
+    name: string;
+    jersey_number: number | null;
+    positions?: string[] | null;
+    title?: string | null;
   };
+  const byStatus: {
+    attending: VotePlayer[];
+    absent: VotePlayer[];
+    undecided: VotePlayer[];
+  } = { attending: [], absent: [], undecided: [] };
   const votedIds = new Set<string>();
-  for (const row of ((attendancesRaw ?? []) as unknown as {
+  for (const row of (attendancesRaw ?? []) as unknown as {
     status: keyof typeof byStatus;
     player: VotePlayer | null;
-  }[])) {
+  }[]) {
     if (row.player && row.status in byStatus) {
       byStatus[row.status].push(row.player);
       votedIds.add(row.player.id);
@@ -126,9 +128,10 @@ export default async function MatchDetailPage({
 
   const m = match as Match;
   const isStaff = me?.role === "manager" || me?.role === "coach";
+  const editing = edit === "1" && isStaff;
   const result =
     m.status === "done" ? getResult(m.our_score, m.opponent_score) : null;
-  const defs = (statDefs ?? []) as StatDef[];
+  const totalMembers = (allMembers ?? []).length;
 
   const participations = ((participationsRaw ?? []) as unknown as Participation[])
     .slice()
@@ -137,25 +140,97 @@ export default async function MatchDetailPage({
     );
 
   const participatedIds = new Set(participations.map((p) => p.player_id));
-  const availableMembers = ((allMembers ?? []) as MemberOpt[]).filter(
-    (mem) => !participatedIds.has(mem.id),
+
+  // D-day 계산
+  const matchTs = new Date(m.match_date).getTime();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const matchStart = new Date(m.match_date);
+  matchStart.setHours(0, 0, 0, 0);
+  const diffDays = Math.round(
+    (matchStart.getTime() - todayStart.getTime()) / 86400000,
   );
+  const dDay =
+    m.status === "scheduled"
+      ? diffDays > 0
+        ? `D-${diffDays}`
+        : diffDays === 0
+          ? "D-DAY"
+          : null
+      : null;
+
+  // 출석 마감 (경기 전날)
+  const deadline = new Date(matchTs);
+  deadline.setDate(deadline.getDate() - 1);
+  const deadlineStr = `${deadline.getMonth() + 1}/${deadline.getDate()}`;
+
+  const isIntra = m.opponent === "자체전";
+  const isStarted = isMatchStarted(m);
+
+  // 편집 모드: 경기 등록 화면과 동일한 레이아웃
+  if (editing) {
+    return (
+      <main className="flex-1 bg-white desktop:bg-suaza-bg px-6 desktop:px-8 py-8 desktop:py-12">
+        <div className="max-w-[600px] mx-auto bg-white desktop:rounded-2xl desktop:p-12 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
+          <header className="flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <Link
+                href="/"
+                aria-label="홈으로"
+                className="relative w-9 h-9 rounded-full overflow-hidden block hover:opacity-80 transition shrink-0"
+              >
+                <Image
+                  src="/suaza-emblem.png"
+                  alt="홈"
+                  fill
+                  sizes="36px"
+                  className="object-cover"
+                />
+              </Link>
+              <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
+                경기 정보 수정
+              </h1>
+            </div>
+            <p className="text-sm text-suaza-ink-muted">
+              경기 정보를 수정합니다
+            </p>
+          </header>
+
+          {error && (
+            <p className="-mt-2 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
+              {error}
+            </p>
+          )}
+
+          <NewMatchForm
+            mode="edit"
+            matchId={m.id}
+            initial={{
+              opponent: m.opponent,
+              matchDate: m.match_date,
+              location: m.location,
+              status: m.status,
+              notes: m.notes,
+            }}
+            recentOpponents={[]}
+            recentLocations={[]}
+          />
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
-      <div className="max-w-[600px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
-        <header className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/matches"
-              className="text-sm text-suaza-ink-muted hover:underline"
-            >
-              ← 목록
-            </Link>
-            <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
-              vs {m.opponent}
-            </h1>
-          </div>
+    <main className="flex-1 bg-white desktop:bg-suaza-bg px-6 desktop:px-8 py-6 desktop:py-12">
+      <div className="max-w-[600px] desktop:max-w-[1400px] mx-auto flex flex-col gap-4">
+        {/* Header: 경기 목록 + status + D-day */}
+        <header className="flex items-center justify-between gap-2">
+          <Link
+            href="/matches"
+            className="text-sm text-suaza-ink-muted hover:underline"
+          >
+            ‹ 경기 목록
+          </Link>
           <div className="flex items-center gap-1.5">
             {result && (
               <span
@@ -165,337 +240,548 @@ export default async function MatchDetailPage({
               </span>
             )}
             <span
-              className={`text-xs px-2 py-0.5 rounded ${MATCH_STATUS_BADGE[m.status]}`}
+              className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${MATCH_STATUS_BADGE[m.status]}`}
             >
+              <span
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: statusDotColor(m.status) }}
+              />
               {MATCH_STATUS_LABEL[m.status]}
+              {dDay && <span className="font-bold ml-1">{dDay}</span>}
             </span>
           </div>
         </header>
 
-        <Link
-          href={`/matches/${m.id}/formation`}
-          className="-mt-2 self-start text-sm text-suaza-accent hover:underline font-medium"
-        >
-          포메이션 보기 →
-        </Link>
-
-        {m.status === "scheduled" && (
-          <AttendanceVote
-            matchId={m.id}
-            redirectTo={`/matches/${m.id}`}
-            myStatus={myStatus}
-            byStatus={byStatus}
-            nonVoters={nonVoters}
-            isManager={me?.role === "manager"}
-          />
-        )}
-
         {message && (
-          <p className="-mt-2 p-3 bg-green-50 text-green-700 rounded-lg text-sm">
+          <p className="p-3 bg-green-50 text-green-700 rounded-lg text-sm">
             {message}
           </p>
         )}
         {error && (
-          <p className="-mt-2 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
+          <p className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">
             {error}
           </p>
         )}
 
-        {!isStaff ? (
-          <ReadOnlyView m={m} />
-        ) : (
-          <form
-            action={updateMatch.bind(null, m.id)}
-            className="flex flex-col gap-4"
-          >
-            <Field label="상대팀">
-              <input
-                type="text"
-                name="opponent"
-                defaultValue={m.opponent}
-                required
-                className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
-              />
-            </Field>
+        <VSCard m={m} isIntra={isIntra} isStaff={isStaff} isStarted={isStarted} />
 
-            <Field label="경기 일시">
-              <input
-                type="datetime-local"
-                name="match_date"
-                defaultValue={isoToLocalDatetime(m.match_date)}
-                required
-                className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
-              />
-            </Field>
-
-            <Field label="장소">
-              <input
-                type="text"
-                name="location"
-                defaultValue={m.location ?? ""}
-                className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
-              />
-            </Field>
-
-            <Field label="상태">
-              <select
-                name="status"
-                defaultValue={m.status}
-                className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink bg-white focus:outline-none focus:border-suaza-button"
-              >
-                {MATCH_STATUS.map((s) => (
-                  <option key={s} value={s}>
-                    {MATCH_STATUS_LABEL[s]}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="우리팀 득점">
-                <input
-                  type="number"
-                  name="our_score"
-                  defaultValue={m.our_score ?? ""}
-                  min={0}
-                  max={99}
-                  className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
+            <div className="grid grid-cols-1 desktop:grid-cols-2 gap-4">
+              {m.status !== "canceled" && (
+                <AttendanceCard
+                  matchId={m.id}
+                  redirectTo={`/matches/${m.id}`}
+                  myStatus={myStatus}
+                  byStatus={byStatus}
+                  nonVoters={nonVoters}
+                  isManager={me?.role === "manager"}
+                  myName={me?.name ?? null}
+                  totalMembers={totalMembers}
+                  deadlineStr={deadlineStr}
+                  locked={isStarted}
                 />
-              </Field>
-              <Field label="상대팀 득점">
-                <input
-                  type="number"
-                  name="opponent_score"
-                  defaultValue={m.opponent_score ?? ""}
-                  min={0}
-                  max={99}
-                  className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
-                />
-              </Field>
+              )}
+              <ParticipationBoard
+                matchId={m.id}
+                isStaff={isStaff}
+                isManager={me?.role === "manager"}
+                myUserId={user.id}
+                isStarted={isStarted}
+                isMyselfAttending={myStatus === "attending"}
+                myProfile={
+                  ((allMembers ?? []) as unknown as ParticipationData["player"][]).find(
+                    (mm) => mm?.id === user.id,
+                  ) ?? null
+                }
+                participations={
+                  participations as unknown as ParticipationData[]
+                }
+                attendingMembers={
+                  byStatus.attending.filter(
+                    (a) => !participatedIds.has(a.id),
+                  ) as unknown as ParticipationData["player"][]
+                }
+              />
             </div>
 
-            <Field label="메모">
-              <textarea
-                name="notes"
-                rows={3}
-                defaultValue={m.notes ?? ""}
-                className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink resize-none focus:outline-none focus:border-suaza-button"
-              />
-            </Field>
-
-            <button
-              type="submit"
-              className="h-[52px] rounded-lg bg-suaza-button text-white text-base font-medium hover:opacity-90 transition mt-2"
-            >
-              경기 정보 저장
-            </button>
-          </form>
-        )}
-
-        {/* 선수별 기록 섹션 */}
-        <section className="flex flex-col gap-3 pt-2 border-t border-suaza-border">
-          <div className="flex items-center justify-between mt-3">
-            <h2 className="font-bold text-suaza-ink text-lg">선수별 기록</h2>
-            {isStaff && me?.role === "manager" && (
-              <Link
-                href="/settings/stats"
-                className="text-xs text-suaza-accent hover:underline"
-              >
-                기록 항목 관리 →
-              </Link>
+            {isStaff && (
+              <form action={deleteMatch.bind(null, m.id)} className="flex justify-center mt-4">
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 text-sm border border-red-300 text-red-600 rounded-lg px-4 py-2 font-medium hover:bg-red-50 transition"
+                >
+                  <span>🗑</span>
+                  경기 삭제
+                </button>
+              </form>
             )}
-          </div>
-
-          {isStaff && availableMembers.length > 0 && (
-            <form
-              action={addParticipant.bind(null, m.id)}
-              className="flex gap-2"
-            >
-              <select
-                name="player_id"
-                required
-                defaultValue=""
-                className="flex-1 px-4 py-2.5 rounded-lg border border-suaza-border text-sm text-suaza-ink bg-white focus:outline-none focus:border-suaza-button"
-              >
-                <option value="" disabled>
-                  출전 선수 추가...
-                </option>
-                {availableMembers.map((mem) => (
-                  <option key={mem.id} value={mem.id}>
-                    {mem.jersey_number != null ? `#${mem.jersey_number} ` : ""}
-                    {mem.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="submit"
-                className="text-sm bg-suaza-button text-white rounded-lg px-4 font-medium hover:opacity-90"
-              >
-                추가
-              </button>
-            </form>
-          )}
-
-          {participations.length === 0 ? (
-            <p className="text-suaza-ink-muted text-sm">
-              아직 출전 선수가 없습니다.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {participations.map((p) =>
-                isStaff ? (
-                  <ParticipationEditRow
-                    key={p.id}
-                    p={p}
-                    matchId={m.id}
-                    defs={defs}
-                  />
-                ) : (
-                  <ParticipationReadRow key={p.id} p={p} defs={defs} />
-                ),
-              )}
-            </ul>
-          )}
-        </section>
-
-        {isStaff && (
-          <form action={deleteMatch.bind(null, m.id)}>
-            <button
-              type="submit"
-              className="w-full h-[44px] rounded-lg border border-red-300 text-red-600 text-sm font-medium hover:bg-red-50 transition"
-            >
-              경기 삭제
-            </button>
-          </form>
-        )}
       </div>
     </main>
   );
 }
 
-function Field({
+// ───────────────────────────────────────────────────────────
+// VS Card
+// ───────────────────────────────────────────────────────────
+
+function VSCard({
+  m,
+  isIntra,
+  isStaff,
+  isStarted,
+}: {
+  m: Match;
+  isIntra: boolean;
+  isStaff: boolean;
+  isStarted: boolean;
+}) {
+  return (
+    <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4">
+      {/* 경기 유형 + 상태 라벨 */}
+      <div className="flex items-center justify-center gap-2">
+        <span
+          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+            isIntra
+              ? "bg-amber-50 text-amber-700"
+              : "bg-red-50 text-suaza-accent"
+          }`}
+        >
+          <span>{isIntra ? "⚽" : "🆚"}</span>
+          {isIntra ? "자체전" : "상대전"}
+        </span>
+        <span
+          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${MATCH_STATUS_BADGE[m.status]}`}
+        >
+          <span
+            className="w-1.5 h-1.5 rounded-full"
+            style={{ backgroundColor: statusDotColor(m.status) }}
+          />
+          {MATCH_STATUS_LABEL[m.status]}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 items-center gap-3">
+        {isIntra ? (
+          <>
+            <TeamSide kind="letter" letter="A" color="#EF3E3E" />
+            <VsBadge />
+            <TeamSide kind="letter" letter="B" color="#338CF2" />
+          </>
+        ) : (
+          <>
+            <TeamSide kind="us" />
+            <VsBadge />
+            <TeamSide kind="opponent" name={m.opponent} />
+          </>
+        )}
+      </div>
+
+      <div className="flex items-center justify-center gap-2 desktop:gap-4 text-suaza-ink-muted text-sm flex-wrap">
+        <span className="inline-flex items-center gap-1">
+          <span>📅</span>
+          {formatMatchDateLong(m.match_date)}
+        </span>
+        <span className="hidden desktop:inline text-suaza-ink-faint">·</span>
+        <span className="inline-flex items-center gap-1">
+          <span>⏰</span>
+          {formatMatchTime(m.match_date)}
+        </span>
+        {m.location && (
+          <>
+            <span className="hidden desktop:inline text-suaza-ink-faint">·</span>
+            <span className="inline-flex items-center gap-1 w-full desktop:w-auto justify-center">
+              <span>📍</span>
+              {m.location}
+            </span>
+          </>
+        )}
+      </div>
+
+      <div className="flex items-center justify-center gap-2 flex-wrap">
+        {isStaff && m.status === "scheduled" && (
+          <form action={startMatch.bind(null, m.id)}>
+            <button
+              type="submit"
+              className="text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 transition px-4 py-1.5 rounded-lg inline-flex items-center gap-1"
+            >
+              ▶ 경기 시작
+              {isStarted && (
+                <span className="text-[10px] font-normal opacity-80">
+                  (시각 경과)
+                </span>
+              )}
+            </button>
+          </form>
+        )}
+        {isStaff && (
+          <Link
+            href={`/matches/${m.id}?edit=1`}
+            className="text-sm font-bold text-suaza-accent bg-red-50 hover:bg-red-100 transition px-4 py-1.5 rounded-lg"
+          >
+            경기 정보 수정 ›
+          </Link>
+        )}
+        <Link
+          href={`/matches/${m.id}/formation`}
+          className="text-sm font-medium text-suaza-ink bg-gray-100 hover:bg-gray-200 transition px-4 py-1.5 rounded-lg"
+        >
+          포메이션 ›
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function VsBadge() {
+  return (
+    <span className="text-suaza-ink-muted font-bold text-base desktop:text-2xl text-center">
+      VS
+    </span>
+  );
+}
+
+function TeamSide({
+  kind,
+  name,
+  letter,
+  color,
+}: {
+  kind: "us" | "opponent" | "letter";
+  name?: string;
+  letter?: "A" | "B";
+  color?: string;
+}) {
+  if (kind === "us") {
+    return (
+      <div className="flex flex-col items-center gap-2">
+        <div className="relative w-16 h-16 desktop:w-24 desktop:h-24 rounded-full overflow-hidden bg-white">
+          <Image
+            src="/suaza-emblem.png"
+            alt="SUAZA FC"
+            fill
+            sizes="96px"
+            className="object-cover"
+          />
+        </div>
+        <span className="text-sm desktop:text-lg font-bold text-suaza-ink">
+          SUAZA FC
+        </span>
+      </div>
+    );
+  }
+
+  if (kind === "letter") {
+    return (
+      <div className="flex flex-col items-center gap-2">
+        <div
+          className="w-16 h-16 desktop:w-24 desktop:h-24 rounded-full flex items-center justify-center"
+          style={{ backgroundColor: color }}
+        >
+          <span className="text-2xl desktop:text-4xl font-bold text-white">
+            {letter}
+          </span>
+        </div>
+        <span className="text-sm desktop:text-lg font-bold text-suaza-ink">
+          {letter}팀
+        </span>
+      </div>
+    );
+  }
+
+  const trimmed = (name ?? "").trim();
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="w-16 h-16 desktop:w-24 desktop:h-24 rounded-full bg-[#338CF2] flex items-center justify-center">
+        <span className="text-2xl desktop:text-4xl font-bold text-white">
+          {trimmed.charAt(0) || "?"}
+        </span>
+      </div>
+      <span className="text-sm desktop:text-lg font-bold text-suaza-ink text-center break-all">
+        {trimmed || "(상대팀)"}
+      </span>
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────
+// Attendance Card (new design)
+// ───────────────────────────────────────────────────────────
+
+type AttendancePlayer = {
+  id: string;
+  name: string;
+  jersey_number: number | null;
+};
+
+function AttendanceCard({
+  matchId,
+  redirectTo,
+  myStatus,
+  byStatus,
+  nonVoters,
+  isManager,
+  myName,
+  totalMembers,
+  deadlineStr,
+  locked,
+}: {
+  matchId: string;
+  redirectTo: string;
+  myStatus: string | null;
+  byStatus: {
+    attending: AttendancePlayer[];
+    absent: AttendancePlayer[];
+    undecided: AttendancePlayer[];
+  };
+  nonVoters: AttendancePlayer[];
+  isManager?: boolean;
+  myName: string | null;
+  totalMembers: number;
+  deadlineStr: string;
+  locked?: boolean;
+}) {
+  const counts = {
+    attending: byStatus.attending.length,
+    absent: byStatus.absent.length,
+    undecided: byStatus.undecided.length,
+    nonVoters: nonVoters.length,
+  };
+
+  return (
+    <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-baseline gap-2">
+          <h2 className="font-bold text-suaza-ink text-lg">출석 투표</h2>
+          <span className="text-xs text-suaza-ink-muted">
+            <span className="hidden desktop:inline">전체 </span>
+            {totalMembers}명
+          </span>
+        </div>
+        <span className="text-xs text-suaza-ink-muted">
+          마감 {deadlineStr}
+          <span className="hidden desktop:inline"> 23:59</span>
+        </span>
+      </div>
+
+      {/* My response */}
+      {locked ? (
+        <div className="bg-gray-50 rounded-xl p-3 text-center text-xs text-suaza-ink-muted">
+          🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다
+        </div>
+      ) : (
+        <div className="bg-red-50/50 rounded-xl p-3 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <span className="w-7 h-7 rounded-full bg-suaza-accent text-white text-xs font-bold flex items-center justify-center shrink-0">
+              {myName?.charAt(0) ?? "?"}
+            </span>
+            <span className="text-sm font-medium text-suaza-ink">
+              <span className="desktop:hidden">내 응답을 알려주세요</span>
+              <span className="hidden desktop:inline">
+                {myName
+                  ? `${myName} 님의 응답을 알려주세요`
+                  : "응답을 알려주세요"}
+              </span>
+            </span>
+          </div>
+          <form action={setAttendance.bind(null, matchId, redirectTo)}>
+            <div className="grid grid-cols-3 gap-2">
+              <AttendanceVoteButton
+                value="attending"
+                label="참석"
+                icon="✓"
+                active={myStatus === "attending"}
+                activeClass="bg-green-600 text-white border-green-600"
+              />
+              <AttendanceVoteButton
+                value="absent"
+                label="불참"
+                active={myStatus === "absent"}
+                activeClass="bg-red-600 text-white border-red-600"
+              />
+              <AttendanceVoteButton
+                value="undecided"
+                label="미정"
+                active={myStatus === "undecided"}
+                activeClass="bg-gray-700 text-white border-gray-700"
+              />
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Stats row */}
+      <div className="grid grid-cols-4 gap-2 py-2">
+        <StatCount label="참석" value={counts.attending} color="#22C55E" />
+        <StatCount label="불참" value={counts.absent} color="#EF3E3E" />
+        <StatCount label="미정" value={counts.undecided} color="#9CA3AF" />
+        <StatCount label="미투표" value={counts.nonVoters} color="#D1D5DB" />
+      </div>
+
+      {/* Member pills */}
+      {isManager && !locked ? (
+        <>
+          <h3 className="text-sm font-bold text-suaza-ink">멤버별 응답</h3>
+          <AttendanceManagerBoard
+            matchId={matchId}
+            byStatus={byStatus}
+            nonVoters={nonVoters}
+          />
+        </>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <h3 className="text-sm font-bold text-suaza-ink">멤버별 응답</h3>
+          <MemberGroup
+            label="참석"
+            count={counts.attending}
+            color="#22C55E"
+            members={byStatus.attending}
+          />
+          <MemberGroup
+            label="불참"
+            count={counts.absent}
+            color="#EF3E3E"
+            members={byStatus.absent}
+          />
+          <MemberGroup
+            label="미정"
+            count={counts.undecided}
+            color="#9CA3AF"
+            members={byStatus.undecided}
+          />
+          <MemberGroup
+            label="미투표"
+            count={counts.nonVoters}
+            color="#D1D5DB"
+            members={nonVoters}
+            muted
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AttendanceVoteButton({
+  value,
   label,
-  children,
+  icon,
+  active,
+  activeClass,
+}: {
+  value: string;
+  label: string;
+  icon?: string;
+  active: boolean;
+  activeClass: string;
+}) {
+  return (
+    <button
+      type="submit"
+      name="status"
+      value={value}
+      className={`h-11 rounded-lg border text-sm font-medium transition flex items-center justify-center gap-1 ${
+        active
+          ? activeClass
+          : "bg-white border-suaza-border text-suaza-ink hover:bg-gray-50"
+      }`}
+    >
+      {icon && active && <span>{icon}</span>}
+      {label}
+    </button>
+  );
+}
+
+function StatCount({
+  label,
+  value,
+  color,
 }: {
   label: string;
-  children: React.ReactNode;
+  value: number;
+  color: string;
 }) {
   return (
-    <label className="flex flex-col gap-2">
-      <span className="text-suaza-ink text-base">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function ReadOnlyView({ m }: { m: Match }) {
-  return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-      <dt className="font-medium text-suaza-ink-muted">일시</dt>
-      <dd className="text-suaza-ink">{formatMatchDate(m.match_date)}</dd>
-      {m.location && (
-        <>
-          <dt className="font-medium text-suaza-ink-muted">장소</dt>
-          <dd className="text-suaza-ink">{m.location}</dd>
-        </>
-      )}
-      {m.our_score != null && m.opponent_score != null && (
-        <>
-          <dt className="font-medium text-suaza-ink-muted">스코어</dt>
-          <dd className="text-suaza-ink">
-            {m.our_score} : {m.opponent_score}
-          </dd>
-        </>
-      )}
-      {m.notes && (
-        <>
-          <dt className="font-medium text-suaza-ink-muted">메모</dt>
-          <dd className="text-suaza-ink whitespace-pre-wrap">{m.notes}</dd>
-        </>
-      )}
-    </dl>
-  );
-}
-
-function ParticipationReadRow({
-  p,
-  defs,
-}: {
-  p: Participation;
-  defs: StatDef[];
-}) {
-  const stats: string[] = [];
-  if (p.goals) stats.push(`골 ${p.goals}`);
-  if (p.assists) stats.push(`어시 ${p.assists}`);
-  for (const d of defs) {
-    const v = p.custom_stats?.[d.key];
-    if (v) stats.push(`${d.label} ${v}`);
-  }
-  return (
-    <li className="border border-suaza-border rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
-      <span className="font-medium text-suaza-ink">
-        {p.player?.jersey_number != null ? `#${p.player.jersey_number} ` : ""}
-        {p.player?.name ?? "(알 수 없음)"}
-      </span>
-      <span className="text-sm text-suaza-ink-muted">
-        {stats.length > 0 ? stats.join(" · ") : "기록 없음"}
-      </span>
-    </li>
-  );
-}
-
-function ParticipationEditRow({
-  p,
-  matchId,
-  defs,
-}: {
-  p: Participation;
-  matchId: string;
-  defs: StatDef[];
-}) {
-  return (
-    <li className="border border-suaza-border rounded-lg p-3 flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-suaza-ink">
-          {p.player?.jersey_number != null ? `#${p.player.jersey_number} ` : ""}
-          {p.player?.name ?? "(알 수 없음)"}
-        </span>
-        <form action={removeParticipant.bind(null, p.id, matchId)}>
-          <button
-            type="submit"
-            className="text-xs text-red-600 hover:underline"
-            aria-label="출전 명단에서 제외"
-          >
-            제외
-          </button>
-        </form>
+    <div className="flex flex-col items-center gap-0.5 border-r border-suaza-border last:border-r-0">
+      <div className="flex items-center gap-1">
+        <span
+          className="w-1.5 h-1.5 rounded-full"
+          style={{ backgroundColor: color }}
+        />
+        <span className="text-xl font-bold text-suaza-ink">{value}</span>
       </div>
-      <form
-        action={updateParticipant.bind(null, p.id, matchId)}
-        className="flex flex-col gap-2"
-      >
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <NumberField name="goals" label="골" defaultValue={p.goals} />
-          <NumberField name="assists" label="어시" defaultValue={p.assists} />
-          {defs.map((d) => (
-            <NumberField
-              key={d.key}
-              name={`custom__${d.key}`}
-              label={d.label}
-              defaultValue={p.custom_stats?.[d.key] ?? ""}
-            />
-          ))}
-        </div>
-        <button
-          type="submit"
-          className="self-end text-sm bg-suaza-button text-white rounded-md px-3 py-1.5 font-medium hover:opacity-90"
-        >
-          저장
-        </button>
-      </form>
-    </li>
+      <span className="text-[11px] text-suaza-ink-muted">{label}</span>
+    </div>
   );
 }
+
+function MemberGroup({
+  label,
+  count,
+  color,
+  members,
+  muted = false,
+}: {
+  label: string;
+  count: number;
+  color: string;
+  members: AttendancePlayer[];
+  muted?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5">
+        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+        <span
+          className={`text-xs font-bold ${muted ? "text-suaza-ink-muted" : "text-suaza-ink"}`}
+        >
+          {label} {count}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {members.length === 0 ? (
+          <span className="text-xs text-suaza-ink-faint">—</span>
+        ) : (
+          members.map((m) => (
+            <span
+              key={m.id}
+              className={`text-xs px-2.5 py-0.5 rounded-full border ${
+                muted ? "text-suaza-ink-muted bg-gray-50" : "text-suaza-ink bg-white"
+              }`}
+              style={{ borderColor: muted ? "#E5E7EB" : color }}
+            >
+              {m.name}
+            </span>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────
+// Helpers
+// ───────────────────────────────────────────────────────────
+
+function statusDotColor(status: string) {
+  return (
+    MATCH_STATUS_DOT_COLOR[status as keyof typeof MATCH_STATUS_DOT_COLOR] ??
+    "#9CA3AF"
+  );
+}
+
+function formatMatchDateLong(iso: string) {
+  const d = new Date(iso);
+  const days = ["일", "월", "화", "수", "목", "금", "토"];
+  return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
+}
+
+function formatMatchTime(iso: string) {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+// ───────────────────────────────────────────────────────────
+// AttendanceVote — 홈 페이지가 import 하므로 유지
+// ───────────────────────────────────────────────────────────
 
 type VotePlayer = {
   id: string;
@@ -644,25 +930,3 @@ function NonVoterRow({ members }: { members: VotePlayer[] }) {
   );
 }
 
-function NumberField({
-  name,
-  label,
-  defaultValue,
-}: {
-  name: string;
-  label: string;
-  defaultValue: number | string;
-}) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs text-suaza-ink-muted">{label}</span>
-      <input
-        type="number"
-        name={name}
-        defaultValue={defaultValue}
-        min={0}
-        className="w-full px-2 py-1.5 rounded-md border border-suaza-border text-sm text-suaza-ink focus:outline-none focus:border-suaza-button"
-      />
-    </label>
-  );
-}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import PageHeader from "@/components/page-header";
 import RosterView from "./roster-view";
 import SeasonView from "./season-view";
 import MatchesView from "./matches-view";
@@ -52,11 +53,7 @@ export default async function MembersPage({
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[800px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
-        <header>
-          <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
-            회원 명단
-          </h1>
-        </header>
+        <PageHeader title="회원 명단" />
 
         <nav className="flex border-b border-suaza-border -mb-2">
           {TABS.map((t) => {

@@ -1,15 +1,16 @@
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
-  MEMBER_TITLES,
-  POSITIONS,
   TITLE_BADGE,
   TITLE_LABEL,
   type MemberTitle,
   type Position,
+  type PreferredFoot,
 } from "@/lib/members/positions";
-import { updateProfile } from "./actions";
+import ProfileEditForm from "./profile-edit-form";
+import AvatarUpload from "./avatar-upload";
 
 type StatDef = { key: string; label: string; sort_order: number };
 
@@ -45,7 +46,7 @@ export default async function MemberDetailPage({
     supabase
       .from("profiles")
       .select(
-        "id, name, nickname, role, title, positions, jersey_number, birth_date",
+        "id, name, nickname, role, title, positions, jersey_number, birth_date, avatar_url, preferred_foot",
       )
       .eq("id", id)
       .single(),
@@ -53,7 +54,8 @@ export default async function MemberDetailPage({
     supabase
       .from("match_participations")
       .select("goals, assists, custom_stats, match:matches(status)")
-      .eq("player_id", id),
+      .eq("player_id", id)
+      .is("archived_at", null),
     supabase
       .from("stat_definitions")
       .select("key, label, sort_order")
@@ -85,15 +87,24 @@ export default async function MemberDetailPage({
     });
   }
 
+  const avatarSrc = profile.avatar_url || "/suaza-emblem.png";
+
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[600px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
         <header className="flex items-center gap-3 flex-wrap">
           <Link
-            href="/members"
-            className="text-sm text-suaza-ink-muted hover:underline"
+            href="/"
+            aria-label="홈으로"
+            className="relative w-9 h-9 rounded-full overflow-hidden block hover:opacity-80 transition shrink-0"
           >
-            ← 명단
+            <Image
+              src="/suaza-emblem.png"
+              alt="홈"
+              fill
+              sizes="36px"
+              className="object-cover"
+            />
           </Link>
           <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
             {profile.name}
@@ -116,102 +127,38 @@ export default async function MemberDetailPage({
           </p>
         )}
 
-        <section className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-          {totals.map((t) => (
-            <Stat key={t.label} label={t.label} value={t.value} />
-          ))}
+        <section className="flex items-center">
+          <div className="flex-1 flex justify-start pointer-fine:justify-center">
+            <AvatarUpload
+              profileId={profile.id}
+              src={avatarSrc}
+              name={profile.name}
+              canEdit={canEdit}
+            />
+          </div>
+          <div className="grid grid-cols-[repeat(3,auto)] gap-x-1 gap-y-2">
+            {totals.slice(0, 6).map((t) => (
+              <Stat key={t.label} label={t.label} value={t.value} />
+            ))}
+          </div>
         </section>
 
         {!canEdit ? (
           <ReadOnlyView profile={profile} positions={positions} />
         ) : (
-          <form
-            action={updateProfile.bind(null, profile.id)}
-            className="flex flex-col gap-4"
-          >
-            <Field label="이름">
-              <input
-                type="text"
-                name="name"
-                defaultValue={profile.name}
-                required
-                className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
-              />
-            </Field>
-
-            <Field label="별명">
-              <input
-                type="text"
-                name="nickname"
-                defaultValue={profile.nickname ?? ""}
-                className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
-              />
-            </Field>
-
-            <Field label="포지션 (복수 선택)">
-              <div className="flex gap-2 flex-wrap">
-                {POSITIONS.map((p) => (
-                  <label
-                    key={p}
-                    className="flex items-center gap-2 px-3 py-1.5 border border-suaza-border rounded-lg cursor-pointer hover:bg-gray-50"
-                  >
-                    <input
-                      type="checkbox"
-                      name="positions"
-                      value={p}
-                      defaultChecked={positions.includes(p)}
-                      className="accent-suaza-button"
-                    />
-                    <span className="text-suaza-ink">{p}</span>
-                  </label>
-                ))}
-              </div>
-            </Field>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="등번호">
-                <input
-                  type="number"
-                  name="jersey_number"
-                  defaultValue={profile.jersey_number ?? ""}
-                  min={0}
-                  max={999}
-                  className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
-                />
-              </Field>
-              <Field label="생년월일">
-                <input
-                  type="date"
-                  name="birth_date"
-                  defaultValue={profile.birth_date ?? ""}
-                  className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
-                />
-              </Field>
-            </div>
-
-            {isManager && (
-              <Field label="직책">
-                <select
-                  name="title"
-                  defaultValue={title}
-                  className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink bg-white focus:outline-none focus:border-suaza-button"
-                >
-                  {MEMBER_TITLES.map((t) => (
-                    <option key={t} value={t}>
-                      {TITLE_LABEL[t]}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            )}
-
-            <button
-              type="submit"
-              className="h-[52px] rounded-lg bg-suaza-button text-white text-base font-medium hover:opacity-90 transition mt-2"
-            >
-              저장
-            </button>
-          </form>
+          <ProfileEditForm
+            profileId={profile.id}
+            isManager={isManager}
+            initial={{
+              name: profile.name,
+              nickname: profile.nickname ?? null,
+              positions,
+              jersey_number: profile.jersey_number ?? null,
+              birth_date: profile.birth_date ?? null,
+              preferred_foot: (profile.preferred_foot ?? null) as PreferredFoot | null,
+              title,
+            }}
+          />
         )}
       </div>
     </main>
@@ -220,25 +167,12 @@ export default async function MemberDetailPage({
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex flex-col items-center justify-center p-3 border border-suaza-border rounded-lg">
-      <span className="text-xs text-suaza-ink-muted">{label}</span>
-      <span className="text-xl font-bold text-suaza-ink">{value}</span>
+    <div className="w-[66px] h-[66px] pointer-fine:w-20 pointer-fine:h-20 flex flex-col items-center justify-center gap-1 px-1 py-2 border border-suaza-border rounded-lg">
+      <span className="text-[11px] text-suaza-ink-muted whitespace-nowrap">
+        {label}
+      </span>
+      <span className="text-lg font-bold text-suaza-ink">{value}</span>
     </div>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="flex flex-col gap-2">
-      <span className="text-suaza-ink text-base">{label}</span>
-      {children}
-    </label>
   );
 }
 

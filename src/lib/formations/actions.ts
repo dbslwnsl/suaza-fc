@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { buildSlots } from "./helpers";
+import { buildSlots, type SaveFormationPayload, type SavedQuarter } from "./helpers";
 
 async function requireStaff() {
   const supabase = await createClient();
@@ -22,44 +22,43 @@ async function requireStaff() {
   return { supabase, userId: user.id };
 }
 
-export async function saveFormation(matchId: string, formData: FormData) {
+export async function saveFormation(
+  matchId: string,
+  payload: SaveFormationPayload,
+): Promise<{ ok?: true; error?: string }> {
   const { supabase, userId } = await requireStaff();
-  const shape = String(formData.get("shape") ?? "").trim();
-  if (!shape) {
-    redirect(
-      `/matches/${matchId}/formation?error=${encodeURIComponent("포메이션을 선택해 주세요")}`,
-    );
+  const input = (payload?.quarters ?? []).filter(
+    (q) => q && typeof q.shape === "string" && q.shape.trim(),
+  );
+  if (input.length === 0) {
+    return { error: "저장할 포메이션이 없습니다" };
   }
 
-  const slots = buildSlots(shape);
-  const player_ids: (string | null)[] = slots.map((s) => {
-    const v = String(formData.get(`slot__${s.index}`) ?? "").trim();
-    return v || null;
+  const cleaned: SavedQuarter[] = input.map((q) => {
+    const slots = buildSlots(q.shape);
+    const player_ids = slots.map((_, i) => q.player_ids?.[i] ?? null);
+    return { id: q.id, shape: q.shape, player_ids };
   });
+  const first = cleaned[0];
 
-  const { error } = await supabase
-    .from("formations")
-    .upsert(
-      {
-        match_id: matchId,
-        shape,
-        positions: { player_ids },
-        created_by: userId,
+  const { error } = await supabase.from("formations").upsert(
+    {
+      match_id: matchId,
+      shape: first.shape,
+      positions: {
+        quarters: cleaned,
+        player_ids: first.player_ids,
       },
-      { onConflict: "match_id" },
-    );
+      created_by: userId,
+    },
+    { onConflict: "match_id" },
+  );
 
-  if (error) {
-    redirect(
-      `/matches/${matchId}/formation?error=${encodeURIComponent(error.message)}`,
-    );
-  }
+  if (error) return { error: error.message };
 
   revalidatePath(`/matches/${matchId}/formation`);
   revalidatePath(`/matches/${matchId}`);
-  redirect(
-    `/matches/${matchId}/formation?message=${encodeURIComponent("저장되었습니다")}`,
-  );
+  return { ok: true };
 }
 
 export async function deleteFormation(matchId: string) {

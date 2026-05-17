@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import PageHeader from "@/components/page-header";
 import {
   MATCH_STATUS_BADGE,
   MATCH_STATUS_LABEL,
@@ -42,27 +43,19 @@ export default async function MatchesPage({
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[800px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-8">
-        <header className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/"
-              className="text-sm text-suaza-ink-muted hover:underline"
-            >
-              ← 홈
-            </Link>
-            <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
-              경기 일정 / 결과
-            </h1>
-          </div>
-          {isStaff && (
-            <Link
-              href="/matches/new"
-              className="text-sm bg-suaza-button text-white rounded-lg px-3.5 py-2 font-medium hover:opacity-90"
-            >
-              + 새 경기
-            </Link>
-          )}
-        </header>
+        <PageHeader
+          title="경기 일정 / 결과"
+          right={
+            isStaff && (
+              <Link
+                href="/matches/new"
+                className="text-sm bg-suaza-button text-white rounded-lg px-3.5 py-2 font-medium hover:opacity-90"
+              >
+                + 새 경기
+              </Link>
+            )
+          }
+        />
 
         {message && (
           <p className="-mb-4 p-3 bg-green-50 text-green-700 rounded-lg text-sm">

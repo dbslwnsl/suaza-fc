@@ -1,8 +1,8 @@
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createMatch } from "@/lib/matches/actions";
-import { MATCH_STATUS, MATCH_STATUS_LABEL } from "@/lib/matches/helpers";
+import NewMatchForm from "./new-match-form";
 
 export default async function NewMatchPage({
   searchParams,
@@ -25,19 +25,52 @@ export default async function NewMatchPage({
     redirect(`/matches?error=${encodeURIComponent("경기 관리 권한이 없습니다")}`);
   }
 
+  // 자주 만난 팀 / 최근 장소 추출 (최근 30경기 기준 unique)
+  const { data: pastMatches } = await supabase
+    .from("matches")
+    .select("opponent, location, match_date")
+    .order("match_date", { ascending: false })
+    .limit(30);
+
+  const recentOpponents = unique(
+    (pastMatches ?? []).map((m) => m.opponent),
+    4,
+  );
+  const recentLocations = unique(
+    (pastMatches ?? []).map((m) => m.location ?? ""),
+    3,
+  );
+
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[600px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
-        <header className="flex items-center gap-3">
-          <Link
-            href="/matches"
-            className="text-sm text-suaza-ink-muted hover:underline"
-          >
-            ← 목록
-          </Link>
-          <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
-            새 경기 등록
-          </h1>
+        <header className="flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              aria-label="홈으로"
+              className="relative w-9 h-9 rounded-full overflow-hidden block hover:opacity-80 transition shrink-0"
+            >
+              <Image
+                src="/suaza-emblem.png"
+                alt="홈"
+                fill
+                sizes="36px"
+                className="object-cover"
+              />
+            </Link>
+            <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
+              경기 등록
+            </h1>
+          </div>
+          <p className="text-sm text-suaza-ink-muted">
+            <span className="pointer-fine:hidden">
+              등록하면 캘린더 + 출석 투표 자동 생성
+            </span>
+            <span className="hidden pointer-fine:inline">
+              경기 정보를 입력하면 일정 캘린더와 출석 투표가 자동 생성됩니다
+            </span>
+          </p>
         </header>
 
         {error && (
@@ -46,101 +79,25 @@ export default async function NewMatchPage({
           </p>
         )}
 
-        <form action={createMatch} className="flex flex-col gap-4">
-          <Field label="상대팀">
-            <input
-              type="text"
-              name="opponent"
-              required
-              placeholder="예: 잠실 FC"
-              className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button"
-            />
-          </Field>
-
-          <Field label="경기 일시">
-            <input
-              type="datetime-local"
-              name="match_date"
-              required
-              className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
-            />
-          </Field>
-
-          <Field label="장소 (선택)">
-            <input
-              type="text"
-              name="location"
-              placeholder="예: 수원종합운동장"
-              className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button"
-            />
-          </Field>
-
-          <Field label="상태">
-            <select
-              name="status"
-              defaultValue="scheduled"
-              className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink bg-white focus:outline-none focus:border-suaza-button"
-            >
-              {MATCH_STATUS.map((s) => (
-                <option key={s} value={s}>
-                  {MATCH_STATUS_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="우리팀 득점 (선택)">
-              <input
-                type="number"
-                name="our_score"
-                min={0}
-                max={99}
-                className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
-              />
-            </Field>
-            <Field label="상대팀 득점 (선택)">
-              <input
-                type="number"
-                name="opponent_score"
-                min={0}
-                max={99}
-                className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
-              />
-            </Field>
-          </div>
-
-          <Field label="메모 (선택)">
-            <textarea
-              name="notes"
-              rows={3}
-              className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button resize-none"
-            />
-          </Field>
-
-          <button
-            type="submit"
-            className="h-[52px] rounded-lg bg-suaza-button text-white text-base font-medium hover:opacity-90 transition mt-2"
-          >
-            등록
-          </button>
-        </form>
+        <NewMatchForm
+          recentOpponents={recentOpponents}
+          recentLocations={recentLocations}
+        />
       </div>
     </main>
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="flex flex-col gap-2">
-      <span className="text-suaza-ink text-base">{label}</span>
-      {children}
-    </label>
-  );
+function unique(arr: (string | null)[], limit: number): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const v of arr) {
+    const s = (v ?? "").trim();
+    if (!s) continue;
+    if (seen.has(s)) continue;
+    seen.add(s);
+    result.push(s);
+    if (result.length >= limit) break;
+  }
+  return result;
 }

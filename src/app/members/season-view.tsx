@@ -52,7 +52,8 @@ export default async function SeasonView({
           .select(
             "match_id, player_id, goals, assists, custom_stats, player:profiles(id, name, jersey_number)",
           )
-          .in("match_id", matchIds),
+          .in("match_id", matchIds)
+          .is("archived_at", null),
     supabase
       .from("stat_definitions")
       .select("key, label, sort_order")
