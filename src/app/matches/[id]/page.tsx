@@ -167,6 +167,17 @@ export default async function MatchDetailPage({
   const isIntra = m.opponent === "자체전";
   const isStarted = isMatchStarted(m);
 
+  // 시각 경과 + scheduled 면 자동으로 in_progress 로 진행
+  // 단, 매니저가 시작 시각 이후 명시적으로 변경한 흔적이 있으면 skip (수동 우선)
+  const overriddenAfterStart =
+    m.status_overridden_at != null &&
+    new Date(m.status_overridden_at).getTime() >=
+      new Date(m.match_date).getTime();
+  if (m.status === "scheduled" && isStarted && !overriddenAfterStart) {
+    await supabase.rpc("auto_progress_match", { p_match_id: m.id });
+    m.status = "in_progress";
+  }
+
   // 편집 모드: 경기 등록 화면과 동일한 레이아웃
   if (editing) {
     return (
@@ -211,6 +222,7 @@ export default async function MatchDetailPage({
               location: m.location,
               status: m.status,
               notes: m.notes,
+              durationHours: m.duration_hours,
             }}
             recentOpponents={[]}
             recentLocations={[]}
@@ -384,6 +396,11 @@ function VSCard({
         <span className="inline-flex items-center gap-1">
           <span>⏰</span>
           {formatMatchTime(m.match_date)}
+          {m.duration_hours ? (
+            <span className="text-suaza-ink-faint">
+              ~{formatMatchEndTime(m.match_date, m.duration_hours)} ({m.duration_hours}시간)
+            </span>
+          ) : null}
         </span>
         {m.location && (
           <>
@@ -776,6 +793,11 @@ function formatMatchDateLong(iso: string) {
 
 function formatMatchTime(iso: string) {
   const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatMatchEndTime(iso: string, durationHours: number) {
+  const d = new Date(new Date(iso).getTime() + durationHours * 60 * 60 * 1000);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 

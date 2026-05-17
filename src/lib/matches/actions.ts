@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { MatchStatus } from "./helpers";
-import { MATCH_STATUS } from "./helpers";
+import {
+  DEFAULT_MATCH_DURATION_HOURS,
+  MATCH_DURATION_OPTIONS,
+  MATCH_STATUS,
+} from "./helpers";
 
 type MatchInput = {
   opponent: string;
@@ -14,6 +18,7 @@ type MatchInput = {
   opponent_score: number | null;
   status: MatchStatus;
   notes: string | null;
+  duration_hours: number;
 };
 
 function parseForm(formData: FormData): MatchInput {
@@ -33,6 +38,13 @@ function parseForm(formData: FormData): MatchInput {
     : "scheduled";
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
+  const durationRaw = Number(formData.get("duration_hours"));
+  const duration_hours = (
+    MATCH_DURATION_OPTIONS as readonly number[]
+  ).includes(durationRaw)
+    ? durationRaw
+    : DEFAULT_MATCH_DURATION_HOURS;
+
   return {
     opponent,
     match_date,
@@ -41,6 +53,7 @@ function parseForm(formData: FormData): MatchInput {
     opponent_score: oppScoreRaw ? Number(oppScoreRaw) : null,
     status,
     notes,
+    duration_hours,
   };
 }
 
@@ -101,9 +114,21 @@ export async function updateMatch(matchId: string, formData: FormData) {
     redirect(`/matches/${matchId}?error=${encodeURIComponent("경기 날짜를 선택해 주세요")}`);
   }
 
+  // 기존 status 와 비교하여 명시적 변경이면 override 시각 기록
+  const { data: existing } = await supabase
+    .from("matches")
+    .select("status")
+    .eq("id", matchId)
+    .single();
+
+  const update: Record<string, unknown> = { ...input };
+  if (existing && existing.status !== input.status) {
+    update.status_overridden_at = new Date().toISOString();
+  }
+
   const { error } = await supabase
     .from("matches")
-    .update(input)
+    .update(update)
     .eq("id", matchId);
 
   if (error) {
