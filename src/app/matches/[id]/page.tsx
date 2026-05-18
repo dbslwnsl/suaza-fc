@@ -9,6 +9,7 @@ import {
 } from "@/lib/matches/actions";
 import AttendanceManagerBoard from "@/components/attendance-manager-board";
 import NewMatchForm from "@/app/matches/new/new-match-form";
+import ScoreControl from "./score-control";
 import ParticipationBoard, {
   type ParticipationData,
 } from "./participation-board";
@@ -376,13 +377,35 @@ function VSCard({
         {isIntra ? (
           <>
             <TeamSide kind="letter" letter="A" color="#EF3E3E" />
-            <VsBadge />
+            {isStaff ? (
+              <ScoreControl
+                matchId={m.id}
+                ourScore={m.our_score}
+                opponentScore={m.opponent_score}
+              />
+            ) : (
+              <ScoreVs
+                ourScore={m.our_score}
+                opponentScore={m.opponent_score}
+              />
+            )}
             <TeamSide kind="letter" letter="B" color="#338CF2" />
           </>
         ) : (
           <>
             <TeamSide kind="us" />
-            <VsBadge />
+            {isStaff ? (
+              <ScoreControl
+                matchId={m.id}
+                ourScore={m.our_score}
+                opponentScore={m.opponent_score}
+              />
+            ) : (
+              <ScoreVs
+                ourScore={m.our_score}
+                opponentScore={m.opponent_score}
+              />
+            )}
             <TeamSide kind="opponent" name={m.opponent} />
           </>
         )}
@@ -449,11 +472,25 @@ function VSCard({
   );
 }
 
-function VsBadge() {
+function ScoreVs({
+  ourScore,
+  opponentScore,
+}: {
+  ourScore: number | null;
+  opponentScore: number | null;
+}) {
   return (
-    <span className="text-suaza-ink-muted font-bold text-base desktop:text-2xl text-center">
-      VS
-    </span>
+    <div className="flex items-center justify-center gap-2 desktop:gap-3 text-suaza-ink">
+      <span className="text-3xl desktop:text-5xl font-bold tabular-nums">
+        {ourScore ?? 0}
+      </span>
+      <span className="text-suaza-ink-muted font-bold text-sm desktop:text-xl">
+        VS
+      </span>
+      <span className="text-3xl desktop:text-5xl font-bold tabular-nums">
+        {opponentScore ?? 0}
+      </span>
+    </div>
   );
 }
 

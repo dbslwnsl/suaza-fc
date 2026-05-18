@@ -153,6 +153,41 @@ export async function startMatch(matchId: string) {
   redirect(`/matches/${matchId}`);
 }
 
+/**
+ * 우리/상대 점수를 delta 만큼 증감. 매니저/코치만 가능.
+ * 음수가 되지 않도록 0 에서 클램프.
+ */
+export async function incrementMatchScore(
+  matchId: string,
+  side: "our" | "opponent",
+  delta: number,
+) {
+  const { supabase } = await requireStaff();
+
+  const { data: existing, error: getErr } = await supabase
+    .from("matches")
+    .select("our_score, opponent_score")
+    .eq("id", matchId)
+    .single();
+
+  if (getErr || !existing) return;
+
+  const col = side === "our" ? "our_score" : "opponent_score";
+  const current =
+    side === "our" ? existing.our_score ?? 0 : existing.opponent_score ?? 0;
+  const next = Math.max(0, current + delta);
+
+  const { error } = await supabase
+    .from("matches")
+    .update({ [col]: next })
+    .eq("id", matchId);
+
+  if (error) return;
+
+  revalidatePath(`/matches/${matchId}`);
+  revalidatePath("/matches");
+}
+
 export async function deleteMatch(matchId: string) {
   const { supabase } = await requireStaff();
   const { error } = await supabase.from("matches").delete().eq("id", matchId);
