@@ -75,7 +75,7 @@ export default async function MembersPage({
           })}
         </nav>
 
-        {tab === "roster" && <RosterView />}
+        {tab === "roster" && <RosterView year={year} />}
         {tab === "season" && (
           <SeasonView
             year={year}

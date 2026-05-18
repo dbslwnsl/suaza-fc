@@ -1,27 +1,35 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
-  TITLE_BADGE,
-  TITLE_LABEL,
   type MemberTitle,
+  type Position,
 } from "@/lib/members/positions";
+import {
+  aggregateSeason,
+  yearRange,
+  type ParticipationRow,
+  type PlayerSeasonStat,
+  type StatDef,
+} from "@/lib/stats/helpers";
 import { displayMemberName } from "@/lib/members/name";
+import RosterList, { type RosterMember } from "./roster-list";
 
 type MemberRow = {
   id: string;
   name: string;
   nickname: string | null;
   title: MemberTitle;
-  positions: string[] | null;
+  positions: Position[] | null;
   jersey_number: number | null;
 };
 
-export default async function RosterView() {
+export default async function RosterView({ year }: { year: number }) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   const myId = user?.id ?? null;
+
+  const { from, to } = yearRange(year);
 
   const { data: members } = await supabase
     .from("profiles")
@@ -29,59 +37,71 @@ export default async function RosterView() {
     .is("deleted_at", null)
     .order("name", { ascending: true });
 
+  const { data: matchesRaw } = await supabase
+    .from("matches")
+    .select("id")
+    .eq("status", "done")
+    .gte("match_date", from)
+    .lt("match_date", to);
+
+  const matchIds = (matchesRaw ?? []).map((m) => m.id);
+
+  const [{ data: partsRaw }, { data: defsRaw }] = await Promise.all([
+    matchIds.length
+      ? supabase
+          .from("match_participations")
+          .select(
+            "match_id, player_id, goals, assists, custom_stats, player:profiles(id, name, jersey_number)",
+          )
+          .in("match_id", matchIds)
+          .is("archived_at", null)
+      : Promise.resolve({ data: [] as ParticipationRow[] }),
+    supabase
+      .from("stat_definitions")
+      .select("key, label, sort_order"),
+  ]);
+
+  const defs = (defsRaw ?? []) as StatDef[];
+  const aggregated = aggregateSeason(
+    (partsRaw ?? []) as unknown as ParticipationRow[],
+    defs,
+  );
+  const statsMap = new Map<string, PlayerSeasonStat>(
+    aggregated.map((s) => [s.player_id, s]),
+  );
+
   const raw = (members ?? []) as MemberRow[];
-  // 본인을 항상 맨 위로
-  const list = myId
+  const sorted = myId
     ? [
         ...raw.filter((m) => m.id === myId),
         ...raw.filter((m) => m.id !== myId),
       ]
     : raw;
 
-  return (
-    <section className="flex flex-col gap-4">
-      <div className="flex items-center justify-end">
-        <span className="text-sm text-suaza-ink-muted">총 {list.length}명</span>
-      </div>
+  if (sorted.length === 0) {
+    return (
+      <p className="text-suaza-ink-muted text-sm">등록된 회원이 없습니다.</p>
+    );
+  }
 
-      {list.length === 0 ? (
-        <p className="text-suaza-ink-muted text-sm">등록된 회원이 없습니다.</p>
-      ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {list.map((m) => (
-            <li key={m.id}>
-              <Link
-                href={`/members/${m.id}`}
-                className="block p-4 border border-suaza-border rounded-lg hover:bg-gray-50 transition"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-suaza-ink">
-                      {displayMemberName(m.name)}
-                    </span>
-                    {m.nickname && (
-                      <span className="text-sm text-suaza-ink-muted">
-                        ({m.nickname})
-                      </span>
-                    )}
-                  </div>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded ${TITLE_BADGE[m.title] ?? TITLE_BADGE.player}`}
-                  >
-                    {TITLE_LABEL[m.title] ?? m.title}
-                  </span>
-                </div>
-                <div className="text-sm text-suaza-ink-muted flex gap-3">
-                  {m.jersey_number != null && <span>#{m.jersey_number}</span>}
-                  {m.positions && m.positions.length > 0 && (
-                    <span>{m.positions.join(" / ")}</span>
-                  )}
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
+  const list: RosterMember[] = sorted.map((m) => {
+    const stat = statsMap.get(m.id);
+    return {
+      id: m.id,
+      name: m.name,
+      displayName: displayMemberName(m.name),
+      initial: m.name.charAt(0),
+      nickname: m.nickname,
+      title: m.title,
+      positions: (m.positions ?? []) as Position[],
+      jerseyNumber: m.jersey_number,
+      appearances: stat?.appearances ?? 0,
+      goals: stat?.goals ?? 0,
+      assists: stat?.assists ?? 0,
+      cleanSheets: stat?.custom.clean_sheets ?? 0,
+      points: stat?.custom.points ?? 0,
+    };
+  });
+
+  return <RosterList members={list} />;
 }
