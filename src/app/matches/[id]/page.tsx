@@ -377,7 +377,7 @@ function VSCard({
         {isIntra ? (
           <>
             <TeamSide kind="letter" letter="A" color="#EF3E3E" />
-            {isStaff ? (
+            {isStaff && isStarted ? (
               <ScoreControl
                 matchId={m.id}
                 ourScore={m.our_score}
@@ -394,7 +394,7 @@ function VSCard({
         ) : (
           <>
             <TeamSide kind="us" />
-            {isStaff ? (
+            {isStaff && isStarted ? (
               <ScoreControl
                 matchId={m.id}
                 ourScore={m.our_score}

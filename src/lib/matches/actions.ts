@@ -8,6 +8,7 @@ import {
   DEFAULT_MATCH_DURATION_HOURS,
   MATCH_DURATION_OPTIONS,
   MATCH_STATUS,
+  isMatchStarted,
 } from "./helpers";
 
 type MatchInput = {
@@ -166,11 +167,13 @@ export async function incrementMatchScore(
 
   const { data: existing, error: getErr } = await supabase
     .from("matches")
-    .select("our_score, opponent_score")
+    .select("our_score, opponent_score, status, match_date")
     .eq("id", matchId)
     .single();
 
   if (getErr || !existing) return;
+  // 경기 시작 전에는 점수 수정 불가
+  if (!isMatchStarted(existing)) return;
 
   const col = side === "our" ? "our_score" : "opponent_score";
   const current =
