@@ -62,8 +62,6 @@ export default function FormationEditor({
     }),
   );
   const [activeIdx, setActiveIdx] = useState(0);
-  const [filter, setFilter] = useState<Filter>("ALL");
-  const [query, setQuery] = useState("");
   const [openSlot, setOpenSlot] = useState<number | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<
@@ -192,13 +190,7 @@ export default function FormationEditor({
     const m = byId.get(playerId);
     const positions: Position[] = m?.positions ?? [];
     const assigns = current.assignments;
-    // 1) 필터가 특정 포지션이면 그 라인의 빈 슬롯 우선
-    if (filter !== "ALL") {
-      for (let i = 0; i < slots.length; i++) {
-        if (!assigns[i] && slots[i].role === filter) return i;
-      }
-    }
-    // 2) 선수 본인 포지션 순으로 매칭
+    // 1) 선수 본인 포지션 순으로 매칭
     for (const pos of positions) {
       for (let i = 0; i < slots.length; i++) {
         if (!assigns[i] && slots[i].role === pos) return i;
@@ -370,78 +362,34 @@ export default function FormationEditor({
         </div>
 
         <aside className="hidden desktop:flex desktop:absolute desktop:top-0 desktop:right-0 desktop:bottom-0 desktop:w-[340px] flex-col bg-white rounded-2xl border border-suaza-border p-4 gap-3 min-h-0">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-suaza-ink">
-              선수 명단
-            </h2>
-            <span className="text-xs text-suaza-ink-muted">
-              배치{" "}
-              <span className="font-semibold text-suaza-ink">
-                {placedSet.size}
-              </span>
-              /{slots.length}
-            </span>
-          </div>
-          <SearchInput value={query} onChange={setQuery} />
-          <FilterTabs value={filter} onChange={setFilter} />
-          {!readonly && (
-            <>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={resetCurrent}
-                  className="h-9 rounded-lg border border-suaza-border text-sm font-medium text-suaza-ink hover:bg-suaza-bg transition"
-                >
-                  초기화
-                </button>
-                <button
-                  type="button"
-                  onClick={autoPlace}
-                  className="h-9 rounded-lg bg-suaza-bg text-sm font-medium text-suaza-ink hover:bg-suaza-border/60 transition"
-                >
-                  자동 배치
-                </button>
-              </div>
-              <div className="flex justify-end">
-                <SaveStatusBadge status={saveStatus} />
-              </div>
-            </>
-          )}
-          <div className="flex-1 min-h-0 overflow-y-auto -mx-2 px-2">
-            <PlayerList
-              members={attendingMembers}
-              placedSet={placedSet}
-              filter={filter}
-              query={query}
-              readonly={readonly}
-              emptyText={
-                attendingMembers.length === 0
-                  ? "참석으로 표시된 선수가 없습니다"
-                  : undefined
-              }
-              onTap={(id, placed) => {
-                if (readonly) return;
-                if (placed) unassignPlayer(id);
-                else placeByClick(id);
-              }}
-              onDragStart={(id) => setDraggingId(id)}
-              onDragEnd={() => setDraggingId(null)}
-            />
-          </div>
+          <PlayerRosterDesktop
+            members={attendingMembers}
+            quarters={quarters}
+            placedSet={placedSet}
+            readonly={readonly}
+            onTap={(id: string, placed: boolean) => {
+              if (readonly) return;
+              if (placed) unassignPlayer(id);
+              else placeByClick(id);
+            }}
+            onDragStart={(id: string) => setDraggingId(id)}
+            onDragEnd={() => setDraggingId(null)}
+          />
         </aside>
       </div>
 
-      {/* 모바일 전용 참석 선수 칩 */}
-      <AttendingStrip
+      {/* 모바일 전용 선수 명단 (쿼터별 출전 현황) */}
+      <PlayerRosterMobile
         members={attendingMembers}
+        quarters={quarters}
         placedSet={placedSet}
         readonly={readonly}
-        onTap={(id, placed) => {
+        onTap={(id: string, placed: boolean) => {
           if (readonly) return;
           if (placed) unassignPlayer(id);
           else placeByClick(id);
         }}
-        onDragStart={(id) => setDraggingId(id)}
+        onDragStart={(id: string) => setDraggingId(id)}
         onDragEnd={() => setDraggingId(null)}
       />
 
@@ -1019,8 +967,153 @@ function PlayerAvatar({
   );
 }
 
-function AttendingStrip({
+type PlayerParticipation = {
+  member: EditorMember;
+  byQuarter: (Position | null)[];
+  totalPlayed: number;
+  positionsPlayed: Position[];
+  hasPositionChange: boolean;
+};
+
+function computeParticipations(
+  members: EditorMember[],
+  quarters: { shape: string; assignments: (string | null)[] }[],
+): PlayerParticipation[] {
+  return members.map((m) => {
+    const byQuarter: (Position | null)[] = quarters.map((q) => {
+      const idx = q.assignments.indexOf(m.id);
+      if (idx < 0) return null;
+      const slots = buildSlots(q.shape);
+      return (slots[idx]?.role as Position) ?? null;
+    });
+    const seen = new Set<Position>();
+    const positionsPlayed: Position[] = [];
+    for (const p of byQuarter) {
+      if (p && !seen.has(p)) {
+        seen.add(p);
+        positionsPlayed.push(p);
+      }
+    }
+    return {
+      member: m,
+      byQuarter,
+      totalPlayed: byQuarter.filter((p): p is Position => p != null).length,
+      positionsPlayed,
+      hasPositionChange: positionsPlayed.length > 1,
+    };
+  });
+}
+
+function getTierColor(played: number): string {
+  if (played >= 4) return "#22C55E";
+  if (played === 3) return "#3B82F6";
+  if (played === 2) return "#F59E0B";
+  if (played === 1) return "#EF4444";
+  return "#9CA3AF";
+}
+
+function LegendBar() {
+  return (
+    <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-suaza-bg">
+      <span className="text-xs">🎨</span>
+      <span className="text-[11px] text-suaza-ink-muted">쿼터별 출전 포지션</span>
+      <div className="flex items-center gap-2 ml-auto">
+        {POSITIONS.map((p) => (
+          <span key={p} className="inline-flex items-center gap-1 text-[10px] font-semibold text-suaza-ink">
+            <span
+              className="w-3 h-3 rounded-sm"
+              style={{ backgroundColor: POSITION_COLOR[p] }}
+            />
+            {p}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function QuarterTierCounters({
+  tierCounts,
+}: {
+  tierCounts: number[]; // index 0..4 → count of players who played that many quarters
+}) {
+  const tiers = [4, 3, 2, 1] as const;
+  return (
+    <div className="grid grid-cols-4 gap-2 rounded-xl border border-suaza-border bg-white p-3">
+      {tiers.map((t) => {
+        const color = getTierColor(t);
+        const n = tierCounts[t] ?? 0;
+        return (
+          <div key={t} className="flex flex-col items-center gap-0.5">
+            <div className="inline-flex items-baseline gap-1">
+              <span
+                className="inline-block w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: color }}
+              />
+              <span className="text-lg font-bold" style={{ color }}>
+                {n}
+              </span>
+              <span className="text-[10px] text-suaza-ink-muted">명</span>
+            </div>
+            <span className="text-[10px] text-suaza-ink-muted">{t}Q</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function FilterTabsWithCounts({
+  value,
+  onChange,
+  counts,
+}: {
+  value: Filter;
+  onChange: (v: Filter) => void;
+  counts: Record<Filter, number>;
+}) {
+  const items: { key: Filter; label: string }[] = [
+    { key: "ALL", label: "전체" },
+    ...POSITIONS.map((p) => ({ key: p as Filter, label: p })),
+  ];
+  return (
+    <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1">
+      {items.map((it) => {
+        const active = it.key === value;
+        const color = it.key === "ALL" ? "#1F2937" : POSITION_COLOR[it.key];
+        const cnt = counts[it.key] ?? 0;
+        return (
+          <button
+            key={it.key}
+            type="button"
+            onClick={() => onChange(it.key)}
+            className={`shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-xs font-semibold transition ${
+              active
+                ? "text-white shadow-sm"
+                : "bg-white border border-suaza-border text-suaza-ink hover:bg-suaza-bg"
+            }`}
+            style={active ? { backgroundColor: color } : undefined}
+          >
+            {it.key !== "ALL" && (
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${active ? "bg-white/80" : ""}`}
+                style={!active ? { backgroundColor: color } : undefined}
+              />
+            )}
+            <span>{it.label}</span>
+            <span className={active ? "text-white/80" : "text-suaza-ink-muted"}>
+              {cnt}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function PlayerRosterMobile({
   members,
+  quarters,
   placedSet,
   readonly,
   onTap,
@@ -1028,12 +1121,41 @@ function AttendingStrip({
   onDragEnd,
 }: {
   members: EditorMember[];
+  quarters: { shape: string; assignments: (string | null)[] }[];
   placedSet: Set<string>;
   readonly: boolean;
   onTap: (id: string, placed: boolean) => void;
   onDragStart?: (id: string) => void;
   onDragEnd?: () => void;
 }) {
+  const participations = useMemo(
+    () => computeParticipations(members, quarters),
+    [members, quarters],
+  );
+  const total = members.length;
+  const played = participations.filter((p) => p.totalPlayed > 0).length;
+  const sumQuarters = participations.reduce((s, p) => s + p.totalPlayed, 0);
+  const avg = played > 0 ? (sumQuarters / played).toFixed(1) : "0.0";
+
+  const tierCounts = useMemo(() => {
+    const c = [0, 0, 0, 0, 0];
+    for (const p of participations) {
+      const t = Math.min(4, p.totalPlayed);
+      c[t]++;
+    }
+    return c;
+  }, [participations]);
+
+  const sorted = useMemo(() => {
+    return [...participations].sort((a, b) => {
+      if (b.totalPlayed !== a.totalPlayed)
+        return b.totalPlayed - a.totalPlayed;
+      const an = a.member.jersey_number ?? 9999;
+      const bn = b.member.jersey_number ?? 9999;
+      return an - bn;
+    });
+  }, [participations]);
+
   if (members.length === 0) {
     return (
       <div className="desktop:hidden rounded-2xl border border-dashed border-suaza-border p-5 text-center text-sm text-suaza-ink-muted">
@@ -1041,58 +1163,299 @@ function AttendingStrip({
       </div>
     );
   }
-  const placedCount = members.filter((m) => placedSet.has(m.id)).length;
+
   return (
-    <div className="desktop:hidden flex flex-col gap-2.5 rounded-2xl bg-white border border-suaza-border p-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-suaza-ink">참석 선수</h3>
-        <span className="text-xs text-suaza-ink-muted">
-          배치{" "}
-          <span className="font-semibold text-suaza-ink">
-            {placedCount}
-          </span>
-          /{members.length}
-        </span>
+    <div className="desktop:hidden flex flex-col gap-3 rounded-2xl bg-white border border-suaza-border p-4">
+      <div>
+        <h3 className="text-base font-bold text-suaza-ink">선수명단</h3>
+        <p className="text-xs text-suaza-ink-muted mt-0.5">
+          총 {total}명 · 출전 {played}명 · 평균 {avg}쿼터
+        </p>
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        {members.map((m) => {
-          const placed = placedSet.has(m.id);
-          const primaryPos = m.positions?.[0];
-          const posColor = primaryPos ? POSITION_COLOR[primaryPos] : null;
-          return (
-            <button
-              key={m.id}
-              type="button"
-              disabled={readonly}
-              draggable={!readonly}
-              onDragStart={(e) => {
-                e.dataTransfer.setData("text/plain", m.id);
-                e.dataTransfer.effectAllowed = "move";
-                onDragStart?.(m.id);
-              }}
-              onDragEnd={() => onDragEnd?.()}
-              onClick={() => onTap(m.id, placed)}
-              style={{ touchAction: "manipulation" }}
-              className={`shrink-0 inline-flex items-center gap-1.5 h-8 pl-2 pr-2.5 rounded-full border text-xs font-medium transition ${
-                placed
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                  : "bg-white border-suaza-border text-suaza-ink hover:bg-suaza-bg"
-              } ${!readonly ? "cursor-grab active:cursor-grabbing" : ""} disabled:opacity-60 disabled:cursor-not-allowed`}
+      <LegendBar />
+      <QuarterTierCounters tierCounts={tierCounts} />
+      <div className="grid grid-cols-2 gap-2">
+        {sorted.map((p) => (
+          <DesktopPlayerCard
+            key={p.member.id}
+            participation={p}
+            placed={placedSet.has(p.member.id)}
+            readonly={readonly}
+            onTap={onTap}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PlayerRowMobile({
+  participation,
+  placed,
+  readonly,
+  onTap,
+  onDragStart,
+  onDragEnd,
+}: {
+  participation: PlayerParticipation;
+  placed: boolean;
+  readonly: boolean;
+  onTap: (id: string, placed: boolean) => void;
+  onDragStart?: (id: string) => void;
+  onDragEnd?: () => void;
+}) {
+  const m = participation.member;
+  const primary = m.positions?.[0];
+  const primaryColor = primary ? POSITION_COLOR[primary] : "#9CA3AF";
+  const tierColor = getTierColor(participation.totalPlayed);
+  const hasPlayed = participation.totalPlayed > 0;
+
+  return (
+    <div
+      style={{ touchAction: "manipulation" }}
+      draggable={!readonly}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", m.id);
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart?.(m.id);
+      }}
+      onDragEnd={() => onDragEnd?.()}
+      onClick={() => !readonly && onTap(m.id, placed)}
+      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border bg-white select-none transition ${
+        readonly ? "cursor-default" : "cursor-pointer"
+      } ${hasPlayed ? "border-suaza-border" : "border-suaza-border opacity-80"}`}
+    >
+      <div
+        className={`shrink-0 w-10 h-10 rounded-full border-2 flex items-center justify-center text-sm font-bold ${
+          hasPlayed ? "" : "border-gray-200 text-gray-300"
+        }`}
+        style={hasPlayed ? { borderColor: primaryColor, color: primaryColor } : undefined}
+      >
+        {m.name.slice(0, 1)}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-sm font-semibold text-suaza-ink truncate">
+            {m.name}
+          </span>
+          {m.jersey_number != null && (
+            <span className="text-[11px] font-mono text-suaza-ink-muted shrink-0">
+              #{m.jersey_number}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+          {!hasPlayed && (
+            <span className="text-[10px] text-suaza-ink-muted">미출전</span>
+          )}
+          {participation.positionsPlayed.map((pos) => (
+            <span
+              key={pos}
+              className="inline-flex items-center gap-0.5 text-[10px] font-semibold"
+              style={{ color: POSITION_COLOR[pos] }}
             >
               <span
-                className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold text-white"
-                style={{
-                  backgroundColor: placed
-                    ? "#10b981"
-                    : (posColor ?? "#9CA3AF"),
-                }}
-              >
-                {placed ? "✓" : (m.jersey_number ?? "·")}
-              </span>
-              <span>{m.name}</span>
-            </button>
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: POSITION_COLOR[pos] }}
+              />
+              {pos}
+            </span>
+          ))}
+          {participation.hasPositionChange && (
+            <span className="text-[10px] text-suaza-ink-muted">
+              · 포지션 변경
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1 shrink-0">
+        {participation.byQuarter.map((pos, i) => {
+          const bg = pos ? POSITION_COLOR[pos] : null;
+          return (
+            <span
+              key={i}
+              className={`w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-bold ${
+                bg ? "text-white" : "bg-gray-100 text-gray-400"
+              }`}
+              style={bg ? { backgroundColor: bg } : undefined}
+            >
+              {i + 1}
+            </span>
           );
         })}
+      </div>
+
+      <span
+        className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold text-white"
+        style={{ backgroundColor: tierColor }}
+      >
+        {participation.totalPlayed}/{participation.byQuarter.length}
+      </span>
+    </div>
+  );
+}
+
+function PlayerRosterDesktop({
+  members,
+  quarters,
+  placedSet,
+  readonly,
+  onTap,
+  onDragStart,
+  onDragEnd,
+}: {
+  members: EditorMember[];
+  quarters: { shape: string; assignments: (string | null)[] }[];
+  placedSet: Set<string>;
+  readonly: boolean;
+  onTap: (id: string, placed: boolean) => void;
+  onDragStart?: (id: string) => void;
+  onDragEnd?: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("ALL");
+
+  const participations = useMemo(
+    () => computeParticipations(members, quarters),
+    [members, quarters],
+  );
+  const posCounts = useMemo(() => {
+    const c: Record<Filter, number> = {
+      ALL: members.length,
+      GK: 0,
+      DF: 0,
+      MF: 0,
+      FW: 0,
+    };
+    for (const m of members) {
+      const primary = m.positions?.[0];
+      if (primary) c[primary]++;
+    }
+    return c;
+  }, [members]);
+  const tierCounts = useMemo(() => {
+    const c = [0, 0, 0, 0, 0];
+    for (const p of participations) {
+      const t = Math.min(4, p.totalPlayed);
+      c[t]++;
+    }
+    return c;
+  }, [participations]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let out = participations;
+    if (filter !== "ALL") {
+      out = out.filter((p) => p.member.positions?.[0] === filter);
+    }
+    if (q) {
+      out = out.filter((p) => {
+        const name = p.member.name.toLowerCase();
+        const num =
+          p.member.jersey_number != null ? String(p.member.jersey_number) : "";
+        return name.includes(q) || num.includes(q);
+      });
+    }
+    return [...out].sort((a, b) => {
+      if (b.totalPlayed !== a.totalPlayed)
+        return b.totalPlayed - a.totalPlayed;
+      const an = a.member.jersey_number ?? 9999;
+      const bn = b.member.jersey_number ?? 9999;
+      return an - bn;
+    });
+  }, [participations, filter, query]);
+
+  return (
+    <>
+      <div className="flex items-baseline gap-2">
+        <h2 className="text-base font-bold text-suaza-ink">선수 명단</h2>
+        <span className="text-xs text-suaza-ink-muted">쿼터별 출전 현황</span>
+      </div>
+      <SearchInput value={query} onChange={setQuery} />
+      <FilterTabsWithCounts
+        value={filter}
+        onChange={setFilter}
+        counts={posCounts}
+      />
+      <LegendBar />
+      <QuarterTierCounters tierCounts={tierCounts} />
+      <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">
+        {filtered.length === 0 ? (
+          <p className="py-6 text-center text-sm text-suaza-ink-muted">
+            {members.length === 0
+              ? "참석으로 표시된 선수가 없습니다"
+              : "해당 조건의 선수가 없습니다"}
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {filtered.map((p) => (
+              <PlayerRowMobile
+                key={p.member.id}
+                participation={p}
+                placed={placedSet.has(p.member.id)}
+                readonly={readonly}
+                onTap={onTap}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function DesktopPlayerCard({
+  participation,
+  placed,
+  readonly,
+  onTap,
+  onDragStart,
+  onDragEnd,
+}: {
+  participation: PlayerParticipation;
+  placed: boolean;
+  readonly: boolean;
+  onTap: (id: string, placed: boolean) => void;
+  onDragStart?: (id: string) => void;
+  onDragEnd?: () => void;
+}) {
+  const m = participation.member;
+  return (
+    <div
+      draggable={!readonly}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", m.id);
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart?.(m.id);
+      }}
+      onDragEnd={() => onDragEnd?.()}
+      onClick={() => !readonly && onTap(m.id, placed)}
+      className={`flex items-center gap-2 p-2.5 rounded-xl border bg-white select-none transition ${
+        readonly ? "cursor-default" : "cursor-pointer hover:bg-suaza-bg"
+      } ${placed ? "border-emerald-200" : "border-suaza-border"}`}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-semibold text-suaza-ink truncate">
+          {m.name}
+        </div>
+        <div className="text-[10px] text-suaza-ink-muted">
+          {m.jersey_number != null ? `#${m.jersey_number}` : "—"}
+        </div>
+      </div>
+      <div className="flex gap-0.5 shrink-0">
+        {participation.byQuarter.map((pos, i) => (
+          <span
+            key={i}
+            className={`w-3 h-5 rounded-sm ${pos ? "" : "bg-gray-200"}`}
+            style={pos ? { backgroundColor: POSITION_COLOR[pos] } : undefined}
+          />
+        ))}
       </div>
     </div>
   );
