@@ -26,6 +26,7 @@ export default async function RosterView() {
   const { data: members } = await supabase
     .from("profiles")
     .select("id, name, nickname, title, positions, jersey_number")
+    .is("deleted_at", null)
     .order("name", { ascending: true });
 
   const raw = (members ?? []) as MemberRow[];

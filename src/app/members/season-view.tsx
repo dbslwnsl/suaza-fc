@@ -71,6 +71,7 @@ export default async function SeasonView({
   const { data: allMembersRaw } = await supabase
     .from("profiles")
     .select("id, name, jersey_number")
+    .is("deleted_at", null)
     .order("name", { ascending: true });
 
   const statsMap = new Map(aggregated.map((s) => [s.player_id, s]));

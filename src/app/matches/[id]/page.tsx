@@ -79,6 +79,7 @@ export default async function MatchDetailPage({
     supabase
       .from("profiles")
       .select("id, name, jersey_number, positions, title")
+      .is("deleted_at", null)
       .order("name", { ascending: true }),
     supabase
       .from("match_attendances")

@@ -124,6 +124,7 @@ export default async function Home() {
         supabase
           .from("profiles")
           .select("id, name, jersey_number")
+          .is("deleted_at", null)
           .order("name", { ascending: true }),
       ]);
 

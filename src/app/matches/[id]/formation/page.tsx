@@ -99,6 +99,7 @@ export default async function FormationPage({
     supabase
       .from("profiles")
       .select("id, name, jersey_number, positions, title, avatar_url")
+      .is("deleted_at", null)
       .order("jersey_number", { ascending: true, nullsFirst: false }),
     supabase
       .from("match_attendances")

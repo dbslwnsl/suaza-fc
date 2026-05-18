@@ -11,6 +11,7 @@ import {
 } from "@/lib/members/positions";
 import ProfileEditForm from "./profile-edit-form";
 import AvatarUpload from "./avatar-upload";
+import DeleteMemberButton from "./delete-member-button";
 
 type StatDef = { key: string; label: string; sort_order: number };
 
@@ -49,6 +50,7 @@ export default async function MemberDetailPage({
         "id, name, nickname, role, title, positions, jersey_number, birth_date, avatar_url, preferred_foot",
       )
       .eq("id", id)
+      .is("deleted_at", null)
       .single(),
     supabase.from("profiles").select("role").eq("id", user.id).single(),
     supabase
@@ -159,6 +161,10 @@ export default async function MemberDetailPage({
               title,
             }}
           />
+        )}
+
+        {isManager && !isSelf && (
+          <DeleteMemberButton profileId={profile.id} name={profile.name} />
         )}
       </div>
     </main>

@@ -63,6 +63,7 @@ export default async function MatchesView({
     supabase
       .from("profiles")
       .select("id, name, jersey_number")
+      .is("deleted_at", null)
       .order("name", { ascending: true }),
   ]);
 
