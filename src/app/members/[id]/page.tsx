@@ -89,7 +89,7 @@ export default async function MemberDetailPage({
     });
   }
 
-  const avatarSrc = profile.avatar_url || "/suaza-emblem.png";
+  const avatarSrc = profile.avatar_url ?? null;
 
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
