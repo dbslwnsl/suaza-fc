@@ -9,6 +9,7 @@ import {
 } from "@/lib/matches/actions";
 import AttendanceManagerBoard from "@/components/attendance-manager-board";
 import NewMatchForm from "@/app/matches/new/new-match-form";
+import ScoreControl from "./score-control";
 import ParticipationBoard, {
   type ParticipationData,
 } from "./participation-board";
@@ -79,6 +80,7 @@ export default async function MatchDetailPage({
     supabase
       .from("profiles")
       .select("id, name, jersey_number, positions, title")
+      .is("deleted_at", null)
       .order("name", { ascending: true }),
     supabase
       .from("match_attendances")
@@ -167,6 +169,17 @@ export default async function MatchDetailPage({
   const isIntra = m.opponent === "자체전";
   const isStarted = isMatchStarted(m);
 
+  // 시각 경과 + scheduled 면 자동으로 in_progress 로 진행
+  // 단, 매니저가 시작 시각 이후 명시적으로 변경한 흔적이 있으면 skip (수동 우선)
+  const overriddenAfterStart =
+    m.status_overridden_at != null &&
+    new Date(m.status_overridden_at).getTime() >=
+      new Date(m.match_date).getTime();
+  if (m.status === "scheduled" && isStarted && !overriddenAfterStart) {
+    await supabase.rpc("auto_progress_match", { p_match_id: m.id });
+    m.status = "in_progress";
+  }
+
   // 편집 모드: 경기 등록 화면과 동일한 레이아웃
   if (editing) {
     return (
@@ -211,6 +224,7 @@ export default async function MatchDetailPage({
               location: m.location,
               status: m.status,
               notes: m.notes,
+              durationHours: m.duration_hours,
             }}
             recentOpponents={[]}
             recentLocations={[]}
@@ -363,13 +377,35 @@ function VSCard({
         {isIntra ? (
           <>
             <TeamSide kind="letter" letter="A" color="#EF3E3E" />
-            <VsBadge />
+            {isStaff && isStarted ? (
+              <ScoreControl
+                matchId={m.id}
+                ourScore={m.our_score}
+                opponentScore={m.opponent_score}
+              />
+            ) : (
+              <ScoreVs
+                ourScore={m.our_score}
+                opponentScore={m.opponent_score}
+              />
+            )}
             <TeamSide kind="letter" letter="B" color="#338CF2" />
           </>
         ) : (
           <>
             <TeamSide kind="us" />
-            <VsBadge />
+            {isStaff && isStarted ? (
+              <ScoreControl
+                matchId={m.id}
+                ourScore={m.our_score}
+                opponentScore={m.opponent_score}
+              />
+            ) : (
+              <ScoreVs
+                ourScore={m.our_score}
+                opponentScore={m.opponent_score}
+              />
+            )}
             <TeamSide kind="opponent" name={m.opponent} />
           </>
         )}
@@ -384,6 +420,11 @@ function VSCard({
         <span className="inline-flex items-center gap-1">
           <span>⏰</span>
           {formatMatchTime(m.match_date)}
+          {m.duration_hours ? (
+            <span className="text-suaza-ink-faint">
+              ~{formatMatchEndTime(m.match_date, m.duration_hours)} ({m.duration_hours}시간)
+            </span>
+          ) : null}
         </span>
         {m.location && (
           <>
@@ -431,11 +472,25 @@ function VSCard({
   );
 }
 
-function VsBadge() {
+function ScoreVs({
+  ourScore,
+  opponentScore,
+}: {
+  ourScore: number | null;
+  opponentScore: number | null;
+}) {
   return (
-    <span className="text-suaza-ink-muted font-bold text-base desktop:text-2xl text-center">
-      VS
-    </span>
+    <div className="flex items-center justify-center gap-2 desktop:gap-3 text-suaza-ink">
+      <span className="text-3xl desktop:text-5xl font-bold tabular-nums">
+        {ourScore ?? 0}
+      </span>
+      <span className="text-suaza-ink-muted font-bold text-sm desktop:text-xl">
+        VS
+      </span>
+      <span className="text-3xl desktop:text-5xl font-bold tabular-nums">
+        {opponentScore ?? 0}
+      </span>
+    </div>
   );
 }
 
@@ -776,6 +831,11 @@ function formatMatchDateLong(iso: string) {
 
 function formatMatchTime(iso: string) {
   const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatMatchEndTime(iso: string, durationHours: number) {
+  const d = new Date(new Date(iso).getTime() + durationHours * 60 * 60 * 1000);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 

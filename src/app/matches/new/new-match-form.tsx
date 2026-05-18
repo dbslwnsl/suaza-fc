@@ -4,6 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { createMatch, updateMatch } from "@/lib/matches/actions";
+import {
+  DEFAULT_MATCH_DURATION_HOURS,
+  MATCH_DURATION_OPTIONS,
+  type MatchDurationHours,
+} from "@/lib/matches/helpers";
 
 type Status = "scheduled" | "in_progress" | "done" | "canceled";
 type MatchType = "vs" | "intra";
@@ -46,6 +51,7 @@ type Initial = {
   location: string | null;
   status: Status;
   notes: string | null;
+  durationHours?: number | null;
 };
 
 export default function NewMatchForm({
@@ -79,10 +85,19 @@ export default function NewMatchForm({
   const [location, setLocation] = useState(initial?.location ?? "");
   const [status, setStatus] = useState<Status>(initial?.status ?? "scheduled");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [durationHours, setDurationHours] = useState<MatchDurationHours>(
+    (MATCH_DURATION_OPTIONS as readonly number[]).includes(
+      initial?.durationHours ?? DEFAULT_MATCH_DURATION_HOURS,
+    )
+      ? ((initial?.durationHours ??
+          DEFAULT_MATCH_DURATION_HOURS) as MatchDurationHours)
+      : (DEFAULT_MATCH_DURATION_HOURS as MatchDurationHours),
+  );
   const opponentInputRef = useRef<HTMLInputElement>(null);
 
   const matchDate = date && time ? `${date}T${time}` : "";
   const effectiveOpponent = matchType === "intra" ? "자체전" : opponent;
+  const finishTimeLabel = computeFinishTime(time, durationHours);
 
   // 생성 모드일 때만 오늘 날짜 + 현재 시간(30분 단위 반올림) 기본값
   useEffect(() => {
@@ -117,6 +132,7 @@ export default function NewMatchForm({
       <input type="hidden" name="location" value={location} />
       <input type="hidden" name="status" value={status} />
       <input type="hidden" name="notes" value={notes} />
+      <input type="hidden" name="duration_hours" value={durationHours} />
 
       {/* 경기 유형 */}
       <div className="flex flex-col gap-2">
@@ -222,6 +238,24 @@ export default function NewMatchForm({
         </Field>
       </div>
 
+      {/* 경기 시간 */}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-baseline gap-2">
+          <span className="text-suaza-ink text-base font-medium">경기 시간</span>
+          <span className="text-xs text-suaza-accent font-medium">필수</span>
+        </div>
+        <DurationSegmented
+          value={durationHours}
+          onChange={setDurationHours}
+          options={MATCH_DURATION_OPTIONS}
+        />
+        {finishTimeLabel && (
+          <span className="text-xs text-suaza-ink-faint mt-1">
+            종료 시간: {finishTimeLabel} (자동 계산)
+          </span>
+        )}
+      </div>
+
       {/* 장소 */}
       <Field label="장소">
         <input
@@ -324,6 +358,56 @@ export default function NewMatchForm({
 
 const inputCls =
   "w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button";
+
+function computeFinishTime(time: string, hours: number): string {
+  if (!time) return "";
+  const [hStr, mStr] = time.split(":");
+  const h = Number(hStr);
+  const m = Number(mStr);
+  if (Number.isNaN(h) || Number.isNaN(m)) return "";
+  const endH = (h + hours) % 24;
+  return `${String(endH).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function DurationSegmented({
+  value,
+  onChange,
+  options,
+}: {
+  value: MatchDurationHours;
+  onChange: (v: MatchDurationHours) => void;
+  options: readonly MatchDurationHours[];
+}) {
+  const index = options.indexOf(value);
+  const count = options.length;
+  return (
+    <div className="relative bg-gray-100 rounded-xl p-1 grid grid-cols-4 gap-0">
+      <span
+        aria-hidden
+        className="absolute top-1 bottom-1 rounded-lg bg-suaza-accent shadow-sm transition-all duration-200 ease-out"
+        style={{
+          width: `calc((100% - 0.5rem) / ${count})`,
+          left: `calc(0.25rem + ${index} * ((100% - 0.5rem) / ${count}))`,
+        }}
+      />
+      {options.map((opt) => {
+        const on = opt === value;
+        return (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => onChange(opt)}
+            className={`relative z-10 h-11 rounded-lg text-sm font-bold transition-colors ${
+              on ? "text-white" : "text-suaza-ink-muted"
+            }`}
+          >
+            {opt}시간
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function isoToLocalDate(iso: string): string {
   const d = new Date(iso);

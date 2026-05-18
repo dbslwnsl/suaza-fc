@@ -63,6 +63,7 @@ export default async function MatchesView({
     supabase
       .from("profiles")
       .select("id, name, jersey_number")
+      .is("deleted_at", null)
       .order("name", { ascending: true }),
   ]);
 
@@ -106,7 +107,7 @@ export default async function MatchesView({
             <table className="text-xs sm:text-sm border-separate border-spacing-0">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-10 bg-white py-2 px-2 text-left text-suaza-ink-muted font-medium border-b border-r border-suaza-border min-w-[110px]">
+                  <th className="sticky left-0 z-10 bg-white py-2 px-2 text-center text-suaza-ink-muted font-medium border-b border-r border-suaza-border min-w-[110px]">
                     선수
                   </th>
                   {matches.map((m) => (

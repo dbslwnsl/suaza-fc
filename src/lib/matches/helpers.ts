@@ -18,7 +18,28 @@ export type Match = {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  status_overridden_at: string | null;
+  duration_hours: number;
 };
+
+export const DEFAULT_MATCH_DURATION_HOURS = 2;
+export const MATCH_DURATION_OPTIONS = [1, 2, 3, 4] as const;
+export type MatchDurationHours = (typeof MATCH_DURATION_OPTIONS)[number];
+
+export function getMatchFinishTime(m: {
+  match_date: string;
+  duration_hours?: number | null;
+}): Date {
+  const hours = m.duration_hours ?? DEFAULT_MATCH_DURATION_HOURS;
+  return new Date(new Date(m.match_date).getTime() + hours * 60 * 60 * 1000);
+}
+
+export function isMatchFinished(m: {
+  match_date: string;
+  duration_hours?: number | null;
+}): boolean {
+  return Date.now() >= getMatchFinishTime(m).getTime();
+}
 
 export const MATCH_STATUS_LABEL: Record<MatchStatus, string> = {
   scheduled: "예정",

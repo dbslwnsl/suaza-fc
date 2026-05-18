@@ -71,6 +71,7 @@ export default async function SeasonView({
   const { data: allMembersRaw } = await supabase
     .from("profiles")
     .select("id, name, jersey_number")
+    .is("deleted_at", null)
     .order("name", { ascending: true });
 
   const statsMap = new Map(aggregated.map((s) => [s.player_id, s]));
@@ -149,7 +150,6 @@ export default async function SeasonView({
                   order={order}
                   year={year}
                   month={month}
-                  align="left"
                 />
                 <SortTh
                   label="출전"
@@ -330,7 +330,11 @@ function SortTh({
   return (
     <th
       className={`py-2 px-2 text-suaza-ink-muted font-medium border-b border-suaza-border ${
-        align === "left" ? "text-left" : "text-center min-w-[80px] w-[80px]"
+        align === "left"
+          ? "text-left"
+          : isNameCol
+            ? "text-center"
+            : "text-center min-w-[80px] w-[80px]"
       }`}
     >
       <Link

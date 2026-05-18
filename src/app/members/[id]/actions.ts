@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   MEMBER_TITLES,
   POSITIONS,
@@ -20,6 +21,7 @@ type UpdateInput = {
   birth_date: string | null;
   preferred_foot: PreferredFoot | null;
   title?: MemberTitle;
+  profile_completed: boolean;
 };
 
 export async function updateProfile(profileId: string, formData: FormData) {
@@ -63,6 +65,7 @@ export async function updateProfile(profileId: string, formData: FormData) {
     positions,
     jersey_number: jerseyRaw ? Number(jerseyRaw) : null,
     birth_date: birthRaw || null,
+    profile_completed: true,
     preferred_foot,
   };
 
@@ -88,7 +91,9 @@ export async function updateProfile(profileId: string, formData: FormData) {
     .eq("id", profileId);
 
   if (error) {
-    redirect(`/members/${profileId}?error=${encodeURIComponent(error.message)}`);
+    redirect(
+      `/members/${profileId}?error=${encodeURIComponent(error.message)}`,
+    );
   }
 
   revalidatePath(`/members/${profileId}`);
@@ -187,6 +192,63 @@ export async function uploadAvatar(profileId: string, formData: FormData) {
   );
 }
 
+/**
+ * 회원 Soft Delete.
+ * - profiles.deleted_at 세팅 (과거 경기 기록은 그대로 보존)
+ * - auth.users 도 함께 제거하여 동일 이메일 재가입 허용
+ * - 매니저 권한자만 호출 가능, 본인 자신은 삭제 불가
+ */
+export async function softDeleteMember(profileId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (me?.role !== "manager") {
+    redirect(
+      `/members/${profileId}?error=${encodeURIComponent("매니저만 회원을 삭제할 수 있습니다")}`,
+    );
+  }
+  if (user.id === profileId) {
+    redirect(
+      `/members/${profileId}?error=${encodeURIComponent("본인은 삭제할 수 없습니다")}`,
+    );
+  }
+
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", profileId);
+
+  if (updateError) {
+    redirect(
+      `/members/${profileId}?error=${encodeURIComponent(updateError.message)}`,
+    );
+  }
+
+  // auth.users 제거 → 동일 이메일 재가입 가능. service_role 필요.
+  const admin = createAdminClient();
+  const { error: authError } = await admin.auth.admin.deleteUser(profileId);
+  if (authError) {
+    // profile 은 이미 soft-delete 됐으니 목록엔 안 보이지만, 인증 row 가 남아있는 상태.
+    // 에러는 전달하되 멤버 목록으로는 보내자.
+    redirect(
+      `/members?error=${encodeURIComponent(`회원 비활성화는 완료됐지만 인증 제거 실패: ${authError.message}`)}`,
+    );
+  }
+
+  revalidatePath("/members");
+  revalidatePath("/");
+  redirect(`/members?message=${encodeURIComponent("회원이 삭제되었습니다")}`);
+}
+
 export async function deleteAvatar(profileId: string) {
   const supabase = await createClient();
   const {
@@ -209,9 +271,7 @@ export async function deleteAvatar(profileId: string) {
   }
 
   // 저장된 객체도 함께 삭제 (해당 사용자 폴더 전체)
-  const { data: list } = await supabase.storage
-    .from("avatars")
-    .list(profileId);
+  const { data: list } = await supabase.storage.from("avatars").list(profileId);
   if (list && list.length > 0) {
     await supabase.storage
       .from("avatars")
@@ -224,7 +284,9 @@ export async function deleteAvatar(profileId: string) {
     .eq("id", profileId);
 
   if (error) {
-    redirect(`/members/${profileId}?error=${encodeURIComponent(error.message)}`);
+    redirect(
+      `/members/${profileId}?error=${encodeURIComponent(error.message)}`,
+    );
   }
 
   revalidatePath(`/members/${profileId}`);

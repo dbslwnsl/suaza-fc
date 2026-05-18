@@ -14,7 +14,7 @@ export default function AvatarUpload({
   canEdit,
 }: {
   profileId: string;
-  src: string;
+  src: string | null;
   name: string;
   canEdit: boolean;
 }) {
@@ -25,14 +25,8 @@ export default function AvatarUpload({
 
   if (!canEdit) {
     return (
-      <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-gray-100">
-        <Image
-          src={src}
-          alt={name}
-          fill
-          sizes="(min-width: 640px) 112px, 96px"
-          className="object-cover"
-        />
+      <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
+        <AvatarContent src={src} name={name} />
       </div>
     );
   }
@@ -92,15 +86,9 @@ export default function AvatarUpload({
         onClick={() => setMenuOpen((v) => !v)}
         disabled={isPending}
         aria-label="프로필 이미지 변경"
-        className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-gray-100 group disabled:opacity-50 transition"
+        className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-gray-100 group disabled:opacity-50 transition flex items-center justify-center"
       >
-        <Image
-          src={src}
-          alt={name}
-          fill
-          sizes="(min-width: 640px) 112px, 96px"
-          className="object-cover"
-        />
+        <AvatarContent src={src} name={name} />
         <span
           className={`absolute inset-0 bg-black/40 flex items-center justify-center text-white text-xs font-medium transition ${
             isPending || menuOpen
@@ -140,6 +128,31 @@ export default function AvatarUpload({
         </p>
       )}
     </div>
+  );
+}
+
+function AvatarContent({
+  src,
+  name,
+}: {
+  src: string | null;
+  name: string;
+}) {
+  if (src) {
+    return (
+      <Image
+        src={src}
+        alt={name}
+        fill
+        sizes="(min-width: 640px) 112px, 96px"
+        className="object-cover"
+      />
+    );
+  }
+  return (
+    <span className="text-2xl sm:text-3xl font-bold text-suaza-ink">
+      {name.charAt(0) || "?"}
+    </span>
   );
 }
 

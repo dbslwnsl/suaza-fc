@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { MatchStatus } from "./helpers";
-import { MATCH_STATUS } from "./helpers";
+import {
+  DEFAULT_MATCH_DURATION_HOURS,
+  MATCH_DURATION_OPTIONS,
+  MATCH_STATUS,
+  isMatchStarted,
+} from "./helpers";
 
 type MatchInput = {
   opponent: string;
@@ -14,6 +19,7 @@ type MatchInput = {
   opponent_score: number | null;
   status: MatchStatus;
   notes: string | null;
+  duration_hours: number;
 };
 
 function parseForm(formData: FormData): MatchInput {
@@ -33,6 +39,13 @@ function parseForm(formData: FormData): MatchInput {
     : "scheduled";
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
+  const durationRaw = Number(formData.get("duration_hours"));
+  const duration_hours = (
+    MATCH_DURATION_OPTIONS as readonly number[]
+  ).includes(durationRaw)
+    ? durationRaw
+    : DEFAULT_MATCH_DURATION_HOURS;
+
   return {
     opponent,
     match_date,
@@ -41,6 +54,7 @@ function parseForm(formData: FormData): MatchInput {
     opponent_score: oppScoreRaw ? Number(oppScoreRaw) : null,
     status,
     notes,
+    duration_hours,
   };
 }
 
@@ -101,9 +115,21 @@ export async function updateMatch(matchId: string, formData: FormData) {
     redirect(`/matches/${matchId}?error=${encodeURIComponent("경기 날짜를 선택해 주세요")}`);
   }
 
+  // 기존 status 와 비교하여 명시적 변경이면 override 시각 기록
+  const { data: existing } = await supabase
+    .from("matches")
+    .select("status")
+    .eq("id", matchId)
+    .single();
+
+  const update: Record<string, unknown> = { ...input };
+  if (existing && existing.status !== input.status) {
+    update.status_overridden_at = new Date().toISOString();
+  }
+
   const { error } = await supabase
     .from("matches")
-    .update(input)
+    .update(update)
     .eq("id", matchId);
 
   if (error) {
@@ -126,6 +152,43 @@ export async function startMatch(matchId: string) {
   }
   revalidatePath(`/matches/${matchId}`);
   redirect(`/matches/${matchId}`);
+}
+
+/**
+ * 우리/상대 점수를 delta 만큼 증감. 매니저/코치만 가능.
+ * 음수가 되지 않도록 0 에서 클램프.
+ */
+export async function incrementMatchScore(
+  matchId: string,
+  side: "our" | "opponent",
+  delta: number,
+) {
+  const { supabase } = await requireStaff();
+
+  const { data: existing, error: getErr } = await supabase
+    .from("matches")
+    .select("our_score, opponent_score, status, match_date")
+    .eq("id", matchId)
+    .single();
+
+  if (getErr || !existing) return;
+  // 경기 시작 전에는 점수 수정 불가
+  if (!isMatchStarted(existing)) return;
+
+  const col = side === "our" ? "our_score" : "opponent_score";
+  const current =
+    side === "our" ? existing.our_score ?? 0 : existing.opponent_score ?? 0;
+  const next = Math.max(0, current + delta);
+
+  const { error } = await supabase
+    .from("matches")
+    .update({ [col]: next })
+    .eq("id", matchId);
+
+  if (error) return;
+
+  revalidatePath(`/matches/${matchId}`);
+  revalidatePath("/matches");
 }
 
 export async function deleteMatch(matchId: string) {
