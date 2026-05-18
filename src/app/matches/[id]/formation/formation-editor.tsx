@@ -7,10 +7,12 @@ import {
   FORMATIONS,
   MAX_QUARTERS,
   buildSlots,
+  buildSlotsForTeam,
   type SaveFormationPayload,
   type SavedQuarter,
   type SlotDef,
   type SlotRole,
+  type Team,
 } from "@/lib/formations/helpers";
 import {
   POSITIONS,
@@ -22,11 +24,19 @@ import type { EditorMember } from "./page";
 
 type Filter = "ALL" | Position;
 
+type TeamFormation = {
+  shape: string;
+  assignments: (string | null)[];
+};
+
 type QuarterState = {
   id: string;
   shape: string;
   assignments: (string | null)[];
+  teamB?: TeamFormation;
 };
+
+const DEFAULT_INTRA_SHAPE = "4-4-2";
 
 const TITLE_SHORT: Record<MemberTitle, string> = {
   president: "회장",
@@ -43,26 +53,40 @@ export default function FormationEditor({
   members,
   attendingIds,
   initialQuarters,
+  isIntra,
   readonly,
 }: {
   matchId: string;
   members: EditorMember[];
   attendingIds: string[];
   initialQuarters: SavedQuarter[];
+  isIntra: boolean;
   readonly: boolean;
 }) {
   const [quarters, setQuarters] = useState<QuarterState[]>(() =>
     initialQuarters.map((q) => {
-      const slots = buildSlots(q.shape);
-      return {
+      const aSlots = buildSlots(q.shape);
+      const state: QuarterState = {
         id: q.id,
         shape: q.shape,
-        assignments: slots.map((_, i) => q.player_ids[i] ?? null),
+        assignments: aSlots.map((_, i) => q.player_ids[i] ?? null),
       };
+      if (isIntra) {
+        const bShape = q.teamB?.shape ?? DEFAULT_INTRA_SHAPE;
+        const bSlots = buildSlots(bShape);
+        state.teamB = {
+          shape: bShape,
+          assignments: bSlots.map((_, i) => q.teamB?.player_ids?.[i] ?? null),
+        };
+      }
+      return state;
     }),
   );
   const [activeIdx, setActiveIdx] = useState(0);
-  const [openSlot, setOpenSlot] = useState<number | null>(null);
+  const [openSlot, setOpenSlot] = useState<{
+    team: "A" | "B";
+    idx: number;
+  } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saving" | "saved" | "error"
@@ -86,6 +110,12 @@ export default function FormationEditor({
             id: q.id,
             shape: q.shape,
             player_ids: q.assignments,
+            teamB: q.teamB
+              ? {
+                  shape: q.teamB.shape,
+                  player_ids: q.teamB.assignments,
+                }
+              : undefined,
           })),
         };
         try {
@@ -104,15 +134,33 @@ export default function FormationEditor({
   }, [quarters, matchId, readonly]);
 
   const current = quarters[activeIdx] ?? quarters[0];
-  const slots = useMemo(() => buildSlots(current.shape), [current.shape]);
+  const slotsA = useMemo(() => buildSlots(current.shape), [current.shape]);
+  const slotsB = useMemo(
+    () => (current.teamB ? buildSlots(current.teamB.shape) : []),
+    [current.teamB],
+  );
   const byId = useMemo(
     () => new Map(members.map((m) => [m.id, m])),
     [members],
   );
-  const placedSet = useMemo(
-    () => new Set(current.assignments.filter((v): v is string => !!v)),
-    [current.assignments],
-  );
+  // placedSet: 현재 쿼터의 양 팀 모두를 포함
+  const placedSet = useMemo(() => {
+    const s = new Set(current.assignments.filter((v): v is string => !!v));
+    if (current.teamB) {
+      for (const p of current.teamB.assignments) {
+        if (p) s.add(p);
+      }
+    }
+    return s;
+  }, [current]);
+  const teamOfPlayer = useMemo(() => {
+    const map = new Map<string, "A" | "B">();
+    for (const p of current.assignments) if (p) map.set(p, "A");
+    if (current.teamB) {
+      for (const p of current.teamB.assignments) if (p) map.set(p, "B");
+    }
+    return map;
+  }, [current]);
   const attendingMembers = useMemo(() => {
     const set = new Set(attendingIds);
     return members
@@ -128,54 +176,116 @@ export default function FormationEditor({
     setQuarters((prev) => prev.map((q, idx) => (idx === i ? fn(q) : q)));
   }
 
-  function changeShape(next: string) {
+  function changeShape(team: "A" | "B", next: string) {
     patchQuarter(activeIdx, (q) => {
       const nextSlots = buildSlots(next);
+      const tf =
+        team === "A"
+          ? { shape: q.shape, assignments: q.assignments }
+          : q.teamB ?? { shape: DEFAULT_INTRA_SHAPE, assignments: [] };
       const seen = new Set<string>();
       const newAssignments: (string | null)[] = nextSlots.map((_, j) => {
-        const pid = q.assignments[j] ?? null;
+        const pid = tf.assignments[j] ?? null;
         if (pid && !seen.has(pid)) {
           seen.add(pid);
           return pid;
         }
         return null;
       });
-      return { ...q, shape: next, assignments: newAssignments };
+      if (team === "A") {
+        return { ...q, shape: next, assignments: newAssignments };
+      }
+      return {
+        ...q,
+        teamB: { shape: next, assignments: newAssignments },
+      };
     });
     setOpenSlot(null);
   }
 
-  function assignSlot(slotIndex: number, playerId: string | null) {
+  function assignSlot(
+    team: "A" | "B",
+    slotIndex: number,
+    playerId: string | null,
+  ) {
     patchQuarter(activeIdx, (q) => {
-      const next = [...q.assignments];
+      const aAssigns = [...q.assignments];
+      const bAssigns = q.teamB ? [...q.teamB.assignments] : null;
       if (playerId) {
-        for (let j = 0; j < next.length; j++) {
-          if (j !== slotIndex && next[j] === playerId) next[j] = null;
+        // 양 팀 전체에서 중복 제거 (현재 슬롯 제외)
+        for (let j = 0; j < aAssigns.length; j++) {
+          if (aAssigns[j] === playerId) {
+            if (!(team === "A" && j === slotIndex)) aAssigns[j] = null;
+          }
+        }
+        if (bAssigns) {
+          for (let j = 0; j < bAssigns.length; j++) {
+            if (bAssigns[j] === playerId) {
+              if (!(team === "B" && j === slotIndex)) bAssigns[j] = null;
+            }
+          }
         }
       }
-      next[slotIndex] = playerId;
-      return { ...q, assignments: next };
+      if (team === "A") {
+        aAssigns[slotIndex] = playerId;
+      } else if (bAssigns) {
+        bAssigns[slotIndex] = playerId;
+      }
+      return {
+        ...q,
+        assignments: aAssigns,
+        teamB:
+          q.teamB && bAssigns
+            ? { ...q.teamB, assignments: bAssigns }
+            : q.teamB,
+      };
     });
     setOpenSlot(null);
   }
 
-  function swapSlots(sourceIdx: number, targetIdx: number) {
-    if (sourceIdx === targetIdx) return;
+  function swapSlots(
+    sourceTeam: "A" | "B",
+    sourceIdx: number,
+    targetTeam: "A" | "B",
+    targetIdx: number,
+  ) {
+    if (sourceTeam === targetTeam && sourceIdx === targetIdx) return;
     patchQuarter(activeIdx, (q) => {
-      const next = [...q.assignments];
-      const tmp = next[targetIdx] ?? null;
-      next[targetIdx] = next[sourceIdx] ?? null;
-      next[sourceIdx] = tmp;
-      return { ...q, assignments: next };
+      const aAssigns = [...q.assignments];
+      const bAssigns = q.teamB ? [...q.teamB.assignments] : null;
+      const get = (t: "A" | "B", i: number): string | null =>
+        t === "A" ? aAssigns[i] ?? null : bAssigns ? bAssigns[i] ?? null : null;
+      const set = (t: "A" | "B", i: number, v: string | null) => {
+        if (t === "A") aAssigns[i] = v;
+        else if (bAssigns) bAssigns[i] = v;
+      };
+      const src = get(sourceTeam, sourceIdx);
+      const tgt = get(targetTeam, targetIdx);
+      set(targetTeam, targetIdx, src);
+      set(sourceTeam, sourceIdx, tgt);
+      return {
+        ...q,
+        assignments: aAssigns,
+        teamB:
+          q.teamB && bAssigns
+            ? { ...q.teamB, assignments: bAssigns }
+            : q.teamB,
+      };
     });
     setOpenSlot(null);
   }
 
-  function handleSlotDrop(targetIdx: number, playerId: string, sourceIdx?: number) {
-    if (sourceIdx != null) {
-      swapSlots(sourceIdx, targetIdx);
+  function handleSlotDrop(
+    targetTeam: "A" | "B",
+    targetIdx: number,
+    playerId: string,
+    sourceTeam?: "A" | "B",
+    sourceIdx?: number,
+  ) {
+    if (sourceTeam != null && sourceIdx != null) {
+      swapSlots(sourceTeam, sourceIdx, targetTeam, targetIdx);
     } else {
-      assignSlot(targetIdx, playerId);
+      assignSlot(targetTeam, targetIdx, playerId);
     }
   }
 
@@ -183,20 +293,31 @@ export default function FormationEditor({
     patchQuarter(activeIdx, (q) => ({
       ...q,
       assignments: q.assignments.map((p) => (p === playerId ? null : p)),
+      teamB: q.teamB
+        ? {
+            ...q.teamB,
+            assignments: q.teamB.assignments.map((p) =>
+              p === playerId ? null : p,
+            ),
+          }
+        : q.teamB,
     }));
   }
 
-  function findSlotForPlayer(playerId: string): number | null {
+  function findSlotForPlayer(
+    playerId: string,
+    team: "A" | "B",
+  ): number | null {
     const m = byId.get(playerId);
     const positions: Position[] = m?.positions ?? [];
-    const assigns = current.assignments;
-    // 1) 선수 본인 포지션 순으로 매칭
+    const slots = team === "A" ? slotsA : slotsB;
+    const assigns =
+      team === "A" ? current.assignments : current.teamB?.assignments ?? [];
     for (const pos of positions) {
       for (let i = 0; i < slots.length; i++) {
         if (!assigns[i] && slots[i].role === pos) return i;
       }
     }
-    // 3) 아무 빈 슬롯
     for (let i = 0; i < slots.length; i++) {
       if (!assigns[i]) return i;
     }
@@ -204,33 +325,57 @@ export default function FormationEditor({
   }
 
   function placeByClick(playerId: string) {
-    const slot = findSlotForPlayer(playerId);
-    if (slot != null) assignSlot(slot, playerId);
+    // 이미 배치된 팀이 있으면 그 팀에 재배치, 아니면 A팀 기본
+    const t: "A" | "B" = teamOfPlayer.get(playerId) ?? "A";
+    const slot = findSlotForPlayer(playerId, t);
+    if (slot != null) assignSlot(t, slot, playerId);
   }
 
   function autoPlace() {
     patchQuarter(activeIdx, (q) => {
-      const qSlots = buildSlots(q.shape);
-      const assignments = [...q.assignments];
-      const placed = new Set(assignments.filter((v): v is string => !!v));
+      const aSlots = buildSlots(q.shape);
+      const aAssigns = [...q.assignments];
+      const bSlots = q.teamB ? buildSlots(q.teamB.shape) : [];
+      const bAssigns = q.teamB ? [...q.teamB.assignments] : [];
+      const placed = new Set<string>();
+      for (const p of aAssigns) if (p) placed.add(p);
+      for (const p of bAssigns) if (p) placed.add(p);
       for (const m of attendingMembers) {
         if (placed.has(m.id)) continue;
         const positions = m.positions ?? [];
+        // A 우선 시도
         let assigned = false;
         for (const pos of positions) {
-          const idx = qSlots.findIndex(
-            (s, i) => !assignments[i] && s.role === pos,
+          const idx = aSlots.findIndex(
+            (s, i) => !aAssigns[i] && s.role === pos,
           );
           if (idx >= 0) {
-            assignments[idx] = m.id;
+            aAssigns[idx] = m.id;
             placed.add(m.id);
             assigned = true;
             break;
           }
         }
         if (assigned) continue;
+        // B 시도 (있을 때만)
+        if (q.teamB) {
+          for (const pos of positions) {
+            const idx = bSlots.findIndex(
+              (s, i) => !bAssigns[i] && s.role === pos,
+            );
+            if (idx >= 0) {
+              bAssigns[idx] = m.id;
+              placed.add(m.id);
+              break;
+            }
+          }
+        }
       }
-      return { ...q, assignments };
+      return {
+        ...q,
+        assignments: aAssigns,
+        teamB: q.teamB ? { ...q.teamB, assignments: bAssigns } : q.teamB,
+      };
     });
   }
 
@@ -239,6 +384,12 @@ export default function FormationEditor({
     patchQuarter(activeIdx, (q) => ({
       ...q,
       assignments: buildSlots(q.shape).map(() => null),
+      teamB: q.teamB
+        ? {
+            ...q.teamB,
+            assignments: buildSlots(q.teamB.shape).map(() => null),
+          }
+        : q.teamB,
     }));
   }
 
@@ -250,6 +401,13 @@ export default function FormationEditor({
       shape: current.shape,
       assignments: buildSlots(current.shape).map(() => null),
     };
+    if (isIntra) {
+      const bShape = current.teamB?.shape ?? DEFAULT_INTRA_SHAPE;
+      newQ.teamB = {
+        shape: bShape,
+        assignments: buildSlots(bShape).map(() => null),
+      };
+    }
     setQuarters((prev) => [...prev, newQ]);
     setActiveIdx(quarters.length);
   }
@@ -291,35 +449,30 @@ export default function FormationEditor({
       </div>
 
       {/* 포메이션 칩 */}
-      <div className="-mx-4 sm:mx-0 px-4 sm:px-0 overflow-x-auto sm:overflow-visible">
-        <div className="flex gap-2 sm:flex-wrap sm:gap-2 w-max sm:w-auto">
-          {FORMATIONS.map((f) => {
-            const active = f.shape === current.shape;
-            return (
-              <button
-                key={f.shape}
-                type="button"
-                disabled={readonly}
-                onClick={() => changeShape(f.shape)}
-                className={`shrink-0 h-10 px-4 rounded-xl border text-sm font-semibold transition ${
-                  active
-                    ? "bg-suaza-button text-white border-suaza-button shadow-sm"
-                    : "bg-white text-suaza-ink border-suaza-border hover:border-suaza-ink-muted"
-                } disabled:opacity-60 disabled:cursor-not-allowed`}
-              >
-                {f.shape}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <FormationChipRow
+        label={isIntra ? "A팀" : null}
+        teamColor={isIntra ? "#3B82F6" : null}
+        currentShape={current.shape}
+        readonly={readonly}
+        onChange={(s) => changeShape("A", s)}
+      />
+      {isIntra && current.teamB && (
+        <FormationChipRow
+          label="B팀"
+          teamColor="#EF4444"
+          currentShape={current.teamB.shape}
+          readonly={readonly}
+          onChange={(s) => changeShape("B", s)}
+        />
+      )}
 
-      {/* 모바일 전용 액션 바: 카운터 + 초기화 + 자동배치 + 저장 */}
-      <div className="flex items-center gap-2 desktop:hidden">
+      {/* 액션 바: 카운터 + 초기화 + 자동배치 + 저장 상태 */}
+      <div className="flex items-center gap-2">
         <span className="text-sm text-suaza-ink-muted shrink-0">
           배치{" "}
           <span className="font-semibold text-suaza-ink">
-            {placedSet.size}/{slots.length}
+            {placedSet.size}/
+            {slotsA.length + (current.teamB ? slotsB.length : 0)}
           </span>
         </span>
         {!readonly && (
@@ -347,17 +500,40 @@ export default function FormationEditor({
       <div className="desktop:relative desktop:flex-1 desktop:min-h-0">
         <div className="relative desktop:pr-[360px] desktop:h-full">
           <Pitch
-            slots={slots}
-            assignments={current.assignments}
+            teams={
+              current.teamB
+                ? [
+                    {
+                      team: "A",
+                      slots: buildSlotsForTeam(current.shape, "A"),
+                      assignments: current.assignments,
+                    },
+                    {
+                      team: "B",
+                      slots: buildSlotsForTeam(current.teamB.shape, "B"),
+                      assignments: current.teamB.assignments,
+                    },
+                  ]
+                : [
+                    {
+                      team: "A",
+                      slots: slotsA,
+                      assignments: current.assignments,
+                    },
+                  ]
+            }
+            isIntra={!!current.teamB}
             byId={byId}
             readonly={readonly}
             draggingId={draggingId}
-            onSlotClick={(i) => !readonly && setOpenSlot(i)}
+            onSlotClick={(team, i) =>
+              !readonly && setOpenSlot({ team, idx: i })
+            }
             onSlotDrop={handleSlotDrop}
             onDragStart={(id) => setDraggingId(id)}
             onDragEnd={() => setDraggingId(null)}
-            onSwapSlots={(a, b) => swapSlots(a, b)}
-            onUnassignSlot={(i) => assignSlot(i, null)}
+            onSwapSlots={swapSlots}
+            onUnassignSlot={(team, i) => assignSlot(team, i, null)}
           />
         </div>
 
@@ -366,6 +542,8 @@ export default function FormationEditor({
             members={attendingMembers}
             quarters={quarters}
             placedSet={placedSet}
+            teamOfPlayer={teamOfPlayer}
+            isIntra={isIntra}
             readonly={readonly}
             onTap={(id: string, placed: boolean) => {
               if (readonly) return;
@@ -383,6 +561,8 @@ export default function FormationEditor({
         members={attendingMembers}
         quarters={quarters}
         placedSet={placedSet}
+        teamOfPlayer={teamOfPlayer}
+        isIntra={isIntra}
         readonly={readonly}
         onTap={(id: string, placed: boolean) => {
           if (readonly) return;
@@ -396,22 +576,36 @@ export default function FormationEditor({
       {/* 모바일 바텀시트 */}
       {openSlot != null && (
         <BottomSheet
-          slot={slots[openSlot]}
+          slot={
+            openSlot.team === "A"
+              ? slotsA[openSlot.idx]
+              : slotsB[openSlot.idx]
+          }
           members={attendingMembers}
           placedSet={placedSet}
-          currentPlayerId={current.assignments[openSlot]}
+          currentPlayerId={
+            openSlot.team === "A"
+              ? current.assignments[openSlot.idx]
+              : current.teamB?.assignments[openSlot.idx] ?? null
+          }
           onClose={() => setOpenSlot(null)}
-          onPick={(id) => assignSlot(openSlot, id)}
-          onClear={() => assignSlot(openSlot, null)}
+          onPick={(id) => assignSlot(openSlot.team, openSlot.idx, id)}
+          onClear={() => assignSlot(openSlot.team, openSlot.idx, null)}
         />
       )}
     </div>
   );
 }
 
+type PitchTeam = {
+  team: "A" | "B";
+  slots: SlotDef[];
+  assignments: (string | null)[];
+};
+
 function Pitch({
-  slots,
-  assignments,
+  teams,
+  isIntra,
   byId,
   readonly,
   draggingId,
@@ -422,25 +616,42 @@ function Pitch({
   onSwapSlots,
   onUnassignSlot,
 }: {
-  slots: SlotDef[];
-  assignments: (string | null)[];
+  teams: PitchTeam[];
+  isIntra: boolean;
   byId: Map<string, EditorMember>;
   readonly: boolean;
   draggingId: string | null;
-  onSlotClick: (i: number) => void;
-  onSlotDrop: (targetIdx: number, playerId: string, sourceIdx?: number) => void;
+  onSlotClick: (team: "A" | "B", i: number) => void;
+  onSlotDrop: (
+    targetTeam: "A" | "B",
+    targetIdx: number,
+    playerId: string,
+    sourceTeam?: "A" | "B",
+    sourceIdx?: number,
+  ) => void;
   onDragStart?: (playerId: string) => void;
   onDragEnd?: () => void;
-  onSwapSlots: (a: number, b: number) => void;
-  onUnassignSlot: (i: number) => void;
+  onSwapSlots: (
+    sourceTeam: "A" | "B",
+    sourceIdx: number,
+    targetTeam: "A" | "B",
+    targetIdx: number,
+  ) => void;
+  onUnassignSlot: (team: "A" | "B", i: number) => void;
 }) {
   const pitchRef = useRef<HTMLDivElement | null>(null);
-  const [hoverSlot, setHoverSlot] = useState<number | null>(null);
+  const [hoverSlot, setHoverSlot] = useState<{
+    team: "A" | "B";
+    idx: number;
+  } | null>(null);
   const [pitchDrag, setPitchDrag] = useState<{
+    sourceTeam: "A" | "B";
     sourceIdx: number;
     playerId: string;
+    role: SlotRole;
     x: number;
     y: number;
+    targetTeam: "A" | "B" | null;
     targetIdx: number | null;
   } | null>(null);
   const isDropMode = !readonly && draggingId != null;
@@ -454,21 +665,33 @@ function Pitch({
     };
   }, []);
 
-  function findSlotIdxFromPoint(x: number, y: number): number | null {
+  function findSlotFromPoint(
+    x: number,
+    y: number,
+  ): { team: "A" | "B"; idx: number } | null {
     const el = document.elementFromPoint(x, y) as HTMLElement | null;
     let cur: HTMLElement | null = el;
     while (cur) {
-      const attr = cur.dataset?.slotIdx;
-      if (attr != null) return parseInt(attr, 10);
+      const idxStr = cur.dataset?.slotIdx;
+      const teamStr = cur.dataset?.slotTeam;
+      if (idxStr != null && (teamStr === "A" || teamStr === "B")) {
+        return { team: teamStr, idx: parseInt(idxStr, 10) };
+      }
       cur = cur.parentElement;
     }
     return null;
   }
 
-  function startLongPress(i: number, e: React.PointerEvent) {
+  function startLongPress(
+    team: "A" | "B",
+    i: number,
+    role: SlotRole,
+    e: React.PointerEvent,
+  ) {
     if (readonly) return;
-    const pid = assignments[i];
-    if (!pid) return; // 빈 슬롯에서는 드래그 시작 불가
+    const t = teams.find((x) => x.team === team);
+    const pid = t?.assignments[i];
+    if (!pid) return;
     suppressClick.current = false;
     lpStart.current = { x: e.clientX, y: e.clientY };
     const target = e.currentTarget as HTMLElement;
@@ -478,10 +701,13 @@ function Pitch({
     if (lpTimer.current) clearTimeout(lpTimer.current);
     lpTimer.current = setTimeout(() => {
       setPitchDrag({
+        sourceTeam: team,
         sourceIdx: i,
         playerId: pid,
+        role,
         x: startX,
         y: startY,
+        targetTeam: null,
         targetIdx: null,
       });
       try {
@@ -503,31 +729,37 @@ function Pitch({
   }
 
   function onSlotPointerMove(e: React.PointerEvent) {
-    // 롱프레스 발화 전 — 일정 거리 움직이면 타이머 취소(스크롤로 간주)
     if (lpTimer.current && lpStart.current) {
       const dx = e.clientX - lpStart.current.x;
       const dy = e.clientY - lpStart.current.y;
       if (dx * dx + dy * dy > 100) cancelLongPress();
     }
-    // 드래그 중 — 손가락 따라 ghost 이동 + 타겟 추적
     if (pitchDrag) {
-      const tIdx = findSlotIdxFromPoint(e.clientX, e.clientY);
+      const t = findSlotFromPoint(e.clientX, e.clientY);
+      const sameSlot =
+        t != null &&
+        t.team === pitchDrag.sourceTeam &&
+        t.idx === pitchDrag.sourceIdx;
       setPitchDrag({
         ...pitchDrag,
         x: e.clientX,
         y: e.clientY,
-        targetIdx: tIdx != null && tIdx !== pitchDrag.sourceIdx ? tIdx : null,
+        targetTeam: t && !sameSlot ? t.team : null,
+        targetIdx: t && !sameSlot ? t.idx : null,
       });
     }
   }
 
   function onSlotPointerUp(e: React.PointerEvent) {
     if (pitchDrag) {
-      if (pitchDrag.targetIdx != null) {
-        // 다른 슬롯 위에서 손을 뗌 → 교환
-        onSwapSlots(pitchDrag.sourceIdx, pitchDrag.targetIdx);
+      if (pitchDrag.targetTeam != null && pitchDrag.targetIdx != null) {
+        onSwapSlots(
+          pitchDrag.sourceTeam,
+          pitchDrag.sourceIdx,
+          pitchDrag.targetTeam,
+          pitchDrag.targetIdx,
+        );
       } else {
-        // 경기장 밖이면 선수 제거, 안이면 취소
         const rect = pitchRef.current?.getBoundingClientRect();
         const outside =
           !rect ||
@@ -535,7 +767,7 @@ function Pitch({
           e.clientX > rect.right ||
           e.clientY < rect.top ||
           e.clientY > rect.bottom;
-        if (outside) onUnassignSlot(pitchDrag.sourceIdx);
+        if (outside) onUnassignSlot(pitchDrag.sourceTeam, pitchDrag.sourceIdx);
       }
       setPitchDrag(null);
       suppressClick.current = true;
@@ -546,13 +778,15 @@ function Pitch({
     cancelLongPress();
   }
 
-  function handleSlotClick(i: number) {
+  function handleSlotClick(team: "A" | "B", i: number) {
     if (suppressClick.current) {
       suppressClick.current = false;
       return;
     }
-    onSlotClick(i);
+    onSlotClick(team, i);
   }
+
+  const compact = isIntra;
 
   return (
     <div
@@ -572,100 +806,149 @@ function Pitch({
 
       {/* 필드 라인 */}
       <div className="absolute inset-3 border-2 border-white/60 rounded-md" />
-      <div className="absolute top-1/2 left-3 right-3 h-0.5 bg-white/60" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-white/60" />
+      <div
+        className={`absolute top-1/2 left-3 right-3 bg-white/60 ${
+          isIntra ? "h-1" : "h-0.5"
+        }`}
+      />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 border-white/60" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-white/80" />
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 w-[55%] h-[14%] border-2 border-t-0 border-white/60 rounded-b-sm" />
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-[55%] h-[14%] border-2 border-b-0 border-white/60 rounded-t-sm" />
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 w-[28%] h-[6%] border-2 border-t-0 border-white/60" />
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-[28%] h-[6%] border-2 border-b-0 border-white/60" />
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 w-[55%] h-[10%] border-2 border-t-0 border-white/60 rounded-b-sm" />
+      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-[55%] h-[10%] border-2 border-b-0 border-white/60 rounded-t-sm" />
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 w-[28%] h-[4%] border-2 border-t-0 border-white/60" />
+      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-[28%] h-[4%] border-2 border-b-0 border-white/60" />
 
-      {/* 슬롯 */}
-      {slots.map((s, i) => {
-        const pid = assignments[i];
-        const player = pid ? byId.get(pid) : null;
-        const isDragSource = pitchDrag?.sourceIdx === i;
-        const isDragTarget = pitchDrag?.targetIdx === i;
-        const isHover = isDragTarget || hoverSlot === i;
-        const isEmpty = !player;
-        const showDropHint = isDropMode && isEmpty;
-        const canDrag = !readonly && !!pid;
-        return (
+      {/* 자체전 팀 라벨 */}
+      {isIntra && (
+        <>
           <div
-            key={s.index}
-            className={`absolute -translate-x-1/2 -translate-y-1/2 select-none ${
-              isDragSource ? "opacity-30" : ""
-            }`}
-            style={{
-              left: `${s.x * 100}%`,
-              top: `${s.y * 100}%`,
-              WebkitTouchCallout: "none",
-              touchAction: pitchDrag ? "none" : "manipulation",
-            }}
-            draggable={canDrag}
-            data-slot-idx={i}
-            onPointerDown={(e) => startLongPress(i, e)}
-            onPointerMove={onSlotPointerMove}
-            onPointerUp={onSlotPointerUp}
-            onPointerCancel={onSlotPointerUp}
-            onDragStart={(e) => {
-              cancelLongPress();
-              if (!canDrag || !pid) return;
-              e.dataTransfer.setData("text/plain", pid);
-              e.dataTransfer.setData(
-                "application/x-source-slot",
-                String(i),
-              );
-              e.dataTransfer.effectAllowed = "move";
-              onDragStart?.(pid);
-            }}
-            onDragEnd={() => {
-              setHoverSlot(null);
-              onDragEnd?.();
-            }}
-            onDragOver={(e) => {
-              if (readonly || !draggingId) return;
-              e.preventDefault();
-              setHoverSlot(i);
-            }}
-            onDragLeave={() => {
-              if (hoverSlot === i) setHoverSlot(null);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              setHoverSlot(null);
-              const id = e.dataTransfer.getData("text/plain") || draggingId;
-              if (!id) return;
-              const sourceStr = e.dataTransfer.getData(
-                "application/x-source-slot",
-              );
-              const sourceIdx = sourceStr ? parseInt(sourceStr, 10) : undefined;
-              onSlotDrop(i, id, sourceIdx);
-            }}
+            className="absolute top-2 left-3 px-2 py-0.5 rounded-md text-[11px] font-bold text-white shadow-sm"
+            style={{ backgroundColor: "#3B82F6" }}
           >
-            <button
-              type="button"
-              disabled={readonly}
-              onClick={() => handleSlotClick(i)}
-              className={`flex flex-col items-center gap-1 group ${
-                readonly ? "cursor-default" : "cursor-pointer"
-              } ${canDrag ? "cursor-grab active:cursor-grabbing" : ""}`}
-            >
-              <PlayerCircle
-                player={player}
-                role={s.role}
-                hovered={isHover}
-                hint={showDropHint}
-              />
-              <span className="text-[11px] sm:text-xs text-white font-medium drop-shadow whitespace-nowrap max-w-[80px] truncate">
-                {player?.name ?? (
-                  <span className="text-white/70">{s.role}</span>
-                )}
-              </span>
-            </button>
+            A팀
           </div>
-        );
-      })}
+          <div
+            className="absolute bottom-2 left-3 px-2 py-0.5 rounded-md text-[11px] font-bold text-white shadow-sm"
+            style={{ backgroundColor: "#EF4444" }}
+          >
+            B팀
+          </div>
+        </>
+      )}
+
+      {/* 슬롯 — 모든 팀 */}
+      {teams.flatMap((tf) =>
+        tf.slots.map((s, i) => {
+          const pid = tf.assignments[i];
+          const player = pid ? byId.get(pid) : null;
+          const isDragSource =
+            pitchDrag?.sourceTeam === tf.team && pitchDrag?.sourceIdx === i;
+          const isDragTarget =
+            pitchDrag?.targetTeam === tf.team && pitchDrag?.targetIdx === i;
+          const isHover =
+            isDragTarget ||
+            (hoverSlot?.team === tf.team && hoverSlot?.idx === i);
+          const isEmpty = !player;
+          const showDropHint = isDropMode && isEmpty;
+          const canDrag = !readonly && !!pid;
+          return (
+            <div
+              key={`${tf.team}-${s.index}`}
+              className={`absolute -translate-x-1/2 -translate-y-1/2 select-none ${
+                isDragSource ? "opacity-30" : ""
+              }`}
+              style={{
+                left: `${s.x * 100}%`,
+                top: `${s.y * 100}%`,
+                WebkitTouchCallout: "none",
+                touchAction: pitchDrag ? "none" : "manipulation",
+              }}
+              draggable={canDrag}
+              data-slot-idx={i}
+              data-slot-team={tf.team}
+              onPointerDown={(e) => startLongPress(tf.team, i, s.role, e)}
+              onPointerMove={onSlotPointerMove}
+              onPointerUp={onSlotPointerUp}
+              onPointerCancel={onSlotPointerUp}
+              onDragStart={(e) => {
+                cancelLongPress();
+                if (!canDrag || !pid) return;
+                e.dataTransfer.setData("text/plain", pid);
+                e.dataTransfer.setData(
+                  "application/x-source-slot",
+                  String(i),
+                );
+                e.dataTransfer.setData(
+                  "application/x-source-team",
+                  tf.team,
+                );
+                e.dataTransfer.effectAllowed = "move";
+                onDragStart?.(pid);
+              }}
+              onDragEnd={() => {
+                setHoverSlot(null);
+                onDragEnd?.();
+              }}
+              onDragOver={(e) => {
+                if (readonly || !draggingId) return;
+                e.preventDefault();
+                setHoverSlot({ team: tf.team, idx: i });
+              }}
+              onDragLeave={() => {
+                if (hoverSlot?.team === tf.team && hoverSlot?.idx === i) {
+                  setHoverSlot(null);
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setHoverSlot(null);
+                const id = e.dataTransfer.getData("text/plain") || draggingId;
+                if (!id) return;
+                const sourceStr = e.dataTransfer.getData(
+                  "application/x-source-slot",
+                );
+                const sourceTeamStr = e.dataTransfer.getData(
+                  "application/x-source-team",
+                );
+                const sourceIdx = sourceStr
+                  ? parseInt(sourceStr, 10)
+                  : undefined;
+                const sourceTeam =
+                  sourceTeamStr === "A" || sourceTeamStr === "B"
+                    ? sourceTeamStr
+                    : undefined;
+                onSlotDrop(tf.team, i, id, sourceTeam, sourceIdx);
+              }}
+            >
+              <button
+                type="button"
+                disabled={readonly}
+                onClick={() => handleSlotClick(tf.team, i)}
+                className={`flex flex-col items-center gap-0.5 group ${
+                  readonly ? "cursor-default" : "cursor-pointer"
+                } ${canDrag ? "cursor-grab active:cursor-grabbing" : ""}`}
+              >
+                <PlayerCircle
+                  player={player}
+                  role={s.role}
+                  hovered={isHover}
+                  hint={showDropHint}
+                  compact={compact}
+                />
+                <span
+                  className={`${
+                    compact ? "text-[9px]" : "text-[11px] sm:text-xs"
+                  } text-white font-medium drop-shadow whitespace-nowrap max-w-[70px] truncate`}
+                >
+                  {player?.name ?? (
+                    <span className="text-white/70">{s.role}</span>
+                  )}
+                </span>
+              </button>
+            </div>
+          );
+        }),
+      )}
 
       {/* 드래그 ghost — 손가락 따라옴 */}
       {pitchDrag && (
@@ -675,12 +958,65 @@ function Pitch({
         >
           <PlayerCircle
             player={byId.get(pitchDrag.playerId)}
-            role={slots[pitchDrag.sourceIdx].role}
+            role={pitchDrag.role}
             hovered
             hint={false}
+            compact={compact}
           />
         </div>
       )}
+    </div>
+  );
+}
+
+function FormationChipRow({
+  label,
+  teamColor,
+  currentShape,
+  readonly,
+  onChange,
+}: {
+  label: string | null;
+  teamColor: string | null;
+  currentShape: string;
+  readonly: boolean;
+  onChange: (shape: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 -mx-4 sm:mx-0 px-4 sm:px-0">
+      {label && (
+        <span
+          className="shrink-0 inline-flex items-center gap-1 text-xs font-bold text-suaza-ink"
+        >
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{ backgroundColor: teamColor ?? undefined }}
+          />
+          {label}
+        </span>
+      )}
+      <div className="flex-1 overflow-x-auto">
+        <div className="flex gap-2 w-max">
+          {FORMATIONS.map((f) => {
+            const active = f.shape === currentShape;
+            return (
+              <button
+                key={f.shape}
+                type="button"
+                disabled={readonly}
+                onClick={() => onChange(f.shape)}
+                className={`shrink-0 h-9 px-3 rounded-xl border text-xs font-semibold transition ${
+                  active
+                    ? "bg-suaza-button text-white border-suaza-button shadow-sm"
+                    : "bg-white text-suaza-ink border-suaza-border hover:border-suaza-ink-muted"
+                } disabled:opacity-60 disabled:cursor-not-allowed`}
+              >
+                {f.shape}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -711,18 +1047,23 @@ function PlayerCircle({
   role,
   hovered,
   hint,
+  compact,
 }: {
   player: EditorMember | null | undefined;
   role: SlotRole;
   hovered: boolean;
   hint: boolean;
+  compact?: boolean;
 }) {
   const color = POSITION_COLOR[role];
   const stateRing = hovered ? "ring-4 ring-white/60 scale-110" : "";
+  const sizeClass = compact
+    ? "w-8 h-8 sm:w-9 sm:h-9 text-[10px]"
+    : "w-11 h-11 sm:w-12 sm:h-12 text-[11px]";
   if (player) {
     return (
       <div
-        className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white border-[3px] flex items-center justify-center text-[11px] font-bold shadow-md transition ${stateRing}`}
+        className={`relative ${sizeClass} rounded-full bg-white border-[3px] flex items-center justify-center font-bold shadow-md transition ${stateRing}`}
         style={{ borderColor: color }}
       >
         <span style={{ color }}>{role}</span>
@@ -731,10 +1072,14 @@ function PlayerCircle({
   }
   return (
     <div
-      className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full border-2 border-dashed flex items-center justify-center transition group-hover:bg-white/10 ${stateRing} ${hint ? "animate-pulse" : ""}`}
+      className={`${sizeClass} rounded-full border-2 border-dashed flex items-center justify-center transition group-hover:bg-white/10 ${stateRing} ${hint ? "animate-pulse" : ""}`}
       style={{ borderColor: color, backgroundColor: `${color}33` }}
     >
-      <span className="text-white/85 text-lg leading-none font-light">+</span>
+      <span
+        className={`${compact ? "text-sm" : "text-lg"} text-white/85 leading-none font-light`}
+      >
+        +
+      </span>
     </div>
   );
 }
@@ -1087,7 +1432,7 @@ function FilterTabsWithCounts({
             key={it.key}
             type="button"
             onClick={() => onChange(it.key)}
-            className={`shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-xs font-semibold transition ${
+            className={`shrink-0 inline-flex items-center gap-1 h-[26px] px-2 rounded-full text-[11px] font-semibold transition ${
               active
                 ? "text-white shadow-sm"
                 : "bg-white border border-suaza-border text-suaza-ink hover:bg-suaza-bg"
@@ -1115,6 +1460,8 @@ function PlayerRosterMobile({
   members,
   quarters,
   placedSet,
+  teamOfPlayer,
+  isIntra,
   readonly,
   onTap,
   onDragStart,
@@ -1123,6 +1470,8 @@ function PlayerRosterMobile({
   members: EditorMember[];
   quarters: { shape: string; assignments: (string | null)[] }[];
   placedSet: Set<string>;
+  teamOfPlayer: Map<string, "A" | "B">;
+  isIntra: boolean;
   readonly: boolean;
   onTap: (id: string, placed: boolean) => void;
   onDragStart?: (id: string) => void;
@@ -1180,6 +1529,7 @@ function PlayerRosterMobile({
             key={p.member.id}
             participation={p}
             placed={placedSet.has(p.member.id)}
+            team={isIntra ? teamOfPlayer.get(p.member.id) : undefined}
             readonly={readonly}
             onTap={onTap}
             onDragStart={onDragStart}
@@ -1194,6 +1544,7 @@ function PlayerRosterMobile({
 function PlayerRowMobile({
   participation,
   placed,
+  team,
   readonly,
   onTap,
   onDragStart,
@@ -1201,6 +1552,7 @@ function PlayerRowMobile({
 }: {
   participation: PlayerParticipation;
   placed: boolean;
+  team?: "A" | "B";
   readonly: boolean;
   onTap: (id: string, placed: boolean) => void;
   onDragStart?: (id: string) => void;
@@ -1238,6 +1590,16 @@ function PlayerRowMobile({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-1.5">
+          {team && (
+            <span
+              className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-white"
+              style={{
+                backgroundColor: team === "A" ? "#3B82F6" : "#EF4444",
+              }}
+            >
+              {team}
+            </span>
+          )}
           <span className="text-sm font-semibold text-suaza-ink truncate">
             {m.name}
           </span>
@@ -1272,21 +1634,14 @@ function PlayerRowMobile({
         </div>
       </div>
 
-      <div className="flex items-center gap-1 shrink-0">
-        {participation.byQuarter.map((pos, i) => {
-          const bg = pos ? POSITION_COLOR[pos] : null;
-          return (
-            <span
-              key={i}
-              className={`w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-bold ${
-                bg ? "text-white" : "bg-gray-100 text-gray-400"
-              }`}
-              style={bg ? { backgroundColor: bg } : undefined}
-            >
-              {i + 1}
-            </span>
-          );
-        })}
+      <div className="flex items-center gap-0.5 shrink-0">
+        {participation.byQuarter.map((pos, i) => (
+          <span
+            key={i}
+            className={`w-3 h-6 rounded-sm ${pos ? "" : "bg-gray-200"}`}
+            style={pos ? { backgroundColor: POSITION_COLOR[pos] } : undefined}
+          />
+        ))}
       </div>
 
       <span
@@ -1303,6 +1658,8 @@ function PlayerRosterDesktop({
   members,
   quarters,
   placedSet,
+  teamOfPlayer,
+  isIntra,
   readonly,
   onTap,
   onDragStart,
@@ -1311,6 +1668,8 @@ function PlayerRosterDesktop({
   members: EditorMember[];
   quarters: { shape: string; assignments: (string | null)[] }[];
   placedSet: Set<string>;
+  teamOfPlayer: Map<string, "A" | "B">;
+  isIntra: boolean;
   readonly: boolean;
   onTap: (id: string, placed: boolean) => void;
   onDragStart?: (id: string) => void;
@@ -1397,6 +1756,7 @@ function PlayerRosterDesktop({
                 key={p.member.id}
                 participation={p}
                 placed={placedSet.has(p.member.id)}
+                team={isIntra ? teamOfPlayer.get(p.member.id) : undefined}
                 readonly={readonly}
                 onTap={onTap}
                 onDragStart={onDragStart}
@@ -1413,6 +1773,7 @@ function PlayerRosterDesktop({
 function DesktopPlayerCard({
   participation,
   placed,
+  team,
   readonly,
   onTap,
   onDragStart,
@@ -1420,12 +1781,21 @@ function DesktopPlayerCard({
 }: {
   participation: PlayerParticipation;
   placed: boolean;
+  team?: "A" | "B";
   readonly: boolean;
   onTap: (id: string, placed: boolean) => void;
   onDragStart?: (id: string) => void;
   onDragEnd?: () => void;
 }) {
   const m = participation.member;
+  const teamBg = team === "A" ? "#3B82F6" : team === "B" ? "#EF4444" : null;
+  const cardBorder = team
+    ? team === "A"
+      ? "border-blue-300"
+      : "border-red-300"
+    : placed
+      ? "border-emerald-200"
+      : "border-suaza-border";
   return (
     <div
       draggable={!readonly}
@@ -1436,10 +1806,18 @@ function DesktopPlayerCard({
       }}
       onDragEnd={() => onDragEnd?.()}
       onClick={() => !readonly && onTap(m.id, placed)}
-      className={`flex items-center gap-2 p-2.5 rounded-xl border bg-white select-none transition ${
+      className={`relative flex items-center gap-2 p-2.5 rounded-xl border bg-white select-none transition ${
         readonly ? "cursor-default" : "cursor-pointer hover:bg-suaza-bg"
-      } ${placed ? "border-emerald-200" : "border-suaza-border"}`}
+      } ${cardBorder}`}
     >
+      {team && (
+        <span
+          className="absolute -top-1.5 -left-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-white shadow-sm"
+          style={{ backgroundColor: teamBg ?? undefined }}
+        >
+          {team}
+        </span>
+      )}
       <div className="flex-1 min-w-0">
         <div className="text-xs font-semibold text-suaza-ink truncate">
           {m.name}

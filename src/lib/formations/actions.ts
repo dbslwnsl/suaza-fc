@@ -37,7 +37,15 @@ export async function saveFormation(
   const cleaned: SavedQuarter[] = input.map((q) => {
     const slots = buildSlots(q.shape);
     const player_ids = slots.map((_, i) => q.player_ids?.[i] ?? null);
-    return { id: q.id, shape: q.shape, player_ids };
+    const out: SavedQuarter = { id: q.id, shape: q.shape, player_ids };
+    if (q.teamB && typeof q.teamB.shape === "string" && q.teamB.shape.trim()) {
+      const bSlots = buildSlots(q.teamB.shape);
+      out.teamB = {
+        shape: q.teamB.shape,
+        player_ids: bSlots.map((_, i) => q.teamB!.player_ids?.[i] ?? null),
+      };
+    }
+    return out;
   });
   const first = cleaned[0];
 

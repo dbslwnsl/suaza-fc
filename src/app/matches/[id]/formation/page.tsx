@@ -116,6 +116,7 @@ export default async function FormationPage({
   const attendingIds = (attendances ?? []).map(
     (a: { player_id: string }) => a.player_id,
   );
+  const isIntra = match.opponent === "자체전";
 
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg desktop:overflow-hidden">
@@ -155,6 +156,7 @@ export default async function FormationPage({
           members={(members ?? []) as EditorMember[]}
           attendingIds={attendingIds}
           initialQuarters={initialQuarters}
+          isIntra={isIntra}
           readonly={!isStaff}
         />
       </div>
