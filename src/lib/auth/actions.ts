@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { validatePassword } from "./validation";
+import { isValidEmail, validatePassword } from "./validation";
 
 export async function login(formData: FormData) {
   const email = String(formData.get("email") ?? "");
@@ -67,10 +68,17 @@ export async function signup(formData: FormData) {
   }
 
   const supabase = await createClient();
+  const now = new Date().toISOString();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { name } },
+    options: {
+      data: {
+        name,
+        terms_agreed_at: now,
+        privacy_agreed_at: now,
+      },
+    },
   });
 
   if (error) {
@@ -91,7 +99,99 @@ export async function signup(formData: FormData) {
     );
   }
 
+  // 이메일 확인이 비활성화된 경우 signUp 응답에 세션이 함께 옴 → 즉시 로그인 상태.
+  // 이때는 프로필 작성 페이지로 바로 보냄.
+  if (data.session && data.user) {
+    revalidatePath("/", "layout");
+    redirect(
+      `/members/${data.user.id}?message=${encodeURIComponent(
+        "프로필 정보를 채워 주세요",
+      )}`,
+    );
+  }
+
+  // 이메일 확인이 필요한 경우(기본값) — 메일 발송 안내 화면으로
   redirect(`/signup?completed=1&email=${encodeURIComponent(email)}`);
+}
+
+/**
+ * 비밀번호 재설정 메일 발송.
+ * 보안: 이메일 존재 여부와 무관하게 동일한 응답을 반환(계정 열거 공격 방지).
+ */
+export async function requestPasswordReset(formData: FormData) {
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  if (!email || !isValidEmail(email)) {
+    redirect(
+      `/forgot-password?error=${encodeURIComponent(
+        "올바른 이메일 형식이 아닙니다",
+      )}`,
+    );
+  }
+
+  const h = await headers();
+  const host = h.get("host") ?? "localhost:3000";
+  const protocol = host.startsWith("localhost") ? "http" : "https";
+  const origin = `${protocol}://${host}`;
+
+  const supabase = await createClient();
+  await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/auth/confirm?next=/reset-password`,
+  });
+
+  redirect(
+    `/forgot-password?completed=1&email=${encodeURIComponent(email)}`,
+  );
+}
+
+/**
+ * 비밀번호 재설정 완료 — 이메일 링크 클릭 후 로그인된 상태에서 호출.
+ */
+export async function updatePassword(formData: FormData) {
+  const password = String(formData.get("password") ?? "");
+  const passwordConfirm = String(formData.get("passwordConfirm") ?? "");
+
+  if (!validatePassword(password).valid) {
+    redirect(
+      `/reset-password?error=${encodeURIComponent(
+        "비밀번호는 영문·숫자·특수문자 조합 8자 이상이어야 합니다",
+      )}`,
+    );
+  }
+  if (password !== passwordConfirm) {
+    redirect(
+      `/reset-password?error=${encodeURIComponent(
+        "비밀번호가 일치하지 않습니다",
+      )}`,
+    );
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect(
+      `/forgot-password?error=${encodeURIComponent(
+        "재설정 링크가 만료되었습니다. 다시 시도해 주세요.",
+      )}`,
+    );
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) {
+    redirect(`/reset-password?error=${encodeURIComponent(error.message)}`);
+  }
+
+  // 안전상 로그아웃 → 새 비밀번호로 다시 로그인
+  await supabase.auth.signOut();
+  revalidatePath("/", "layout");
+  redirect(
+    `/login?message=${encodeURIComponent(
+      "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.",
+    )}`,
+  );
 }
 
 export async function logout() {

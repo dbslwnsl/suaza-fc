@@ -62,6 +62,15 @@ export default function ProfileEditForm({
     return false;
   }, [name, nickname, jersey, birth, foot, positions, title, isManager, initial]);
 
+  // 필수: 이름, 등번호, 생년월일, 포지션(1개 이상), 주발
+  const requiredValid =
+    name.trim().length > 0 &&
+    jersey.trim().length > 0 &&
+    birth.trim().length > 0 &&
+    positions.length > 0 &&
+    foot != null;
+  const canSave = isDirty && requiredValid;
+
   const handleCancel = () => {
     setName(initial.name);
     setNickname(initial.nickname ?? "");
@@ -96,7 +105,7 @@ export default function ProfileEditForm({
 
       {/* 이름 / 별명 */}
       <div className="grid grid-cols-2 gap-3">
-        <Field label="이름">
+        <Field label="이름" required>
           <input
             type="text"
             value={name}
@@ -119,7 +128,7 @@ export default function ProfileEditForm({
 
       {/* 등번호 / 생년월일 */}
       <div className="grid grid-cols-2 gap-3">
-        <Field label="등번호" hint="0-99 사이 숫자">
+        <Field label="등번호" hint="0-99 사이 숫자" required>
           <input
             type="number"
             value={jersey}
@@ -127,15 +136,17 @@ export default function ProfileEditForm({
             min={0}
             max={99}
             placeholder="40"
+            required
             className={textInputCls}
           />
         </Field>
-        <Field label="생년월일" hint="YYYY-MM-DD">
+        <Field label="생년월일" hint="YYYY-MM-DD" required>
           <input
             type="date"
             value={birth}
             onChange={(e) => setBirth(e.target.value)}
             placeholder="1987-01-26"
+            required
             className={textInputCls}
           />
         </Field>
@@ -171,6 +182,7 @@ export default function ProfileEditForm({
       <div className="flex flex-col gap-2">
         <div className="flex items-baseline gap-2">
           <span className="text-suaza-ink text-base font-medium">포지션</span>
+          <span className="text-suaza-accent text-xs font-medium">*</span>
           <span className="text-suaza-ink-faint text-xs">복수 선택 가능</span>
         </div>
         <div className="grid grid-cols-4 gap-2">
@@ -207,7 +219,10 @@ export default function ProfileEditForm({
 
       {/* 주발 */}
       <div className="flex flex-col gap-2">
-        <span className="text-suaza-ink text-base font-medium">주발</span>
+        <div className="flex items-baseline gap-2">
+          <span className="text-suaza-ink text-base font-medium">주발</span>
+          <span className="text-suaza-accent text-xs font-medium">*</span>
+        </div>
         <div className="grid grid-cols-3 gap-2">
           {PREFERRED_FEET.map((f) => {
             const on = foot === f;
@@ -230,6 +245,13 @@ export default function ProfileEditForm({
         </div>
       </div>
 
+      {/* 필수 누락 안내 */}
+      {isDirty && !requiredValid && (
+        <p className="text-xs text-suaza-accent">
+          * 등번호, 생년월일, 포지션, 주발은 필수 항목입니다
+        </p>
+      )}
+
       {/* 저장 / 취소 */}
       <div className="flex gap-2 mt-2">
         <button
@@ -242,7 +264,7 @@ export default function ProfileEditForm({
         </button>
         <button
           type="submit"
-          disabled={!isDirty}
+          disabled={!canSave}
           className="flex-1 h-[52px] rounded-lg bg-suaza-accent text-white text-base font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:opacity-50"
         >
           저장
@@ -258,15 +280,22 @@ const textInputCls =
 function Field({
   label,
   hint,
+  required,
   children,
 }: {
   label: string;
   hint?: string;
+  required?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-suaza-ink text-base font-medium">{label}</span>
+      <span className="text-suaza-ink text-base font-medium inline-flex items-baseline gap-1">
+        {label}
+        {required && (
+          <span className="text-suaza-accent text-xs font-medium">*</span>
+        )}
+      </span>
       {hint && <span className="text-suaza-ink-faint text-xs">{hint}</span>}
       {children}
     </label>

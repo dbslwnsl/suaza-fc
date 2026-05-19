@@ -74,6 +74,34 @@ export async function updateProfile(profileId: string, formData: FormData) {
       `/members/${profileId}?error=${encodeURIComponent("이름은 필수입니다")}`,
     );
   }
+  if (update.jersey_number == null) {
+    redirect(
+      `/members/${profileId}?error=${encodeURIComponent("등번호는 필수입니다")}`,
+    );
+  }
+  if (!update.birth_date) {
+    redirect(
+      `/members/${profileId}?error=${encodeURIComponent("생년월일은 필수입니다")}`,
+    );
+  }
+  if (update.positions.length === 0) {
+    redirect(
+      `/members/${profileId}?error=${encodeURIComponent("포지션을 하나 이상 선택해 주세요")}`,
+    );
+  }
+  if (!update.preferred_foot) {
+    redirect(
+      `/members/${profileId}?error=${encodeURIComponent("주발을 선택해 주세요")}`,
+    );
+  }
+
+  // 첫 프로필 작성인지 판별: 업데이트 전 profile_completed 값 확인
+  const { data: before } = await supabase
+    .from("profiles")
+    .select("profile_completed")
+    .eq("id", profileId)
+    .single();
+  const wasIncomplete = !before?.profile_completed;
 
   // manager 만 title(직책) 변경 가능.
   // 매니저 권한(role) 부여는 UI에 노출하지 않으며, 앱 운영자가 Supabase SQL 로 직접 처리.
@@ -99,6 +127,14 @@ export async function updateProfile(profileId: string, formData: FormData) {
   revalidatePath(`/members/${profileId}`);
   revalidatePath("/members");
   revalidatePath("/");
+
+  // 첫 프로필 작성 완료 시 본인이면 홈으로
+  if (wasIncomplete && user.id === profileId) {
+    redirect(
+      `/?message=${encodeURIComponent("환영합니다! 프로필이 저장되었습니다")}`,
+    );
+  }
+
   redirect(
     `/members/${profileId}?message=${encodeURIComponent("저장되었습니다")}`,
   );

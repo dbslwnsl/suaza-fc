@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { checkEmailExists, signup } from "@/lib/auth/actions";
 import { isValidEmail, validatePassword } from "@/lib/auth/validation";
@@ -161,30 +162,52 @@ export default function SignupForm() {
           />
           <span className="text-suaza-ink text-base">전체 동의</span>
         </label>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            name="terms"
-            checked={terms}
-            onChange={(e) => setTerms(e.target.checked)}
-            className="w-4 h-4 rounded border-suaza-border accent-suaza-button"
-          />
-          <span className="text-suaza-ink text-base">
-            <span className="text-suaza-accent font-medium">(필수)</span> 이용약관 동의
-          </span>
-        </label>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            name="privacy"
-            checked={privacy}
-            onChange={(e) => setPrivacy(e.target.checked)}
-            className="w-4 h-4 rounded border-suaza-border accent-suaza-button"
-          />
-          <span className="text-suaza-ink text-base">
-            <span className="text-suaza-accent font-medium">(필수)</span> 개인정보 처리방침 동의
-          </span>
-        </label>
+        <div className="flex items-center justify-between gap-3">
+          <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
+            <input
+              type="checkbox"
+              name="terms"
+              checked={terms}
+              onChange={(e) => setTerms(e.target.checked)}
+              className="w-4 h-4 rounded border-suaza-border accent-suaza-button shrink-0"
+            />
+            <span className="text-suaza-ink text-base truncate">
+              <span className="text-suaza-accent font-medium">(필수)</span>{" "}
+              이용약관 동의
+            </span>
+          </label>
+          <Link
+            href="/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-suaza-ink-muted hover:text-suaza-ink underline shrink-0"
+          >
+            보기
+          </Link>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
+            <input
+              type="checkbox"
+              name="privacy"
+              checked={privacy}
+              onChange={(e) => setPrivacy(e.target.checked)}
+              className="w-4 h-4 rounded border-suaza-border accent-suaza-button shrink-0"
+            />
+            <span className="text-suaza-ink text-base truncate">
+              <span className="text-suaza-accent font-medium">(필수)</span>{" "}
+              개인정보 수집·이용 동의
+            </span>
+          </label>
+          <Link
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-suaza-ink-muted hover:text-suaza-ink underline shrink-0"
+          >
+            보기
+          </Link>
+        </div>
       </div>
 
       <button

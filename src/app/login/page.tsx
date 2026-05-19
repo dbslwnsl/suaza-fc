@@ -89,9 +89,12 @@ export default async function LoginPage({
               />
               <span className="text-suaza-ink text-base">로그인 상태 유지</span>
             </label>
-            <span className="text-suaza-accent text-xs sm:text-[13px] font-medium">
+            <Link
+              href="/forgot-password"
+              className="text-suaza-accent text-xs sm:text-[13px] font-medium hover:underline"
+            >
               비밀번호 찾기
-            </span>
+            </Link>
           </div>
 
           <button

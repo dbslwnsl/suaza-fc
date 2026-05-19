@@ -73,7 +73,7 @@ export default function AvatarUpload({
   };
 
   return (
-    <div className="relative">
+    <div className="relative inline-block">
       <input
         ref={inputRef}
         type="file"
@@ -99,6 +99,26 @@ export default function AvatarUpload({
           {isPending ? "업로드 중..." : "변경"}
         </span>
       </button>
+
+      {/* 항상 보이는 카메라 어포던스 배지 */}
+      <span
+        aria-hidden
+        className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-suaza-button text-white flex items-center justify-center shadow-md ring-2 ring-white pointer-events-none"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+          <circle cx="12" cy="13" r="4" />
+        </svg>
+      </span>
 
       {menuOpen && !isPending && (
         <div className="absolute z-20 left-1/2 -translate-x-1/2 top-full mt-2 bg-white border border-suaza-border rounded-lg shadow-lg overflow-hidden w-32">
