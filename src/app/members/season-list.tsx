@@ -238,39 +238,68 @@ function SeasonSelector({ year, years }: { year: number; years: number[] }) {
 function MonthDropdown({
   month,
   onChange,
-  year,
 }: {
   month: number;
   onChange: (m: number) => void;
   year: number;
 }) {
+  const [open, setOpen] = useState(false);
   const active = month >= 1 && month <= 12;
+  const label = active ? `${month}월` : "전체";
+  const options = [0, ...Array.from({ length: 12 }, (_, i) => i + 1)];
+
   return (
     <div className="relative inline-flex">
-      <select
-        value={month}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className={`appearance-none pl-3 pr-7 py-1 rounded-lg text-sm font-bold border cursor-pointer focus:outline-none transition ${
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-bold border transition ${
           active
             ? "bg-suaza-ink text-white border-suaza-ink"
             : "bg-white text-suaza-ink border-suaza-border hover:bg-gray-50"
         }`}
       >
-        <option value={0}>전체</option>
-        {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-          <option key={m} value={m}>
-            {m}월
-          </option>
-        ))}
-      </select>
-      <span
-        aria-hidden
-        className={`pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] ${
-          active ? "text-white" : "text-suaza-ink-muted"
-        }`}
-      >
-        ▼
-      </span>
+        <span>{label}</span>
+        <span
+          aria-hidden
+          className={`text-[10px] transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          ▼
+        </span>
+      </button>
+      {open && (
+        <>
+          {/* 외부 클릭 닫기 오버레이 */}
+          <div
+            className="fixed inset-0 z-30"
+            onClick={() => setOpen(false)}
+            onTouchStart={() => setOpen(false)}
+          />
+          {/* 드롭다운 메뉴 */}
+          <div className="absolute top-full left-0 mt-1 z-40 bg-white border border-suaza-border rounded-lg shadow-lg overflow-hidden min-w-[100px] max-h-60 overflow-y-auto">
+            {options.map((m) => {
+              const isActive = m === month;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    onChange(m);
+                    setOpen(false);
+                  }}
+                  className={`block w-full text-left px-3 py-2 text-sm transition ${
+                    isActive
+                      ? "bg-red-50 text-suaza-accent font-bold"
+                      : "text-suaza-ink hover:bg-gray-50"
+                  }`}
+                >
+                  {m === 0 ? "전체" : `${m}월`}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
