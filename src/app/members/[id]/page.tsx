@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   FOOT_LABEL,
   POSITIONS,
@@ -72,7 +73,21 @@ export default async function MemberDetailPage({
 
   if (!profile) notFound();
 
+  // 회원 이메일은 auth.users 에만 있어 admin 클라이언트로 조회
+  // (본인은 자기 user.email 사용해 admin 호출 절약)
   const isSelf = user.id === profile.id;
+  let profileEmail: string | null = null;
+  if (isSelf) {
+    profileEmail = user.email ?? null;
+  } else {
+    try {
+      const admin = createAdminClient();
+      const { data: target } = await admin.auth.admin.getUserById(profile.id);
+      profileEmail = target?.user?.email ?? null;
+    } catch {
+      profileEmail = null;
+    }
+  }
   const isManager = me?.role === "manager";
   const canEdit = isSelf || isManager;
   const positions = (profile.positions ?? []) as Position[];
@@ -127,6 +142,11 @@ export default async function MemberDetailPage({
           >
             {TITLE_LABEL[title] ?? title}
           </span>
+          {profileEmail && (
+            <span className="ml-auto text-xs sm:text-sm text-suaza-ink-muted truncate max-w-[60%]">
+              {profileEmail}
+            </span>
+          )}
         </header>
 
         {message && (

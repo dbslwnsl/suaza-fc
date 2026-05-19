@@ -29,7 +29,13 @@ export type RosterMember = {
 
 type Filter = "ALL" | Position;
 
-export default function RosterList({ members }: { members: RosterMember[] }) {
+export default function RosterList({
+  members,
+  myId,
+}: {
+  members: RosterMember[];
+  myId: string | null;
+}) {
   const [filter, setFilter] = useState<Filter>("ALL");
 
   const counts = useMemo(() => {
@@ -84,7 +90,7 @@ export default function RosterList({ members }: { members: RosterMember[] }) {
         <ul className="grid grid-cols-1 gap-3 desktop:grid-cols-2 desktop:gap-4">
           {filtered.map((m) => (
             <li key={m.id}>
-              <MemberCard member={m} />
+              <MemberCard member={m} isMe={m.id === myId} />
             </li>
           ))}
         </ul>
@@ -134,14 +140,24 @@ function FilterChip({
   );
 }
 
-function MemberCard({ member: m }: { member: RosterMember }) {
+function MemberCard({
+  member: m,
+  isMe = false,
+}: {
+  member: RosterMember;
+  isMe?: boolean;
+}) {
   const primary = m.positions[0] ?? null;
   const ringColor = primary ? POSITION_COLOR[primary] : "var(--suaza-border)";
 
   return (
     <Link
       href={`/members/${m.id}`}
-      className="block p-4 desktop:p-5 border border-suaza-border rounded-xl bg-white hover:bg-gray-50 transition"
+      className={`block p-4 desktop:p-5 rounded-xl transition ${
+        isMe
+          ? "border-2 border-suaza-accent bg-red-50/60 hover:bg-red-50"
+          : "border border-suaza-border bg-white hover:bg-gray-50"
+      }`}
     >
       <div className="flex items-center gap-3 desktop:gap-4">
         <div

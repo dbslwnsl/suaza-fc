@@ -53,7 +53,7 @@ export async function updateProfile(profileId: string, formData: FormData) {
 
   const jerseyRaw = String(formData.get("jersey_number") ?? "").trim();
   const birthRaw = String(formData.get("birth_date") ?? "").trim();
-  const nickname = String(formData.get("nickname") ?? "").trim();
+  const nickname = String(formData.get("nickname") ?? "").trim().slice(0, 6);
   const footRaw = String(formData.get("preferred_foot") ?? "");
   const preferred_foot = (PREFERRED_FEET as readonly string[]).includes(footRaw)
     ? (footRaw as PreferredFoot)

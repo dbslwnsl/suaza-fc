@@ -20,9 +20,6 @@ export default async function MembersPage({
   searchParams: Promise<{
     tab?: string;
     year?: string;
-    sort?: string;
-    month?: string;
-    order?: string;
   }>;
 }) {
   const sp = await searchParams;
@@ -76,22 +73,10 @@ export default async function MembersPage({
         </nav>
 
         {tab === "roster" && <RosterView year={year} />}
-        {tab === "season" && (
-          <SeasonView
-            year={year}
-            years={years}
-            sort={sp.sort}
-            month={parseMonth(sp.month)}
-            order={sp.order === "asc" ? "asc" : "desc"}
-          />
-        )}
+        {tab === "season" && <SeasonView year={year} years={years} />}
         {tab === "matches" && <MatchesView year={year} years={years} />}
       </div>
     </main>
   );
 }
 
-function parseMonth(raw?: string): number {
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= 1 && n <= 12 ? n : 0;
-}

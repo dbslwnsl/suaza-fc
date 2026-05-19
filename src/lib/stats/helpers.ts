@@ -19,6 +19,83 @@ export type PlayerSeasonStat = {
   custom: Record<string, number>;
 };
 
+export type MatchSummary = {
+  id: string;
+  match_date: string;
+  our_score: number | null;
+  opponent_score: number | null;
+  opponent: string;
+};
+
+export type MatchResult = "W" | "D" | "L";
+
+export type RichPlayerSeasonStat = PlayerSeasonStat & {
+  attackPoints: number; // goals + assists
+  cleanSheets: number;
+  refereeCount: number;
+  points: number; // custom_stats.points 합
+  attendanceRate: number; // 0~1
+  recent5: MatchResult[]; // 가장 최근 5경기 (출전한 것만)
+};
+
+function resultFromScores(
+  our: number | null,
+  opp: number | null,
+): MatchResult | null {
+  if (our == null || opp == null) return null;
+  if (our > opp) return "W";
+  if (our < opp) return "L";
+  return "D";
+}
+
+/**
+ * aggregateSeason 결과에 시즌 통계용 파생 필드를 추가.
+ * - attackPoints, attendanceRate, recent5, points 등
+ * - matches 는 시즌 종료 경기 목록 (match_date 내림차순 권장)
+ * - parts 는 archive 안 된 participation row
+ */
+export function buildRichSeasonStats(
+  base: PlayerSeasonStat[],
+  parts: ParticipationRow[],
+  matches: MatchSummary[],
+): RichPlayerSeasonStat[] {
+  const totalMatches = matches.length;
+  const matchById = new Map(matches.map((m) => [m.id, m]));
+
+  // 선수별 participation 들을 match_date desc 로 정렬해 가장 최근 5개 결과 산출
+  const partsByPlayer = new Map<string, ParticipationRow[]>();
+  for (const p of parts) {
+    const arr = partsByPlayer.get(p.player_id) ?? [];
+    arr.push(p);
+    partsByPlayer.set(p.player_id, arr);
+  }
+
+  return base.map((s) => {
+    const playerParts = partsByPlayer.get(s.player_id) ?? [];
+    const recent5: MatchResult[] = playerParts
+      .map((p) => matchById.get(p.match_id))
+      .filter((m): m is MatchSummary => !!m)
+      .sort(
+        (a, b) =>
+          new Date(b.match_date).getTime() - new Date(a.match_date).getTime(),
+      )
+      .slice(0, 5)
+      .map((m) => {
+        if (m.opponent === "자체전") return "D"; // 자체전은 무승부 표기
+        return resultFromScores(m.our_score, m.opponent_score) ?? "D";
+      });
+    return {
+      ...s,
+      attackPoints: s.goals + s.assists,
+      cleanSheets: s.custom.clean_sheets ?? 0,
+      refereeCount: s.custom.referee_count ?? 0,
+      points: s.custom.points ?? 0,
+      attendanceRate: totalMatches > 0 ? s.appearances / totalMatches : 0,
+      recent5,
+    };
+  });
+}
+
 export function yearRange(year: number) {
   return {
     from: new Date(year, 0, 1).toISOString(),

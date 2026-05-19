@@ -119,8 +119,9 @@ export default function ProfileEditForm({
           <input
             type="text"
             value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
+            onChange={(e) => setNickname(e.target.value.slice(0, 6))}
             placeholder="해리"
+            maxLength={6}
             className={textInputCls}
           />
         </Field>

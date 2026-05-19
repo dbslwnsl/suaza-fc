@@ -103,5 +103,5 @@ export default async function RosterView({ year }: { year: number }) {
     };
   });
 
-  return <RosterList members={list} />;
+  return <RosterList members={list} myId={myId} />;
 }
