@@ -3,6 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
+  FOOT_LABEL,
+  POSITIONS,
+  POSITION_COLOR,
+  POSITION_LABEL,
+  PREFERRED_FEET,
   TITLE_BADGE,
   TITLE_LABEL,
   type MemberTitle,
@@ -94,6 +99,12 @@ export default async function MemberDetailPage({
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[600px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
+        <Link
+          href="/members"
+          className="text-sm text-suaza-ink-muted hover:underline self-start"
+        >
+          ← 회원 명단
+        </Link>
         <header className="flex items-center gap-3 flex-wrap">
           <Link
             href="/"
@@ -190,31 +201,147 @@ function ReadOnlyView({
     nickname: string | null;
     jersey_number: number | null;
     birth_date: string | null;
+    preferred_foot: PreferredFoot | null;
   };
   positions: Position[];
 }) {
-  const rows: { label: string; value: string }[] = [];
-  if (profile.nickname) rows.push({ label: "별명", value: profile.nickname });
-  if (positions.length > 0)
-    rows.push({ label: "포지션", value: positions.join(" / ") });
-  if (profile.jersey_number != null)
-    rows.push({ label: "등번호", value: `#${profile.jersey_number}` });
-  if (profile.birth_date)
-    rows.push({ label: "생년월일", value: profile.birth_date });
-
-  if (rows.length === 0) {
-    return (
-      <p className="text-suaza-ink-muted text-sm">등록된 정보가 없습니다.</p>
-    );
-  }
+  const dash = "—";
   return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-      {rows.map((r) => (
-        <span key={r.label} className="contents">
-          <dt className="font-medium text-suaza-ink-muted">{r.label}</dt>
-          <dd className="text-suaza-ink">{r.value}</dd>
-        </span>
-      ))}
-    </dl>
+    <div className="flex flex-col gap-6">
+      {/* 별명 */}
+      <ReadField label="별명">
+        <p className={profile.nickname ? "text-suaza-ink" : "text-suaza-ink-faint"}>
+          {profile.nickname || dash}
+        </p>
+      </ReadField>
+
+      {/* 등번호 / 생년월일 */}
+      <div className="grid grid-cols-2 gap-3">
+        <ReadField label="등번호">
+          <p
+            className={
+              profile.jersey_number != null
+                ? "text-suaza-ink font-medium"
+                : "text-suaza-ink-faint"
+            }
+          >
+            {profile.jersey_number != null
+              ? `#${profile.jersey_number}`
+              : dash}
+          </p>
+        </ReadField>
+        <ReadField label="생년월일">
+          <p className={profile.birth_date ? "text-suaza-ink" : "text-suaza-ink-faint"}>
+            {profile.birth_date || dash}
+          </p>
+        </ReadField>
+      </div>
+
+      {/* 포지션 */}
+      <div className="flex flex-col gap-2">
+        <span className="text-suaza-ink text-base font-medium">포지션</span>
+        <div className="grid grid-cols-4 gap-2">
+          {POSITIONS.map((p) => {
+            const on = positions.includes(p);
+            const color = POSITION_COLOR[p];
+            return (
+              <div
+                key={p}
+                style={
+                  on
+                    ? {
+                        borderColor: color,
+                        backgroundColor: `${color}1A`,
+                        color,
+                      }
+                    : undefined
+                }
+                className={`flex flex-col items-center justify-center gap-0.5 py-3 rounded-lg border-2 ${
+                  on
+                    ? ""
+                    : "border-suaza-border bg-white text-suaza-ink-faint"
+                }`}
+              >
+                <span className="text-lg font-bold">{p}</span>
+                <span className="text-[11px]">{POSITION_LABEL[p]}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 주발 */}
+      <div className="flex flex-col gap-2">
+        <span className="text-suaza-ink text-base font-medium">주발</span>
+        <div className="grid grid-cols-3 gap-2">
+          {PREFERRED_FEET.map((f) => {
+            const on = profile.preferred_foot === f;
+            return (
+              <div
+                key={f}
+                className={`flex flex-col items-center gap-2 py-4 rounded-lg border-2 ${
+                  on
+                    ? "border-suaza-accent bg-red-50 text-suaza-accent"
+                    : "border-suaza-border bg-white text-suaza-ink-faint"
+                }`}
+              >
+                <ReadFootIcon variant={f} className="h-12" />
+                <span className="text-sm font-medium">{FOOT_LABEL[f]}</span>
+              </div>
+            );
+          })}
+        </div>
+        {!profile.preferred_foot && (
+          <span className="text-xs text-suaza-ink-faint">선택된 주발이 없습니다</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReadField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-suaza-ink text-base font-medium">{label}</span>
+      <div className="w-full px-4 py-3 rounded-lg border border-suaza-border bg-suaza-bg/40 text-base min-h-[48px] flex items-center">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+const READ_FOOT_IMAGE: Record<
+  PreferredFoot,
+  { src: string; ratio: string }
+> = {
+  left: { src: "/foot-left.png", ratio: "aspect-[3/4]" },
+  right: { src: "/foot-right.png", ratio: "aspect-[3/4]" },
+  both: { src: "/foot-both.png", ratio: "aspect-[3/2]" },
+};
+
+function ReadFootIcon({
+  variant,
+  className = "",
+}: {
+  variant: PreferredFoot;
+  className?: string;
+}) {
+  const { src, ratio } = READ_FOOT_IMAGE[variant];
+  return (
+    <div className={`relative ${ratio} ${className}`}>
+      <Image
+        src={src}
+        alt={FOOT_LABEL[variant]}
+        fill
+        sizes="80px"
+        className="object-contain"
+      />
+    </div>
   );
 }
