@@ -94,6 +94,8 @@ export default function FormationEditor({
   const [, startTransition] = useTransition();
   const initialMount = useRef(true);
   const saveDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // unmount 시 강제 저장을 위해 최신 pending payload 보관
+  const pendingPayloadRef = useRef<SaveFormationPayload | null>(null);
 
   useEffect(() => {
     if (readonly) return;
@@ -101,23 +103,24 @@ export default function FormationEditor({
       initialMount.current = false;
       return;
     }
+    const payload: SaveFormationPayload = {
+      quarters: quarters.map((q) => ({
+        id: q.id,
+        shape: q.shape,
+        player_ids: q.assignments,
+        teamB: q.teamB
+          ? {
+              shape: q.teamB.shape,
+              player_ids: q.teamB.assignments,
+            }
+          : undefined,
+      })),
+    };
+    pendingPayloadRef.current = payload;
     if (saveDebounce.current) clearTimeout(saveDebounce.current);
     saveDebounce.current = setTimeout(() => {
       setSaveStatus("saving");
       startTransition(async () => {
-        const payload: SaveFormationPayload = {
-          quarters: quarters.map((q) => ({
-            id: q.id,
-            shape: q.shape,
-            player_ids: q.assignments,
-            teamB: q.teamB
-              ? {
-                  shape: q.teamB.shape,
-                  player_ids: q.teamB.assignments,
-                }
-              : undefined,
-          })),
-        };
         try {
           const result = await saveFormation(matchId, payload);
           if (result?.error) setSaveStatus("error");
@@ -125,13 +128,28 @@ export default function FormationEditor({
         } catch {
           setSaveStatus("error");
         }
+        // 이 payload 가 끝까지 fire 됐으니 pending 해제
+        if (pendingPayloadRef.current === payload) {
+          pendingPayloadRef.current = null;
+        }
         setTimeout(() => setSaveStatus("idle"), 1500);
       });
-    }, 500);
+    }, 300);
     return () => {
       if (saveDebounce.current) clearTimeout(saveDebounce.current);
     };
   }, [quarters, matchId, readonly]);
+
+  // Unmount: pending 이 남아있으면 fire-and-forget 으로 마지막 저장 강제 실행
+  useEffect(() => {
+    return () => {
+      const pending = pendingPayloadRef.current;
+      if (pending) {
+        saveFormation(matchId, pending).catch(() => {});
+        pendingPayloadRef.current = null;
+      }
+    };
+  }, [matchId]);
 
   const current = quarters[activeIdx] ?? quarters[0];
   const slotsA = useMemo(() => buildSlots(current.shape), [current.shape]);
@@ -1320,16 +1338,34 @@ type PlayerParticipation = {
   hasPositionChange: boolean;
 };
 
+type QuarterWithTeams = {
+  id: string;
+  shape: string;
+  assignments: (string | null)[];
+  teamB?: TeamFormation;
+};
+
 function computeParticipations(
   members: EditorMember[],
-  quarters: { shape: string; assignments: (string | null)[] }[],
+  quarters: QuarterWithTeams[],
 ): PlayerParticipation[] {
   return members.map((m) => {
     const byQuarter: (Position | null)[] = quarters.map((q) => {
-      const idx = q.assignments.indexOf(m.id);
-      if (idx < 0) return null;
-      const slots = buildSlots(q.shape);
-      return (slots[idx]?.role as Position) ?? null;
+      // A팀에서 찾기
+      const aIdx = q.assignments.indexOf(m.id);
+      if (aIdx >= 0) {
+        const slots = buildSlots(q.shape);
+        return (slots[aIdx]?.role as Position) ?? null;
+      }
+      // B팀에서 찾기 (자체전)
+      if (q.teamB) {
+        const bIdx = q.teamB.assignments.indexOf(m.id);
+        if (bIdx >= 0) {
+          const slots = buildSlots(q.teamB.shape);
+          return (slots[bIdx]?.role as Position) ?? null;
+        }
+      }
+      return null;
     });
     const seen = new Set<Position>();
     const positionsPlayed: Position[] = [];
@@ -1377,35 +1413,60 @@ function LegendBar() {
   );
 }
 
-function QuarterTierCounters({
-  tierCounts,
+type QuarterPlacement = {
+  id: string;
+  placed: number;
+  total: number;
+};
+
+function QuarterPlacementCounters({
+  placements,
 }: {
-  tierCounts: number[]; // index 0..4 → count of players who played that many quarters
+  placements: QuarterPlacement[];
 }) {
-  const tiers = [4, 3, 2, 1] as const;
   return (
-    <div className="grid grid-cols-4 gap-2 rounded-xl border border-suaza-border bg-white p-3">
-      {tiers.map((t) => {
-        const color = getTierColor(t);
-        const n = tierCounts[t] ?? 0;
+    <div
+      className="grid gap-2 rounded-xl border border-suaza-border bg-white p-3"
+      style={{
+        gridTemplateColumns: `repeat(${Math.max(1, placements.length)}, minmax(0, 1fr))`,
+      }}
+    >
+      {placements.map((q) => {
+        const full = q.total > 0 && q.placed === q.total;
+        const partial = q.placed > 0 && !full;
+        const color = full ? "#22C55E" : partial ? "#3B82F6" : "#9CA3AF";
         return (
-          <div key={t} className="flex flex-col items-center gap-0.5">
-            <div className="inline-flex items-baseline gap-1">
-              <span
-                className="inline-block w-1.5 h-1.5 rounded-full"
-                style={{ backgroundColor: color }}
-              />
+          <div key={q.id} className="flex flex-col items-center gap-0.5">
+            <span className="text-[10px] text-suaza-ink-muted">{q.id}</span>
+            <div className="inline-flex items-baseline gap-0.5 tabular-nums">
               <span className="text-lg font-bold" style={{ color }}>
-                {n}
+                {q.placed}
               </span>
-              <span className="text-[10px] text-suaza-ink-muted">명</span>
+              <span className="text-[10px] text-suaza-ink-muted">
+                /{q.total}
+              </span>
             </div>
-            <span className="text-[10px] text-suaza-ink-muted">{t}Q</span>
           </div>
         );
       })}
     </div>
   );
+}
+
+function computePlacements(quarters: QuarterWithTeams[]): QuarterPlacement[] {
+  return quarters.map((q) => {
+    const aSlots = buildSlots(q.shape);
+    const bSlots = q.teamB ? buildSlots(q.teamB.shape) : [];
+    const aPlaced = q.assignments.filter((p): p is string => p != null).length;
+    const bPlaced = q.teamB
+      ? q.teamB.assignments.filter((p): p is string => p != null).length
+      : 0;
+    return {
+      id: q.id,
+      placed: aPlaced + bPlaced,
+      total: aSlots.length + bSlots.length,
+    };
+  });
 }
 
 function FilterTabsWithCounts({
@@ -1468,7 +1529,7 @@ function PlayerRosterMobile({
   onDragEnd,
 }: {
   members: EditorMember[];
-  quarters: { shape: string; assignments: (string | null)[] }[];
+  quarters: QuarterWithTeams[];
   placedSet: Set<string>;
   teamOfPlayer: Map<string, "A" | "B">;
   isIntra: boolean;
@@ -1486,14 +1547,7 @@ function PlayerRosterMobile({
   const sumQuarters = participations.reduce((s, p) => s + p.totalPlayed, 0);
   const avg = played > 0 ? (sumQuarters / played).toFixed(1) : "0.0";
 
-  const tierCounts = useMemo(() => {
-    const c = [0, 0, 0, 0, 0];
-    for (const p of participations) {
-      const t = Math.min(4, p.totalPlayed);
-      c[t]++;
-    }
-    return c;
-  }, [participations]);
+  const placements = useMemo(() => computePlacements(quarters), [quarters]);
 
   const sorted = useMemo(() => {
     return [...participations].sort((a, b) => {
@@ -1522,7 +1576,7 @@ function PlayerRosterMobile({
         </p>
       </div>
       <LegendBar />
-      <QuarterTierCounters tierCounts={tierCounts} />
+      <QuarterPlacementCounters placements={placements} />
       <div className="grid grid-cols-2 gap-2">
         {sorted.map((p) => (
           <DesktopPlayerCard
@@ -1666,7 +1720,7 @@ function PlayerRosterDesktop({
   onDragEnd,
 }: {
   members: EditorMember[];
-  quarters: { shape: string; assignments: (string | null)[] }[];
+  quarters: QuarterWithTeams[];
   placedSet: Set<string>;
   teamOfPlayer: Map<string, "A" | "B">;
   isIntra: boolean;
@@ -1696,14 +1750,7 @@ function PlayerRosterDesktop({
     }
     return c;
   }, [members]);
-  const tierCounts = useMemo(() => {
-    const c = [0, 0, 0, 0, 0];
-    for (const p of participations) {
-      const t = Math.min(4, p.totalPlayed);
-      c[t]++;
-    }
-    return c;
-  }, [participations]);
+  const placements = useMemo(() => computePlacements(quarters), [quarters]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -1741,7 +1788,7 @@ function PlayerRosterDesktop({
         counts={posCounts}
       />
       <LegendBar />
-      <QuarterTierCounters tierCounts={tierCounts} />
+      <QuarterPlacementCounters placements={placements} />
       <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">
         {filtered.length === 0 ? (
           <p className="py-6 text-center text-sm text-suaza-ink-muted">

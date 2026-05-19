@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import FormationEditor from "./formation-editor";
+
+// 포메이션 데이터가 자주 바뀌므로 매 요청 fresh 로드 (cache 우회)
+export const dynamic = "force-dynamic";
 import { formatMatchDate } from "@/lib/matches/helpers";
 import {
   DEFAULT_QUARTER_IDS,
@@ -41,6 +44,12 @@ function buildInitialQuarters(f: FormationRow | null): SavedQuarter[] {
           id: q.id,
           shape: q.shape,
           player_ids: q.player_ids ?? [],
+          teamB: q.teamB
+            ? {
+                shape: q.teamB.shape,
+                player_ids: q.teamB.player_ids ?? [],
+              }
+            : undefined,
         }));
     } else if (f.positions?.player_ids) {
       saved = [
