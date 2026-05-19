@@ -2,8 +2,23 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { MatchResult, RichPlayerSeasonStat } from "@/lib/stats/helpers";
+import {
+  aggregateSeason,
+  buildRichSeasonStats,
+  type MatchResult,
+  type MatchSummary,
+  type ParticipationRow,
+  type PlayerSeasonStat,
+  type RichPlayerSeasonStat,
+  type StatDef,
+} from "@/lib/stats/helpers";
 import { displayMemberName } from "@/lib/members/name";
+
+export type RosterBase = {
+  player_id: string;
+  name: string;
+  jersey_number: number | null;
+};
 
 type SortKey =
   | "points"
@@ -23,22 +38,65 @@ const SORT_OPTIONS: { key: SortKey; label: string; desktopOnly?: boolean }[] = [
 ];
 
 export default function SeasonList({
-  stats,
   myId,
   year,
   years,
+  roster,
+  matches,
+  parts,
+  defs,
   totalMembers,
-  activeCount,
 }: {
-  stats: RichPlayerSeasonStat[];
   myId: string | null;
   year: number;
   years: number[];
+  roster: RosterBase[];
+  matches: MatchSummary[];
+  parts: ParticipationRow[];
+  defs: StatDef[];
   totalMembers: number;
-  activeCount: number;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("points");
   const [query, setQuery] = useState("");
+  // 0 = 시즌 전체, 1~12 = 해당 월
+  const [month, setMonth] = useState(0);
+
+  // 선택된 기간에 해당하는 match / participation 만 추림
+  const period = useMemo(() => {
+    if (month < 1 || month > 12) {
+      return { ms: matches, ps: parts };
+    }
+    const ms = matches.filter((m) => {
+      const d = new Date(m.match_date);
+      return d.getMonth() + 1 === month;
+    });
+    const allowedIds = new Set(ms.map((m) => m.id));
+    const ps = parts.filter((p) => allowedIds.has(p.match_id));
+    return { ms, ps };
+  }, [matches, parts, month]);
+
+  // 기간 필터된 데이터로 stats 집계
+  const stats: RichPlayerSeasonStat[] = useMemo(() => {
+    const aggregated = aggregateSeason(period.ps, defs);
+    const statsMap = new Map<string, PlayerSeasonStat>(
+      aggregated.map((s) => [s.player_id, s]),
+    );
+    const base: PlayerSeasonStat[] = roster.map(
+      (m) =>
+        statsMap.get(m.player_id) ?? {
+          player_id: m.player_id,
+          name: m.name,
+          jersey_number: m.jersey_number,
+          appearances: 0,
+          goals: 0,
+          assists: 0,
+          custom: {},
+        },
+    );
+    return buildRichSeasonStats(base, period.ps, period.ms);
+  }, [period, roster, defs]);
+
+  const activeCount = stats.filter((s) => s.appearances > 0).length;
 
   const sortedAll = useMemo(() => {
     return [...stats].sort((a, b) => {
@@ -70,12 +128,16 @@ export default function SeasonList({
       {/* 시즌 칩 + 정렬 칩 + 검색 */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
-          <SeasonSelector year={year} years={years} />
+          <div className="flex items-center gap-2">
+            <SeasonSelector year={year} years={years} />
+            <MonthDropdown month={month} onChange={setMonth} year={year} />
+          </div>
           <span className="shrink-0 text-xs text-suaza-ink-muted bg-gray-100 px-3 py-1 rounded-full">
             총 {totalMembers}명
             <span className="hidden desktop:inline"> · 활동 {activeCount}명</span>
           </span>
         </div>
+
         <div className="flex items-center gap-2 desktop:gap-3">
           <span className="hidden desktop:inline text-sm text-suaza-ink-muted shrink-0">
             정렬
@@ -169,6 +231,46 @@ function SeasonSelector({ year, years }: { year: number; years: number[] }) {
           </Link>
         );
       })}
+    </div>
+  );
+}
+
+function MonthDropdown({
+  month,
+  onChange,
+  year,
+}: {
+  month: number;
+  onChange: (m: number) => void;
+  year: number;
+}) {
+  const active = month >= 1 && month <= 12;
+  return (
+    <div className="relative inline-flex">
+      <select
+        value={month}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className={`appearance-none pl-3 pr-7 py-1 rounded-lg text-sm font-bold border cursor-pointer focus:outline-none transition ${
+          active
+            ? "bg-suaza-ink text-white border-suaza-ink"
+            : "bg-white text-suaza-ink border-suaza-border hover:bg-gray-50"
+        }`}
+      >
+        <option value={0}>전체</option>
+        {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+          <option key={m} value={m}>
+            {m}월
+          </option>
+        ))}
+      </select>
+      <span
+        aria-hidden
+        className={`pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] ${
+          active ? "text-white" : "text-suaza-ink-muted"
+        }`}
+      >
+        ▼
+      </span>
     </div>
   );
 }

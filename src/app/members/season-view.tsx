@@ -1,15 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import {
-  aggregateSeason,
-  buildRichSeasonStats,
   periodRange,
   type MatchSummary,
   type ParticipationRow,
-  type PlayerSeasonStat,
-  type RichPlayerSeasonStat,
   type StatDef,
 } from "@/lib/stats/helpers";
-import SeasonList from "./season-list";
+import SeasonList, { type RosterBase } from "./season-list";
 
 export default async function SeasonView({
   year,
@@ -61,43 +57,30 @@ export default async function SeasonView({
 
   const defs = (defsRaw ?? []) as StatDef[];
   const parts = (partsRaw ?? []) as unknown as ParticipationRow[];
-  const aggregated = aggregateSeason(parts, defs);
 
-  // 모든 활성 회원 명단을 받아 출전 없는 사람도 0 으로 채움
+  // 모든 활성 회원 명단 (출전 없는 사람도 명단에 포함)
   const { data: allMembersRaw } = await supabase
     .from("profiles")
     .select("id, name, jersey_number")
     .is("deleted_at", null)
     .order("name", { ascending: true });
 
-  const statsMap = new Map(aggregated.map((s) => [s.player_id, s]));
-  const baseStats: PlayerSeasonStat[] = (allMembersRaw ?? []).map(
-    (m) =>
-      statsMap.get(m.id) ?? {
-        player_id: m.id,
-        name: m.name,
-        jersey_number: m.jersey_number,
-        appearances: 0,
-        goals: 0,
-        assists: 0,
-        custom: {},
-      },
-  );
-
-  const rich = buildRichSeasonStats(baseStats, parts, matches);
-  const totalMembers = baseStats.length;
-  const activeCount = rich.filter((s) => s.appearances > 0).length;
+  const roster: RosterBase[] = (allMembersRaw ?? []).map((m) => ({
+    player_id: m.id,
+    name: m.name,
+    jersey_number: m.jersey_number,
+  }));
 
   return (
     <SeasonList
-      stats={rich}
       myId={myId}
       year={year}
       years={years}
-      totalMembers={totalMembers}
-      activeCount={activeCount}
+      roster={roster}
+      matches={matches}
+      parts={parts}
+      defs={defs}
+      totalMembers={roster.length}
     />
   );
 }
-
-export type { RichPlayerSeasonStat };

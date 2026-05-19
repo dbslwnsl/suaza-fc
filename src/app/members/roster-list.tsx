@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
@@ -20,6 +21,7 @@ export type RosterMember = {
   title: MemberTitle;
   positions: Position[];
   jerseyNumber: number | null;
+  avatarUrl: string | null;
   appearances: number;
   goals: number;
   assists: number;
@@ -161,13 +163,23 @@ function MemberCard({
     >
       <div className="flex items-center gap-3 desktop:gap-4">
         <div
-          className="shrink-0 w-12 h-12 desktop:w-14 desktop:h-14 rounded-full bg-gray-100 flex items-center justify-center border-2"
+          className="relative shrink-0 w-12 h-12 desktop:w-14 desktop:h-14 rounded-full bg-gray-100 flex items-center justify-center border-2 overflow-hidden"
           style={{ borderColor: ringColor }}
           aria-hidden
         >
-          <span className="text-base desktop:text-lg font-bold text-suaza-ink">
-            {m.initial}
-          </span>
+          {m.avatarUrl ? (
+            <Image
+              src={m.avatarUrl}
+              alt={m.name}
+              fill
+              sizes="(min-width: 768px) 56px, 48px"
+              className="object-cover"
+            />
+          ) : (
+            <span className="text-base desktop:text-lg font-bold text-suaza-ink">
+              {m.initial}
+            </span>
+          )}
         </div>
 
         <div className="flex-1 min-w-0 flex flex-col gap-1.5">
