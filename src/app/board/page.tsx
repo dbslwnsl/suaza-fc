@@ -1,14 +1,27 @@
-import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import PageHeader from "@/components/page-header";
-import { formatPostDate } from "@/lib/board/helpers";
+import PostList, { type ListPost } from "./post-list";
+import { type Comment } from "./[id]/comment-section";
 
-type Post = {
+type PostRow = {
   id: string;
   title: string;
+  content: string;
   is_notice: boolean;
   created_at: string;
+  author_id: string;
+  author: { name: string; avatar_url: string | null } | null;
+};
+
+type CommentRow = {
+  id: string;
+  post_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  author_id: string;
+  parent_id: string | null;
   author: { name: string; avatar_url: string | null } | null;
 };
 
@@ -20,15 +33,58 @@ export default async function BoardPage({
   const { error, message } = await searchParams;
 
   const supabase = await createClient();
-  const { data: postsRaw } = await supabase
-    .from("posts")
-    .select(
-      "id, title, is_notice, created_at, author:profiles(name, avatar_url)",
-    )
-    .order("is_notice", { ascending: false })
-    .order("created_at", { ascending: false });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
 
-  const posts = (postsRaw ?? []) as unknown as Post[];
+  const [{ data: postsRaw }, { data: commentsRaw }, { data: me }] =
+    await Promise.all([
+      supabase
+        .from("posts")
+        .select(
+          "id, title, content, is_notice, created_at, author_id, author:profiles(name, avatar_url)",
+        )
+        .order("is_notice", { ascending: false })
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("post_comments")
+        .select(
+          "id, post_id, content, created_at, updated_at, author_id, parent_id, author:profiles(name, avatar_url)",
+        )
+        .order("created_at", { ascending: true }),
+      supabase.from("profiles").select("role").eq("id", user.id).single(),
+    ]);
+
+  const postRows = (postsRaw ?? []) as unknown as PostRow[];
+  const commentRows = (commentsRaw ?? []) as unknown as CommentRow[];
+  const isManager = me?.role === "manager";
+
+  const commentsByPost = new Map<string, Comment[]>();
+  for (const c of commentRows) {
+    const list = commentsByPost.get(c.post_id) ?? [];
+    list.push({
+      id: c.id,
+      content: c.content,
+      created_at: c.created_at,
+      updated_at: c.updated_at,
+      author_id: c.author_id,
+      parent_id: c.parent_id,
+      author: c.author,
+    });
+    commentsByPost.set(c.post_id, list);
+  }
+
+  const posts: ListPost[] = postRows.map((p) => ({
+    id: p.id,
+    title: p.title,
+    content: p.content,
+    is_notice: p.is_notice,
+    created_at: p.created_at,
+    author_id: p.author_id,
+    author: p.author,
+    comments: commentsByPost.get(p.id) ?? [],
+  }));
 
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
@@ -61,68 +117,13 @@ export default async function BoardPage({
             아직 작성된 글이 없습니다.
           </p>
         ) : (
-          <ul className="flex flex-col gap-2">
-            {posts.map((p) => (
-              <li key={p.id}>
-                <Link
-                  href={`/board/${p.id}`}
-                  className="flex items-center gap-3 p-4 border border-suaza-border rounded-lg hover:bg-gray-50 transition"
-                >
-                  <AuthorAvatar
-                    name={p.author?.name ?? null}
-                    src={p.author?.avatar_url ?? null}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      {p.is_notice && (
-                        <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium shrink-0">
-                          공지
-                        </span>
-                      )}
-                      <span className="font-bold text-suaza-ink truncate">
-                        {p.title}
-                      </span>
-                    </div>
-                    <div className="text-sm text-suaza-ink-muted flex gap-2">
-                      <span>{p.author?.name ?? "(알 수 없음)"}</span>
-                      <span>·</span>
-                      <span>{formatPostDate(p.created_at)}</span>
-                    </div>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <PostList
+            posts={posts}
+            myUserId={user.id}
+            isManager={isManager}
+          />
         )}
       </div>
     </main>
-  );
-}
-
-function AuthorAvatar({
-  name,
-  src,
-}: {
-  name: string | null;
-  src: string | null;
-}) {
-  const initial = name?.charAt(0) || "?";
-  return (
-    <div
-      className="relative shrink-0 w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center"
-      aria-hidden
-    >
-      {src ? (
-        <Image
-          src={src}
-          alt={name ?? "프로필"}
-          fill
-          sizes="40px"
-          className="object-cover"
-        />
-      ) : (
-        <span className="text-sm font-bold text-suaza-ink">{initial}</span>
-      )}
-    </div>
   );
 }

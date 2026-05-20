@@ -45,7 +45,7 @@ export default async function PostDetailPage({
       supabase
         .from("post_comments")
         .select(
-          "id, content, created_at, updated_at, author_id, author:profiles(name)",
+          "id, content, created_at, updated_at, author_id, parent_id, author:profiles(name, avatar_url)",
         )
         .eq("post_id", id)
         .order("created_at", { ascending: true }),

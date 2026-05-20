@@ -145,6 +145,14 @@ export function aggregateSeason(
 }
 
 export function shortDate(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
+  // KST 기준 'M/D' (서버 타임존 무관)
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    month: "numeric",
+    day: "numeric",
+  });
+  const parts = fmt.formatToParts(new Date(iso));
+  const month = parts.find((p) => p.type === "month")?.value ?? "";
+  const day = parts.find((p) => p.type === "day")?.value ?? "";
+  return `${month}/${day}`;
 }

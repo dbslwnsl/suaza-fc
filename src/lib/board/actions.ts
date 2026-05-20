@@ -114,21 +114,39 @@ export async function deletePost(postId: string) {
 // 게시글 댓글
 // ─────────────────────────────────────────────────────────────
 
-export async function createComment(postId: string, formData: FormData) {
+export async function createComment(
+  postId: string,
+  parentId: string | null,
+  formData: FormData,
+) {
   const { supabase, userId } = await getUserAndRole();
   const content = String(formData.get("content") ?? "").trim();
   if (!content) {
     redirect(`/board/${postId}?error=${encodeURIComponent("내용을 입력해 주세요")}`);
   }
+
+  // 1단계만 허용: parent_id 가 이미 답글이면 그 답글의 부모 댓글로 평탄화
+  let effectiveParent: string | null = parentId;
+  if (parentId) {
+    const { data: parent } = await supabase
+      .from("post_comments")
+      .select("parent_id")
+      .eq("id", parentId)
+      .single();
+    if (parent?.parent_id) effectiveParent = parent.parent_id;
+  }
+
   const { error } = await supabase.from("post_comments").insert({
     post_id: postId,
     author_id: userId,
     content,
+    parent_id: effectiveParent,
   });
   if (error) {
     redirect(`/board/${postId}?error=${encodeURIComponent(error.message)}`);
   }
   revalidatePath(`/board/${postId}`);
+  revalidatePath("/board");
   redirect(`/board/${postId}`);
 }
 

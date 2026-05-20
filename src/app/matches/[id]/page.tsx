@@ -823,20 +823,52 @@ function statusDotColor(status: string) {
   );
 }
 
-function formatMatchDateLong(iso: string) {
+// 서버 타임존(보통 UTC) 무관하게 KST 기준으로 추출
+function kstParts(iso: string) {
   const d = new Date(iso);
-  const days = ["일", "월", "화", "수", "목", "금", "토"];
-  return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    weekday: get("weekday"),
+    hour: get("hour"),
+    minute: get("minute"),
+  };
+}
+
+const WEEKDAY_KO: Record<string, string> = {
+  Sun: "일", Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토",
+};
+
+function formatMatchDateLong(iso: string) {
+  const p = kstParts(iso);
+  const dayKo = WEEKDAY_KO[p.weekday] ?? p.weekday;
+  return `${p.year}년 ${Number(p.month)}월 ${Number(p.day)}일 (${dayKo})`;
 }
 
 function formatMatchTime(iso: string) {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const p = kstParts(iso);
+  return `${p.hour}:${p.minute}`;
 }
 
 function formatMatchEndTime(iso: string, durationHours: number) {
-  const d = new Date(new Date(iso).getTime() + durationHours * 60 * 60 * 1000);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const end = new Date(
+    new Date(iso).getTime() + durationHours * 60 * 60 * 1000,
+  ).toISOString();
+  const p = kstParts(end);
+  return `${p.hour}:${p.minute}`;
 }
 
 // ───────────────────────────────────────────────────────────
