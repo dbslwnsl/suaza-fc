@@ -55,7 +55,7 @@ function buildInitialQuarters(f: FormationRow | null): SavedQuarter[] {
       saved = [
         {
           id: "1Q",
-          shape: f.shape ?? "4-4-2",
+          shape: f.shape ?? "4-2-3-1",
           player_ids: f.positions.player_ids,
         },
       ];
@@ -63,7 +63,7 @@ function buildInitialQuarters(f: FormationRow | null): SavedQuarter[] {
   }
   const defaults = DEFAULT_QUARTER_IDS.map<SavedQuarter>((id) => {
     const found = saved.find((q) => q.id === id);
-    return found ?? { id, shape: "4-4-2", player_ids: [] };
+    return found ?? { id, shape: "4-2-3-1", player_ids: [] };
   });
   const extras = saved
     .filter((q) => !DEFAULT_QUARTER_IDS.includes(q.id as never))

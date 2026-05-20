@@ -36,7 +36,7 @@ type QuarterState = {
   teamB?: TeamFormation;
 };
 
-const DEFAULT_INTRA_SHAPE = "4-4-2";
+const DEFAULT_INTRA_SHAPE = "4-2-3-1";
 
 const TITLE_SHORT: Record<MemberTitle, string> = {
   president: "회장",
@@ -582,7 +582,7 @@ export default function FormationEditor({
 
       {/* 메인 영역 */}
       <div className="desktop:relative desktop:flex-1 desktop:min-h-0">
-        <div className="relative desktop:pr-[360px] desktop:h-full">
+        <div className="relative desktop:pr-[360px] desktop:h-full desktop:flex desktop:items-center desktop:justify-center">
           <Pitch
             teams={
               current.teamB
@@ -877,7 +877,9 @@ function Pitch({
   return (
     <div
       ref={pitchRef}
-      className="relative w-full aspect-[3/4] desktop:aspect-auto desktop:h-full desktop:min-h-[360px] bg-gradient-to-b from-emerald-600 to-emerald-700 rounded-2xl overflow-hidden shadow-lg"
+      className={`relative w-full ${
+        isIntra ? "aspect-[3/5]" : "aspect-[3/4]"
+      } desktop:w-auto desktop:h-full bg-gradient-to-b from-emerald-600 to-emerald-700 rounded-2xl overflow-hidden shadow-lg`}
     >
       {/* 잔디 줄무늬 */}
       <div className="absolute inset-0 opacity-20">
@@ -1017,6 +1019,7 @@ function Pitch({
                 <PlayerCircle
                   player={player}
                   role={s.role}
+                  label={s.label}
                   hovered={isHover}
                   hint={showDropHint}
                   compact={compact}
@@ -1027,7 +1030,7 @@ function Pitch({
                   } text-white font-medium drop-shadow whitespace-nowrap max-w-[70px] truncate`}
                 >
                   {player?.name ?? (
-                    <span className="text-white/70">{s.role}</span>
+                    <span className="text-white/70">{s.label ?? s.role}</span>
                   )}
                 </span>
               </button>
@@ -1131,28 +1134,31 @@ function SaveStatusBadge({
 function PlayerCircle({
   player,
   role,
+  label,
   hovered,
   hint,
   compact,
 }: {
   player: EditorMember | null | undefined;
   role: SlotRole;
+  label?: string;
   hovered: boolean;
   hint: boolean;
   compact?: boolean;
 }) {
   const color = POSITION_COLOR[role];
+  const text = label ?? role;
   const stateRing = hovered ? "ring-4 ring-white/60 scale-110" : "";
   const sizeClass = compact
-    ? "w-8 h-8 sm:w-9 sm:h-9 text-[10px]"
-    : "w-11 h-11 sm:w-12 sm:h-12 text-[11px]";
+    ? "w-8 h-8 sm:w-9 sm:h-9 text-[9px]"
+    : "w-11 h-11 sm:w-12 sm:h-12 text-[10px]";
   if (player) {
     return (
       <div
         className={`relative ${sizeClass} rounded-full bg-white border-[3px] flex items-center justify-center font-bold shadow-md transition ${stateRing}`}
         style={{ borderColor: color }}
       >
-        <span style={{ color }}>{role}</span>
+        <span style={{ color }}>{text}</span>
       </div>
     );
   }
