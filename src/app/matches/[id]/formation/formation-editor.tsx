@@ -63,25 +63,31 @@ export default function FormationEditor({
   isIntra: boolean;
   readonly: boolean;
 }) {
-  const [quarters, setQuarters] = useState<QuarterState[]>(() =>
-    initialQuarters.map((q) => {
+  const [quarters, setQuarters] = useState<QuarterState[]>(() => {
+    // 방어: 슬롯에 남아있는 비활성/미출석 회원 ID 를 비운다.
+    // 유효 = 활성 회원(members) ∩ 출석 회원(attendingIds)
+    const memberSet = new Set(members.map((m) => m.id));
+    const attendSet = new Set(attendingIds);
+    const keep = (id: string | null | undefined): string | null =>
+      id && memberSet.has(id) && attendSet.has(id) ? id : null;
+    return initialQuarters.map((q) => {
       const aSlots = buildSlots(q.shape);
       const state: QuarterState = {
         id: q.id,
         shape: q.shape,
-        assignments: aSlots.map((_, i) => q.player_ids[i] ?? null),
+        assignments: aSlots.map((_, i) => keep(q.player_ids[i])),
       };
       if (isIntra) {
         const bShape = q.teamB?.shape ?? DEFAULT_INTRA_SHAPE;
         const bSlots = buildSlots(bShape);
         state.teamB = {
           shape: bShape,
-          assignments: bSlots.map((_, i) => q.teamB?.player_ids?.[i] ?? null),
+          assignments: bSlots.map((_, i) => keep(q.teamB?.player_ids?.[i])),
         };
       }
       return state;
-    }),
-  );
+    });
+  });
   const [activeIdx, setActiveIdx] = useState(0);
   const [openSlot, setOpenSlot] = useState<{
     team: "A" | "B";
@@ -161,16 +167,21 @@ export default function FormationEditor({
     () => new Map(members.map((m) => [m.id, m])),
     [members],
   );
-  // placedSet: 현재 쿼터의 양 팀 모두를 포함
+  // 유효 = 활성 회원 ∩ 출석 회원 (배치/카운트/강조 공통 기준)
+  const validIds = useMemo(() => {
+    const attendSet = new Set(attendingIds);
+    return new Set([...byId.keys()].filter((id) => attendSet.has(id)));
+  }, [byId, attendingIds]);
+  // placedSet: 현재 쿼터의 양 팀 모두를 포함 (유효 회원만)
   const placedSet = useMemo(() => {
-    const s = new Set(current.assignments.filter((v): v is string => !!v));
+    const s = new Set<string>();
+    for (const p of current.assignments) if (p && validIds.has(p)) s.add(p);
     if (current.teamB) {
-      for (const p of current.teamB.assignments) {
-        if (p) s.add(p);
-      }
+      for (const p of current.teamB.assignments)
+        if (p && validIds.has(p)) s.add(p);
     }
     return s;
-  }, [current]);
+  }, [current, validIds]);
   const teamOfPlayer = useMemo(() => {
     const map = new Map<string, "A" | "B">();
     for (const p of current.assignments) if (p) map.set(p, "A");
@@ -350,7 +361,27 @@ export default function FormationEditor({
   }
 
   function autoPlace() {
-    patchQuarter(activeIdx, (q) => {
+    setQuarters((prev) => {
+      const q = prev[activeIdx];
+      if (!q) return prev;
+
+      // 다른 쿼터들에서의 배치 횟수 (현재 쿼터 제외) — 적은 선수 우선
+      const playCount = new Map<string, number>();
+      prev.forEach((qq, idx) => {
+        if (idx === activeIdx) return;
+        for (const p of qq.assignments)
+          if (p) playCount.set(p, (playCount.get(p) ?? 0) + 1);
+        if (qq.teamB) {
+          for (const p of qq.teamB.assignments)
+            if (p) playCount.set(p, (playCount.get(p) ?? 0) + 1);
+        }
+      });
+      // 배치 횟수 오름차순, 동률은 랜덤
+      const order = attendingMembers
+        .map((m) => ({ m, c: playCount.get(m.id) ?? 0, r: Math.random() }))
+        .sort((a, b) => (a.c !== b.c ? a.c - b.c : a.r - b.r))
+        .map((x) => x.m);
+
       const aSlots = buildSlots(q.shape);
       const aAssigns = [...q.assignments];
       const bSlots = q.teamB ? buildSlots(q.teamB.shape) : [];
@@ -358,42 +389,77 @@ export default function FormationEditor({
       const placed = new Set<string>();
       for (const p of aAssigns) if (p) placed.add(p);
       for (const p of bAssigns) if (p) placed.add(p);
-      for (const m of attendingMembers) {
+
+      // 0) 예외: GK 슬롯은 뛴 횟수와 무관하게 GK 포지션 선수를 먼저 배치
+      const fillGK = (slots: SlotDef[], assigns: (string | null)[]) => {
+        for (let i = 0; i < slots.length; i++) {
+          if (slots[i].role !== "GK" || assigns[i]) continue;
+          const gk = order.find(
+            (m) => !placed.has(m.id) && (m.positions ?? []).includes("GK"),
+          );
+          if (gk) {
+            assigns[i] = gk.id;
+            placed.add(gk.id);
+          }
+        }
+      };
+      fillGK(aSlots, aAssigns);
+      if (q.teamB) fillGK(bSlots, bAssigns);
+
+      // 적게 뛴 선수 순서(order)대로 한 명씩:
+      //  본인 포지션 슬롯 우선(A→B) → 없으면 아무 빈 슬롯(A→B)
+      for (const m of order) {
         if (placed.has(m.id)) continue;
         const positions = m.positions ?? [];
-        // A 우선 시도
-        let assigned = false;
+        let done = false;
+
+        // 1) A팀 포지션 매칭
         for (const pos of positions) {
-          const idx = aSlots.findIndex(
-            (s, i) => !aAssigns[i] && s.role === pos,
-          );
+          const idx = aSlots.findIndex((s, i) => !aAssigns[i] && s.role === pos);
           if (idx >= 0) {
             aAssigns[idx] = m.id;
-            placed.add(m.id);
-            assigned = true;
+            done = true;
             break;
           }
         }
-        if (assigned) continue;
-        // B 시도 (있을 때만)
-        if (q.teamB) {
+        // 2) B팀 포지션 매칭
+        if (!done && q.teamB) {
           for (const pos of positions) {
             const idx = bSlots.findIndex(
               (s, i) => !bAssigns[i] && s.role === pos,
             );
             if (idx >= 0) {
               bAssigns[idx] = m.id;
-              placed.add(m.id);
+              done = true;
               break;
             }
           }
         }
+        // 3) A팀 아무 빈 슬롯
+        if (!done) {
+          const idx = aSlots.findIndex((_, i) => !aAssigns[i]);
+          if (idx >= 0) {
+            aAssigns[idx] = m.id;
+            done = true;
+          }
+        }
+        // 4) B팀 아무 빈 슬롯
+        if (!done && q.teamB) {
+          const idx = bSlots.findIndex((_, i) => !bAssigns[i]);
+          if (idx >= 0) {
+            bAssigns[idx] = m.id;
+            done = true;
+          }
+        }
+        if (done) placed.add(m.id);
       }
-      return {
+
+      const newQ: QuarterState = {
         ...q,
         assignments: aAssigns,
         teamB: q.teamB ? { ...q.teamB, assignments: bAssigns } : q.teamB,
       };
+      return prev.map((x, i) => (i === activeIdx ? newQ : x));
     });
   }
 
@@ -559,6 +625,7 @@ export default function FormationEditor({
           <PlayerRosterDesktop
             members={attendingMembers}
             quarters={quarters}
+            validIds={validIds}
             placedSet={placedSet}
             teamOfPlayer={teamOfPlayer}
             isIntra={isIntra}
@@ -578,6 +645,7 @@ export default function FormationEditor({
       <PlayerRosterMobile
         members={attendingMembers}
         quarters={quarters}
+        validIds={validIds}
         placedSet={placedSet}
         teamOfPlayer={teamOfPlayer}
         isIntra={isIntra}
@@ -1453,17 +1521,29 @@ function QuarterPlacementCounters({
   );
 }
 
-function computePlacements(quarters: QuarterWithTeams[]): QuarterPlacement[] {
+function computePlacements(
+  quarters: QuarterWithTeams[],
+  validIds: Set<string>,
+): QuarterPlacement[] {
   return quarters.map((q) => {
     const aSlots = buildSlots(q.shape);
     const bSlots = q.teamB ? buildSlots(q.teamB.shape) : [];
-    const aPlaced = q.assignments.filter((p): p is string => p != null).length;
-    const bPlaced = q.teamB
-      ? q.teamB.assignments.filter((p): p is string => p != null).length
-      : 0;
+    // 슬롯 범위 내 + 실제 존재하는 회원(validIds) + unique 만 카운트.
+    // 출석에서 빠지거나 삭제된 회원 ID 가 슬롯에 잔존해도 화면엔 안 보이므로 제외.
+    const ids = new Set<string>();
+    for (let i = 0; i < aSlots.length; i++) {
+      const p = q.assignments[i];
+      if (p && validIds.has(p)) ids.add(p);
+    }
+    if (q.teamB) {
+      for (let i = 0; i < bSlots.length; i++) {
+        const p = q.teamB.assignments[i];
+        if (p && validIds.has(p)) ids.add(p);
+      }
+    }
     return {
       id: q.id,
-      placed: aPlaced + bPlaced,
+      placed: ids.size,
       total: aSlots.length + bSlots.length,
     };
   });
@@ -1493,7 +1573,7 @@ function FilterTabsWithCounts({
             key={it.key}
             type="button"
             onClick={() => onChange(it.key)}
-            className={`shrink-0 inline-flex items-center gap-1 h-[26px] px-2 rounded-full text-[11px] font-semibold transition ${
+            className={`shrink-0 inline-flex items-center gap-1 h-[25px] px-[7px] rounded-full text-[11px] font-semibold transition ${
               active
                 ? "text-white shadow-sm"
                 : "bg-white border border-suaza-border text-suaza-ink hover:bg-suaza-bg"
@@ -1520,6 +1600,7 @@ function FilterTabsWithCounts({
 function PlayerRosterMobile({
   members,
   quarters,
+  validIds,
   placedSet,
   teamOfPlayer,
   isIntra,
@@ -1530,6 +1611,7 @@ function PlayerRosterMobile({
 }: {
   members: EditorMember[];
   quarters: QuarterWithTeams[];
+  validIds: Set<string>;
   placedSet: Set<string>;
   teamOfPlayer: Map<string, "A" | "B">;
   isIntra: boolean;
@@ -1547,7 +1629,10 @@ function PlayerRosterMobile({
   const sumQuarters = participations.reduce((s, p) => s + p.totalPlayed, 0);
   const avg = played > 0 ? (sumQuarters / played).toFixed(1) : "0.0";
 
-  const placements = useMemo(() => computePlacements(quarters), [quarters]);
+  const placements = useMemo(
+    () => computePlacements(quarters, validIds),
+    [quarters, validIds],
+  );
 
   const sorted = useMemo(() => {
     return [...participations].sort((a, b) => {
@@ -1613,14 +1698,24 @@ function PlayerRowMobile({
   onDragEnd?: () => void;
 }) {
   const m = participation.member;
-  const primary = m.positions?.[0];
+  const memberPositions = m.positions ?? [];
+  const primary = memberPositions[0];
   const primaryColor = primary ? POSITION_COLOR[primary] : "#9CA3AF";
   const tierColor = getTierColor(participation.totalPlayed);
   const hasPlayed = participation.totalPlayed > 0;
 
+  // 현재 쿼터 배치(placed) 강조 — A팀 파랑 / B팀 빨강 / 상대전 초록
+  const highlight = placed
+    ? team === "A"
+      ? { borderColor: "#3B82F6", backgroundColor: "rgba(59,130,246,0.06)" }
+      : team === "B"
+        ? { borderColor: "#EF4444", backgroundColor: "rgba(239,68,68,0.06)" }
+        : { borderColor: "#22C55E", backgroundColor: "rgba(34,197,94,0.06)" }
+    : undefined;
+
   return (
     <div
-      style={{ touchAction: "manipulation" }}
+      style={{ touchAction: "manipulation", ...highlight }}
       draggable={!readonly}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", m.id);
@@ -1629,15 +1724,15 @@ function PlayerRowMobile({
       }}
       onDragEnd={() => onDragEnd?.()}
       onClick={() => !readonly && onTap(m.id, placed)}
-      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border bg-white select-none transition ${
+      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-white select-none transition ${
+        placed ? "border-2" : "border border-suaza-border"
+      } ${
         readonly ? "cursor-default" : "cursor-pointer"
-      } ${hasPlayed ? "border-suaza-border" : "border-suaza-border opacity-80"}`}
+      } ${!hasPlayed && !placed ? "opacity-80" : ""}`}
     >
       <div
-        className={`shrink-0 w-10 h-10 rounded-full border-2 flex items-center justify-center text-sm font-bold ${
-          hasPlayed ? "" : "border-gray-200 text-gray-300"
-        }`}
-        style={hasPlayed ? { borderColor: primaryColor, color: primaryColor } : undefined}
+        className="shrink-0 w-10 h-10 rounded-full border-2 flex items-center justify-center text-sm font-bold"
+        style={{ borderColor: primaryColor, color: primaryColor }}
       >
         {m.name.slice(0, 1)}
       </div>
@@ -1664,22 +1759,25 @@ function PlayerRowMobile({
           )}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-          {!hasPlayed && (
-            <span className="text-[10px] text-suaza-ink-muted">미출전</span>
-          )}
-          {participation.positionsPlayed.map((pos) => (
-            <span
-              key={pos}
-              className="inline-flex items-center gap-0.5 text-[10px] font-semibold"
-              style={{ color: POSITION_COLOR[pos] }}
-            >
-              <span
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ backgroundColor: POSITION_COLOR[pos] }}
-              />
-              {pos}
+          {memberPositions.length === 0 ? (
+            <span className="text-[10px] text-suaza-ink-faint">
+              포지션 미설정
             </span>
-          ))}
+          ) : (
+            memberPositions.map((pos) => (
+              <span
+                key={pos}
+                className="inline-flex items-center gap-0.5 text-[10px] font-semibold"
+                style={{ color: POSITION_COLOR[pos] }}
+              >
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: POSITION_COLOR[pos] }}
+                />
+                {pos}
+              </span>
+            ))
+          )}
           {participation.hasPositionChange && (
             <span className="text-[10px] text-suaza-ink-muted">
               · 포지션 변경
@@ -1711,6 +1809,7 @@ function PlayerRowMobile({
 function PlayerRosterDesktop({
   members,
   quarters,
+  validIds,
   placedSet,
   teamOfPlayer,
   isIntra,
@@ -1721,6 +1820,7 @@ function PlayerRosterDesktop({
 }: {
   members: EditorMember[];
   quarters: QuarterWithTeams[];
+  validIds: Set<string>;
   placedSet: Set<string>;
   teamOfPlayer: Map<string, "A" | "B">;
   isIntra: boolean;
@@ -1744,19 +1844,25 @@ function PlayerRosterDesktop({
       MF: 0,
       FW: 0,
     };
+    // 복수 포지션 선수는 보유한 모든 포지션에 각각 카운트
     for (const m of members) {
-      const primary = m.positions?.[0];
-      if (primary) c[primary]++;
+      for (const p of m.positions ?? []) {
+        if (p in c) c[p as Filter]++;
+      }
     }
     return c;
   }, [members]);
-  const placements = useMemo(() => computePlacements(quarters), [quarters]);
+  const placements = useMemo(
+    () => computePlacements(quarters, validIds),
+    [quarters, validIds],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let out = participations;
     if (filter !== "ALL") {
-      out = out.filter((p) => p.member.positions?.[0] === filter);
+      // 보유 포지션 중 하나라도 일치하면 포함
+      out = out.filter((p) => (p.member.positions ?? []).includes(filter));
     }
     if (q) {
       out = out.filter((p) => {
@@ -1836,13 +1942,14 @@ function DesktopPlayerCard({
 }) {
   const m = participation.member;
   const teamBg = team === "A" ? "#3B82F6" : team === "B" ? "#EF4444" : null;
-  const cardBorder = team
+  // 현재 쿼터 배치(placed) 강조 — A팀 파랑 / B팀 빨강 / 상대전 초록
+  const highlight = placed
     ? team === "A"
-      ? "border-blue-300"
-      : "border-red-300"
-    : placed
-      ? "border-emerald-200"
-      : "border-suaza-border";
+      ? { borderColor: "#3B82F6", backgroundColor: "rgba(59,130,246,0.06)" }
+      : team === "B"
+        ? { borderColor: "#EF4444", backgroundColor: "rgba(239,68,68,0.06)" }
+        : { borderColor: "#22C55E", backgroundColor: "rgba(34,197,94,0.06)" }
+    : undefined;
   return (
     <div
       draggable={!readonly}
@@ -1853,9 +1960,10 @@ function DesktopPlayerCard({
       }}
       onDragEnd={() => onDragEnd?.()}
       onClick={() => !readonly && onTap(m.id, placed)}
-      className={`relative flex items-center gap-2 p-2.5 rounded-xl border bg-white select-none transition ${
-        readonly ? "cursor-default" : "cursor-pointer hover:bg-suaza-bg"
-      } ${cardBorder}`}
+      style={highlight}
+      className={`relative flex items-center gap-2 p-2.5 rounded-xl bg-white select-none transition ${
+        placed ? "border-2" : "border border-suaza-border"
+      } ${readonly ? "cursor-default" : "cursor-pointer hover:bg-suaza-bg"}`}
     >
       {team && (
         <span
