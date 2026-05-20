@@ -24,6 +24,9 @@ export default async function MatchesPage({
   } = await supabase.auth.getUser();
   if (!user) return null;
 
+  // 시각이 지난 경기 자동 진행/완료 처리 (조회 전)
+  await supabase.rpc("auto_progress_due_matches");
+
   const [{ data: matches }, { data: me }] = await Promise.all([
     supabase
       .from("matches")

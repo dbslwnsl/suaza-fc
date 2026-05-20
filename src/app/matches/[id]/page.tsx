@@ -56,6 +56,9 @@ export default async function MatchDetailPage({
   } = await supabase.auth.getUser();
   if (!user) return null;
 
+  // 시각이 지난 모든 경기를 자동 진행/완료 처리 (조회 전 실행)
+  await supabase.rpc("auto_progress_due_matches");
+
   const [
     { data: match },
     { data: me },
@@ -168,17 +171,8 @@ export default async function MatchDetailPage({
 
   const isIntra = m.opponent === "자체전";
   const isStarted = isMatchStarted(m);
-
-  // 시각 경과 + scheduled 면 자동으로 in_progress 로 진행
-  // 단, 매니저가 시작 시각 이후 명시적으로 변경한 흔적이 있으면 skip (수동 우선)
-  const overriddenAfterStart =
-    m.status_overridden_at != null &&
-    new Date(m.status_overridden_at).getTime() >=
-      new Date(m.match_date).getTime();
-  if (m.status === "scheduled" && isStarted && !overriddenAfterStart) {
-    await supabase.rpc("auto_progress_match", { p_match_id: m.id });
-    m.status = "in_progress";
-  }
+  // 상태 자동 진행은 위에서 auto_progress_due_matches 로 이미 처리됨
+  // (조회한 match 는 갱신 후 최신 상태)
 
   // 편집 모드: 경기 등록 화면과 동일한 레이아웃
   if (editing) {

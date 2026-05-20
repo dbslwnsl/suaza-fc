@@ -136,6 +136,9 @@ export default async function Home() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // 시각이 지난 경기 자동 진행/완료 처리 (조회 전)
+  await supabase.rpc("auto_progress_due_matches");
+
   const [
     { data: profile },
     { data: latestNotice },
