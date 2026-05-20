@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import PageHeader from "@/components/page-header";
@@ -8,7 +9,7 @@ type Post = {
   title: string;
   is_notice: boolean;
   created_at: string;
-  author: { name: string } | null;
+  author: { name: string; avatar_url: string | null } | null;
 };
 
 export default async function BoardPage({
@@ -21,7 +22,9 @@ export default async function BoardPage({
   const supabase = await createClient();
   const { data: postsRaw } = await supabase
     .from("posts")
-    .select("id, title, is_notice, created_at, author:profiles(name)")
+    .select(
+      "id, title, is_notice, created_at, author:profiles(name, avatar_url)",
+    )
     .order("is_notice", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -63,20 +66,28 @@ export default async function BoardPage({
               <li key={p.id}>
                 <Link
                   href={`/board/${p.id}`}
-                  className="block p-4 border border-suaza-border rounded-lg hover:bg-gray-50 transition"
+                  className="flex items-center gap-3 p-4 border border-suaza-border rounded-lg hover:bg-gray-50 transition"
                 >
-                  <div className="flex items-center gap-2 mb-1">
-                    {p.is_notice && (
-                      <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium">
-                        공지
+                  <AuthorAvatar
+                    name={p.author?.name ?? null}
+                    src={p.author?.avatar_url ?? null}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      {p.is_notice && (
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium shrink-0">
+                          공지
+                        </span>
+                      )}
+                      <span className="font-bold text-suaza-ink truncate">
+                        {p.title}
                       </span>
-                    )}
-                    <span className="font-bold text-suaza-ink">{p.title}</span>
-                  </div>
-                  <div className="text-sm text-suaza-ink-muted flex gap-2">
-                    <span>{p.author?.name ?? "(알 수 없음)"}</span>
-                    <span>·</span>
-                    <span>{formatPostDate(p.created_at)}</span>
+                    </div>
+                    <div className="text-sm text-suaza-ink-muted flex gap-2">
+                      <span>{p.author?.name ?? "(알 수 없음)"}</span>
+                      <span>·</span>
+                      <span>{formatPostDate(p.created_at)}</span>
+                    </div>
                   </div>
                 </Link>
               </li>
@@ -85,5 +96,33 @@ export default async function BoardPage({
         )}
       </div>
     </main>
+  );
+}
+
+function AuthorAvatar({
+  name,
+  src,
+}: {
+  name: string | null;
+  src: string | null;
+}) {
+  const initial = name?.charAt(0) || "?";
+  return (
+    <div
+      className="relative shrink-0 w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center"
+      aria-hidden
+    >
+      {src ? (
+        <Image
+          src={src}
+          alt={name ?? "프로필"}
+          fill
+          sizes="40px"
+          className="object-cover"
+        />
+      ) : (
+        <span className="text-sm font-bold text-suaza-ink">{initial}</span>
+      )}
+    </div>
   );
 }

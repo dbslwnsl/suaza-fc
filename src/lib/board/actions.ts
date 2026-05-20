@@ -109,3 +109,59 @@ export async function deletePost(postId: string) {
   revalidatePath("/");
   redirect(`/board?message=${encodeURIComponent("삭제되었습니다")}`);
 }
+
+// ─────────────────────────────────────────────────────────────
+// 게시글 댓글
+// ─────────────────────────────────────────────────────────────
+
+export async function createComment(postId: string, formData: FormData) {
+  const { supabase, userId } = await getUserAndRole();
+  const content = String(formData.get("content") ?? "").trim();
+  if (!content) {
+    redirect(`/board/${postId}?error=${encodeURIComponent("내용을 입력해 주세요")}`);
+  }
+  const { error } = await supabase.from("post_comments").insert({
+    post_id: postId,
+    author_id: userId,
+    content,
+  });
+  if (error) {
+    redirect(`/board/${postId}?error=${encodeURIComponent(error.message)}`);
+  }
+  revalidatePath(`/board/${postId}`);
+  redirect(`/board/${postId}`);
+}
+
+export async function updateComment(
+  commentId: string,
+  postId: string,
+  formData: FormData,
+) {
+  const { supabase } = await getUserAndRole();
+  const content = String(formData.get("content") ?? "").trim();
+  if (!content) {
+    redirect(`/board/${postId}?error=${encodeURIComponent("내용을 입력해 주세요")}`);
+  }
+  const { error } = await supabase
+    .from("post_comments")
+    .update({ content, updated_at: new Date().toISOString() })
+    .eq("id", commentId);
+  if (error) {
+    redirect(`/board/${postId}?error=${encodeURIComponent(error.message)}`);
+  }
+  revalidatePath(`/board/${postId}`);
+  redirect(`/board/${postId}`);
+}
+
+export async function deleteComment(commentId: string, postId: string) {
+  const { supabase } = await getUserAndRole();
+  const { error } = await supabase
+    .from("post_comments")
+    .delete()
+    .eq("id", commentId);
+  if (error) {
+    redirect(`/board/${postId}?error=${encodeURIComponent(error.message)}`);
+  }
+  revalidatePath(`/board/${postId}`);
+  redirect(`/board/${postId}`);
+}

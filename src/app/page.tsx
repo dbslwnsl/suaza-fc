@@ -33,8 +33,36 @@ type NoticeRow = {
   id: string;
   title: string;
   created_at: string;
-  author: { name: string } | null;
+  author: { name: string; avatar_url: string | null } | null;
 };
+
+function NoticeAvatar({
+  name,
+  src,
+}: {
+  name: string | null;
+  src: string | null;
+}) {
+  const initial = name?.charAt(0) || "?";
+  return (
+    <div
+      className="relative shrink-0 w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center"
+      aria-hidden
+    >
+      {src ? (
+        <Image
+          src={src}
+          alt={name ?? "프로필"}
+          fill
+          sizes="40px"
+          className="object-cover"
+        />
+      ) : (
+        <span className="text-sm font-bold text-suaza-ink">{initial}</span>
+      )}
+    </div>
+  );
+}
 
 function WeatherStrip({
   weather,
@@ -124,7 +152,7 @@ export default async function Home() {
       .single(),
     supabase
       .from("posts")
-      .select("id, title, created_at, author:profiles(name)")
+      .select("id, title, created_at, author:profiles(name, avatar_url)")
       .eq("is_notice", true)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -393,17 +421,25 @@ export default async function Home() {
         {notice ? (
           <Link
             href={`/board/${notice.id}`}
-            className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border hover:bg-gray-50 transition flex flex-col gap-1.5"
+            className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border hover:bg-gray-50 transition flex items-center gap-3"
           >
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium">
-                공지
-              </span>
-              <span className="text-xs text-suaza-ink-muted">
-                {notice.author?.name ?? ""} · {formatPostDate(notice.created_at)}
+            <NoticeAvatar
+              name={notice.author?.name ?? null}
+              src={notice.author?.avatar_url ?? null}
+            />
+            <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium shrink-0">
+                  공지
+                </span>
+                <span className="text-xs text-suaza-ink-muted truncate">
+                  {notice.author?.name ?? ""} · {formatPostDate(notice.created_at)}
+                </span>
+              </div>
+              <span className="font-bold text-suaza-ink truncate">
+                {notice.title}
               </span>
             </div>
-            <span className="font-bold text-suaza-ink">{notice.title}</span>
           </Link>
         ) : (
           <div className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border flex items-center gap-2">

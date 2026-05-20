@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { deletePost, updatePost } from "@/lib/board/actions";
 import { formatPostDate } from "@/lib/board/helpers";
+import CommentSection, { type Comment } from "./comment-section";
 
 type Post = {
   id: string;
@@ -31,16 +32,24 @@ export default async function PostDetailPage({
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [{ data: post }, { data: me }] = await Promise.all([
-    supabase
-      .from("posts")
-      .select(
-        "id, title, content, is_notice, author_id, created_at, updated_at, author:profiles(name)",
-      )
-      .eq("id", id)
-      .single(),
-    supabase.from("profiles").select("role").eq("id", user.id).single(),
-  ]);
+  const [{ data: post }, { data: me }, { data: commentsRaw }] =
+    await Promise.all([
+      supabase
+        .from("posts")
+        .select(
+          "id, title, content, is_notice, author_id, created_at, updated_at, author:profiles(name)",
+        )
+        .eq("id", id)
+        .single(),
+      supabase.from("profiles").select("role").eq("id", user.id).single(),
+      supabase
+        .from("post_comments")
+        .select(
+          "id, content, created_at, updated_at, author_id, author:profiles(name)",
+        )
+        .eq("post_id", id)
+        .order("created_at", { ascending: true }),
+    ]);
 
   if (!post) notFound();
   const p = post as unknown as Post;
@@ -48,6 +57,7 @@ export default async function PostDetailPage({
   const isManager = me?.role === "manager";
   const canEdit = isAuthor || isManager;
   const editing = edit === "1" && canEdit;
+  const comments = (commentsRaw ?? []) as unknown as Comment[];
 
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
@@ -169,6 +179,13 @@ export default async function PostDetailPage({
                 </form>
               </div>
             )}
+
+            <CommentSection
+              postId={p.id}
+              comments={comments}
+              myUserId={user.id}
+              isManager={isManager}
+            />
           </>
         )}
       </div>
