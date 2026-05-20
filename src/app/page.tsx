@@ -22,6 +22,12 @@ import {
 } from "@/lib/matches/helpers";
 import { formatPostDate } from "@/lib/board/helpers";
 import { AttendanceVote } from "./matches/[id]/page";
+import {
+  fetchWeatherDebug,
+  failureMessage,
+  type WeatherInfo,
+  type WeatherResult,
+} from "@/lib/weather";
 
 type NoticeRow = {
   id: string;
@@ -29,6 +35,56 @@ type NoticeRow = {
   created_at: string;
   author: { name: string } | null;
 };
+
+function WeatherStrip({
+  weather,
+  matchDate,
+}: {
+  weather: WeatherInfo;
+  matchDate: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2">
+      <div className="flex items-center justify-between gap-2 text-[11px] text-sky-700 font-medium">
+        <span>{forecastLabel(matchDate)}</span>
+        <span className="text-suaza-ink-faint font-normal truncate max-w-[60%]">
+          {weather.matchedLocation}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <span className="text-xl">{weather.emoji}</span>
+        <span className="text-sm font-bold text-suaza-ink">{weather.label}</span>
+        <span className="text-xs text-suaza-ink-muted tabular-nums">
+          {weather.tempMin}° / {weather.tempMax}°
+        </span>
+        {weather.precipitationProbability > 0 && (
+          <span className="text-xs text-sky-700 tabular-nums">
+            💧 {weather.precipitationProbability}%
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function forecastLabel(matchDateIso: string): string {
+  const matchDate = new Date(matchDateIso);
+  if (Number.isNaN(matchDate.getTime())) return "경기일 예보";
+  // KST 기준 자정 비교 (Vercel UTC 서버에서도 동일 동작)
+  const fmt = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const today = new Date(fmt.format(new Date()) + "T00:00:00+09:00");
+  const target = new Date(fmt.format(matchDate) + "T00:00:00+09:00");
+  const diff = Math.round((target.getTime() - today.getTime()) / 86400000);
+  if (diff === 0) return "오늘 예보";
+  if (diff === 1) return "내일 예보";
+  if (diff > 1) return `D-${diff} 예보`;
+  return "경기일 예보";
+}
 
 function PositionBadge({ position }: { position: Position }) {
   const color = POSITION_COLOR[position];
@@ -97,6 +153,11 @@ export default async function Home() {
   const upcoming = upcomingMatch as Match | null;
   const last = lastMatch as Match | null;
   const notice = latestNotice as unknown as NoticeRow | null;
+
+  // 다가오는 경기의 날씨 (있으면) — 실패해도 사유 표시
+  const weatherResult: WeatherResult | null = upcoming
+    ? await fetchWeatherDebug(upcoming.location, upcoming.match_date)
+    : null;
 
   // 다가오는 경기 출석 데이터
   type VotePlayer = { id: string; name: string; jersey_number: number | null };
@@ -328,8 +389,8 @@ export default async function Home() {
           )}
         </section>
 
-        {/* Latest Notice */}
-        {notice && (
+        {/* Latest Notice (항상 표시 — 없으면 안내) */}
+        {notice ? (
           <Link
             href={`/board/${notice.id}`}
             className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border hover:bg-gray-50 transition flex flex-col gap-1.5"
@@ -344,6 +405,15 @@ export default async function Home() {
             </div>
             <span className="font-bold text-suaza-ink">{notice.title}</span>
           </Link>
+        ) : (
+          <div className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border flex items-center gap-2">
+            <span className="text-[11px] px-2 py-0.5 rounded bg-gray-200 text-gray-600 font-medium">
+              공지
+            </span>
+            <span className="text-sm text-suaza-ink-muted">
+              등록된 공지가 없습니다
+            </span>
+          </div>
         )}
 
         {/* Upcoming Match + Attendance */}
@@ -371,6 +441,21 @@ export default async function Home() {
                 {upcoming.location && ` · ${upcoming.location}`}
               </span>
             </Link>
+            {weatherResult &&
+              (weatherResult.ok ? (
+                <WeatherStrip
+                  weather={weatherResult.data}
+                  matchDate={upcoming.match_date}
+                />
+              ) : (
+                <div className="flex items-center gap-2 bg-gray-50 border border-suaza-border rounded-lg px-3 py-2 text-xs text-suaza-ink-muted">
+                  <span>🌤️</span>
+                  <span>날씨 정보 없음</span>
+                  <span className="text-suaza-ink-faint truncate">
+                    · {failureMessage(weatherResult.failure)}
+                  </span>
+                </div>
+              ))}
             <AttendanceVote
               matchId={upcoming.id}
               redirectTo="/"

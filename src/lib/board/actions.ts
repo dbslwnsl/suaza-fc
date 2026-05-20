@@ -31,6 +31,14 @@ export async function createPost(formData: FormData) {
     redirect(`/board/new?error=${encodeURIComponent("내용을 입력해 주세요")}`);
   }
 
+  // 새 글을 공지로 등록하면 기존의 다른 공지를 모두 일반 글로 전환 (단일 공지 제약)
+  if (isNotice) {
+    await supabase
+      .from("posts")
+      .update({ is_notice: false })
+      .eq("is_notice", true);
+  }
+
   const { data, error } = await supabase
     .from("posts")
     .insert({
@@ -67,6 +75,15 @@ export async function updatePost(postId: string, formData: FormData) {
     updated_at: new Date().toISOString(),
   };
   if (role === "manager") patch.is_notice = isNotice;
+
+  // 이 글을 공지로 전환하면 다른 모든 공지를 일반 글로 (단일 공지 제약)
+  if (role === "manager" && isNotice) {
+    await supabase
+      .from("posts")
+      .update({ is_notice: false })
+      .eq("is_notice", true)
+      .neq("id", postId);
+  }
 
   const { error } = await supabase
     .from("posts")
