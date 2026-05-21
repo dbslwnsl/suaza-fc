@@ -112,7 +112,7 @@ export default async function FormationPage({
       .order("jersey_number", { ascending: true, nullsFirst: false }),
     supabase
       .from("match_attendances")
-      .select("player_id, status")
+      .select("player_id, status, team")
       .eq("match_id", id)
       .eq("status", "attending"),
   ]);
@@ -122,9 +122,14 @@ export default async function FormationPage({
   const isStaff = me?.role === "manager" || me?.role === "coach";
   const f = formation as FormationRow | null;
   const initialQuarters = buildInitialQuarters(f);
-  const attendingIds = (attendances ?? []).map(
-    (a: { player_id: string }) => a.player_id,
-  );
+  const attendanceRows = (attendances ?? []) as {
+    player_id: string;
+    team: "A" | "B" | null;
+  }[];
+  const attendingIds = attendanceRows.map((a) => a.player_id);
+  // 자체전 편성팀 매핑 (player_id → 'A' | 'B' | null)
+  const teamByPlayer: Record<string, "A" | "B" | null> = {};
+  for (const a of attendanceRows) teamByPlayer[a.player_id] = a.team;
   const isIntra = match.opponent === "자체전";
 
   return (
@@ -164,6 +169,7 @@ export default async function FormationPage({
           matchId={id}
           members={(members ?? []) as EditorMember[]}
           attendingIds={attendingIds}
+          teamByPlayer={teamByPlayer}
           initialQuarters={initialQuarters}
           isIntra={isIntra}
           readonly={!isStaff}

@@ -52,6 +52,7 @@ export default function FormationEditor({
   matchId,
   members,
   attendingIds,
+  teamByPlayer = {},
   initialQuarters,
   isIntra,
   readonly,
@@ -59,6 +60,7 @@ export default function FormationEditor({
   matchId: string;
   members: EditorMember[];
   attendingIds: string[];
+  teamByPlayer?: Record<string, "A" | "B" | null>;
   initialQuarters: SavedQuarter[];
   isIntra: boolean;
   readonly: boolean;
@@ -200,6 +202,15 @@ export default function FormationEditor({
         return an - bn;
       });
   }, [members, attendingIds]);
+  // 자체전: 편성팀(team-builder) 기준으로 명단 분리
+  const teamAMembers = useMemo(
+    () => attendingMembers.filter((m) => teamByPlayer[m.id] === "A"),
+    [attendingMembers, teamByPlayer],
+  );
+  const teamBMembers = useMemo(
+    () => attendingMembers.filter((m) => teamByPlayer[m.id] === "B"),
+    [attendingMembers, teamByPlayer],
+  );
 
   function patchQuarter(i: number, fn: (q: QuarterState) => QuarterState) {
     setQuarters((prev) => prev.map((q, idx) => (idx === i ? fn(q) : q)));
@@ -580,9 +591,34 @@ export default function FormationEditor({
         )}
       </div>
 
-      {/* 메인 영역 */}
-      <div className="desktop:relative desktop:flex-1 desktop:min-h-0">
-        <div className="relative desktop:pr-[360px] desktop:h-full desktop:flex desktop:items-center desktop:justify-center">
+      {/* 메인 영역 — 데스크탑: 자체전 3열(A명단|경기장|B명단), 상대전 2열(경기장|명단) */}
+      <div className="desktop:flex desktop:gap-3 desktop:flex-1 desktop:min-h-0">
+        {/* 자체전 A팀 명단 (데스크탑 좌측) */}
+        {isIntra && (
+          <aside className="hidden desktop:flex desktop:w-[280px] flex-col bg-white rounded-2xl border border-suaza-border p-4 gap-3 min-h-0">
+            <PlayerRosterDesktop
+              members={teamAMembers}
+              teamLabel="A팀"
+              teamColor="#3B82F6"
+              quarters={quarters}
+              validIds={validIds}
+              placedSet={placedSet}
+              teamOfPlayer={teamOfPlayer}
+              isIntra={isIntra}
+              readonly={readonly}
+              onTap={(id, placed) => {
+                if (readonly) return;
+                if (placed) unassignPlayer(id);
+                else placeByClick(id);
+              }}
+              onDragStart={(id) => setDraggingId(id)}
+              onDragEnd={() => setDraggingId(null)}
+            />
+          </aside>
+        )}
+
+        {/* 경기장 */}
+        <div className="relative desktop:flex-1 desktop:flex desktop:items-center desktop:justify-center">
           <Pitch
             teams={
               current.teamB
@@ -621,21 +657,24 @@ export default function FormationEditor({
           />
         </div>
 
-        <aside className="hidden desktop:flex desktop:absolute desktop:top-0 desktop:right-0 desktop:bottom-0 desktop:w-[340px] flex-col bg-white rounded-2xl border border-suaza-border p-4 gap-3 min-h-0">
+        {/* 우측 명단 — 자체전이면 B팀, 상대전이면 전체 */}
+        <aside className="hidden desktop:flex desktop:w-[280px] flex-col bg-white rounded-2xl border border-suaza-border p-4 gap-3 min-h-0">
           <PlayerRosterDesktop
-            members={attendingMembers}
+            members={isIntra ? teamBMembers : attendingMembers}
+            teamLabel={isIntra ? "B팀" : undefined}
+            teamColor={isIntra ? "#EF4444" : undefined}
             quarters={quarters}
             validIds={validIds}
             placedSet={placedSet}
             teamOfPlayer={teamOfPlayer}
             isIntra={isIntra}
             readonly={readonly}
-            onTap={(id: string, placed: boolean) => {
+            onTap={(id, placed) => {
               if (readonly) return;
               if (placed) unassignPlayer(id);
               else placeByClick(id);
             }}
-            onDragStart={(id: string) => setDraggingId(id)}
+            onDragStart={(id) => setDraggingId(id)}
             onDragEnd={() => setDraggingId(null)}
           />
         </aside>
@@ -648,6 +687,7 @@ export default function FormationEditor({
         validIds={validIds}
         placedSet={placedSet}
         teamOfPlayer={teamOfPlayer}
+        teamByPlayer={teamByPlayer}
         isIntra={isIntra}
         readonly={readonly}
         onTap={(id: string, placed: boolean) => {
@@ -1614,6 +1654,7 @@ function PlayerRosterMobile({
   onTap,
   onDragStart,
   onDragEnd,
+  teamByPlayer = {},
 }: {
   members: EditorMember[];
   quarters: QuarterWithTeams[];
@@ -1625,6 +1666,7 @@ function PlayerRosterMobile({
   onTap: (id: string, placed: boolean) => void;
   onDragStart?: (id: string) => void;
   onDragEnd?: () => void;
+  teamByPlayer?: Record<string, "A" | "B" | null>;
 }) {
   const participations = useMemo(
     () => computeParticipations(members, quarters),
@@ -1658,6 +1700,27 @@ function PlayerRosterMobile({
     );
   }
 
+  const renderCard = (p: PlayerParticipation) => (
+    <DesktopPlayerCard
+      key={p.member.id}
+      participation={p}
+      placed={placedSet.has(p.member.id)}
+      team={
+        isIntra
+          ? teamByPlayer[p.member.id] ?? teamOfPlayer.get(p.member.id)
+          : undefined
+      }
+      readonly={readonly}
+      onTap={onTap}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+    />
+  );
+
+  // 자체전: 편성팀 기준 A/B 좌우 컬럼으로 분리
+  const teamACards = sorted.filter((p) => teamByPlayer[p.member.id] === "A");
+  const teamBCards = sorted.filter((p) => teamByPlayer[p.member.id] === "B");
+
   return (
     <div className="desktop:hidden flex flex-col gap-3 rounded-2xl bg-white border border-suaza-border p-4">
       <div>
@@ -1668,20 +1731,32 @@ function PlayerRosterMobile({
       </div>
       <LegendBar />
       <QuarterPlacementCounters placements={placements} />
-      <div className="grid grid-cols-2 gap-2">
-        {sorted.map((p) => (
-          <DesktopPlayerCard
-            key={p.member.id}
-            participation={p}
-            placed={placedSet.has(p.member.id)}
-            team={isIntra ? teamOfPlayer.get(p.member.id) : undefined}
-            readonly={readonly}
-            onTap={onTap}
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-          />
-        ))}
-      </div>
+      {isIntra ? (
+        <div className="grid grid-cols-2 gap-2">
+          {/* A팀 컬럼 */}
+          <div className="flex flex-col gap-2">
+            <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />A팀{" "}
+              <span className="text-xs text-suaza-ink-muted font-normal">
+                {teamACards.length}
+              </span>
+            </span>
+            {teamACards.map(renderCard)}
+          </div>
+          {/* B팀 컬럼 */}
+          <div className="flex flex-col gap-2">
+            <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
+              <span className="w-2 h-2 rounded-full bg-red-500" />B팀{" "}
+              <span className="text-xs text-suaza-ink-muted font-normal">
+                {teamBCards.length}
+              </span>
+            </span>
+            {teamBCards.map(renderCard)}
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">{sorted.map(renderCard)}</div>
+      )}
     </div>
   );
 }
@@ -1705,8 +1780,6 @@ function PlayerRowMobile({
 }) {
   const m = participation.member;
   const memberPositions = m.positions ?? [];
-  const primary = memberPositions[0];
-  const primaryColor = primary ? POSITION_COLOR[primary] : "#9CA3AF";
   const tierColor = getTierColor(participation.totalPlayed);
   const hasPlayed = participation.totalPlayed > 0;
 
@@ -1736,25 +1809,8 @@ function PlayerRowMobile({
         readonly ? "cursor-default" : "cursor-pointer"
       } ${!hasPlayed && !placed ? "opacity-80" : ""}`}
     >
-      <div
-        className="shrink-0 w-10 h-10 rounded-full border-2 flex items-center justify-center text-sm font-bold"
-        style={{ borderColor: primaryColor, color: primaryColor }}
-      >
-        {m.name.slice(0, 1)}
-      </div>
-
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-1.5">
-          {team && (
-            <span
-              className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-white"
-              style={{
-                backgroundColor: team === "A" ? "#3B82F6" : "#EF4444",
-              }}
-            >
-              {team}
-            </span>
-          )}
           <span className="text-sm font-semibold text-suaza-ink truncate">
             {m.name}
           </span>
@@ -1783,11 +1839,6 @@ function PlayerRowMobile({
                 {pos}
               </span>
             ))
-          )}
-          {participation.hasPositionChange && (
-            <span className="text-[10px] text-suaza-ink-muted">
-              · 포지션 변경
-            </span>
           )}
         </div>
       </div>
@@ -1823,6 +1874,8 @@ function PlayerRosterDesktop({
   onTap,
   onDragStart,
   onDragEnd,
+  teamLabel,
+  teamColor,
 }: {
   members: EditorMember[];
   quarters: QuarterWithTeams[];
@@ -1834,6 +1887,8 @@ function PlayerRosterDesktop({
   onTap: (id: string, placed: boolean) => void;
   onDragStart?: (id: string) => void;
   onDragEnd?: () => void;
+  teamLabel?: string;
+  teamColor?: string;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
@@ -1890,8 +1945,18 @@ function PlayerRosterDesktop({
   return (
     <>
       <div className="flex items-baseline gap-2">
-        <h2 className="text-base font-bold text-suaza-ink">선수 명단</h2>
-        <span className="text-xs text-suaza-ink-muted">쿼터별 출전 현황</span>
+        {teamLabel ? (
+          <h2 className="inline-flex items-center gap-1.5 text-base font-bold text-suaza-ink">
+            <span
+              className="w-2.5 h-2.5 rounded-full"
+              style={{ backgroundColor: teamColor }}
+            />
+            {teamLabel}
+          </h2>
+        ) : (
+          <h2 className="text-base font-bold text-suaza-ink">선수 명단</h2>
+        )}
+        <span className="text-xs text-suaza-ink-muted">{members.length}명</span>
       </div>
       <SearchInput value={query} onChange={setQuery} />
       <FilterTabsWithCounts
