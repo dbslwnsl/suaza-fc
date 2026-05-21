@@ -375,6 +375,7 @@ export default function FormationEditor({
     setQuarters((prev) => {
       const q = prev[activeIdx];
       if (!q) return prev;
+      const intra = !!q.teamB;
 
       // 다른 쿼터들에서의 배치 횟수 (현재 쿼터 제외) — 적은 선수 우선
       const playCount = new Map<string, number>();
@@ -387,25 +388,52 @@ export default function FormationEditor({
             if (p) playCount.set(p, (playCount.get(p) ?? 0) + 1);
         }
       });
-      // 배치 횟수 오름차순, 동률은 랜덤
-      const order = attendingMembers
-        .map((m) => ({ m, c: playCount.get(m.id) ?? 0, r: Math.random() }))
-        .sort((a, b) => (a.c !== b.c ? a.c - b.c : a.r - b.r))
-        .map((x) => x.m);
 
       const aSlots = buildSlots(q.shape);
       const aAssigns = [...q.assignments];
       const bSlots = q.teamB ? buildSlots(q.teamB.shape) : [];
       const bAssigns = q.teamB ? [...q.teamB.assignments] : [];
+
+      // 자체전: 편성팀과 다른 팀 슬롯에 잘못 배치된 선수는 먼저 제거
+      if (intra) {
+        for (let i = 0; i < aAssigns.length; i++) {
+          const pid = aAssigns[i];
+          if (pid && teamByPlayer[pid] !== "A") aAssigns[i] = null;
+        }
+        for (let i = 0; i < bAssigns.length; i++) {
+          const pid = bAssigns[i];
+          if (pid && teamByPlayer[pid] !== "B") bAssigns[i] = null;
+        }
+      }
+
       const placed = new Set<string>();
       for (const p of aAssigns) if (p) placed.add(p);
       for (const p of bAssigns) if (p) placed.add(p);
 
-      // 0) 예외: GK 슬롯은 뛴 횟수와 무관하게 GK 포지션 선수를 먼저 배치
-      const fillGK = (slots: SlotDef[], assigns: (string | null)[]) => {
+      // 팀별 후보 명단 (배치 횟수 오름차순, 동률은 랜덤)
+      //  - 자체전: 편성팀이 해당 팀인 선수만
+      //  - 상대전: 전원 A팀
+      const candidatesFor = (team: "A" | "B") => {
+        const base = intra
+          ? attendingMembers.filter((m) => teamByPlayer[m.id] === team)
+          : team === "A"
+            ? attendingMembers
+            : [];
+        return base
+          .map((m) => ({ m, c: playCount.get(m.id) ?? 0, r: Math.random() }))
+          .sort((a, b) => (a.c !== b.c ? a.c - b.c : a.r - b.r))
+          .map((x) => x.m);
+      };
+
+      // 한 팀 포메이션 채우기: GK 우선 → 포지션 매칭 → 아무 빈 슬롯
+      const fillTeam = (
+        slots: SlotDef[],
+        assigns: (string | null)[],
+        candidates: EditorMember[],
+      ) => {
         for (let i = 0; i < slots.length; i++) {
           if (slots[i].role !== "GK" || assigns[i]) continue;
-          const gk = order.find(
+          const gk = candidates.find(
             (m) => !placed.has(m.id) && (m.positions ?? []).includes("GK"),
           );
           if (gk) {
@@ -413,57 +441,31 @@ export default function FormationEditor({
             placed.add(gk.id);
           }
         }
-      };
-      fillGK(aSlots, aAssigns);
-      if (q.teamB) fillGK(bSlots, bAssigns);
-
-      // 적게 뛴 선수 순서(order)대로 한 명씩:
-      //  본인 포지션 슬롯 우선(A→B) → 없으면 아무 빈 슬롯(A→B)
-      for (const m of order) {
-        if (placed.has(m.id)) continue;
-        const positions = m.positions ?? [];
-        let done = false;
-
-        // 1) A팀 포지션 매칭
-        for (const pos of positions) {
-          const idx = aSlots.findIndex((s, i) => !aAssigns[i] && s.role === pos);
-          if (idx >= 0) {
-            aAssigns[idx] = m.id;
-            done = true;
-            break;
-          }
-        }
-        // 2) B팀 포지션 매칭
-        if (!done && q.teamB) {
+        for (const m of candidates) {
+          if (placed.has(m.id)) continue;
+          const positions = m.positions ?? [];
+          let done = false;
           for (const pos of positions) {
-            const idx = bSlots.findIndex(
-              (s, i) => !bAssigns[i] && s.role === pos,
-            );
+            const idx = slots.findIndex((s, i) => !assigns[i] && s.role === pos);
             if (idx >= 0) {
-              bAssigns[idx] = m.id;
+              assigns[idx] = m.id;
               done = true;
               break;
             }
           }
-        }
-        // 3) A팀 아무 빈 슬롯
-        if (!done) {
-          const idx = aSlots.findIndex((_, i) => !aAssigns[i]);
-          if (idx >= 0) {
-            aAssigns[idx] = m.id;
-            done = true;
+          if (!done) {
+            const idx = slots.findIndex((_, i) => !assigns[i]);
+            if (idx >= 0) {
+              assigns[idx] = m.id;
+              done = true;
+            }
           }
+          if (done) placed.add(m.id);
         }
-        // 4) B팀 아무 빈 슬롯
-        if (!done && q.teamB) {
-          const idx = bSlots.findIndex((_, i) => !bAssigns[i]);
-          if (idx >= 0) {
-            bAssigns[idx] = m.id;
-            done = true;
-          }
-        }
-        if (done) placed.add(m.id);
-      }
+      };
+
+      fillTeam(aSlots, aAssigns, candidatesFor("A"));
+      if (q.teamB) fillTeam(bSlots, bAssigns, candidatesFor("B"));
 
       const newQ: QuarterState = {
         ...q,
@@ -1507,107 +1509,24 @@ function getTierColor(played: number): string {
   return "#9CA3AF";
 }
 
-function LegendBar() {
-  return (
-    <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-suaza-bg">
-      <span className="text-xs">🎨</span>
-      <span className="text-[11px] text-suaza-ink-muted">쿼터별 출전 포지션</span>
-      <div className="flex items-center gap-2 ml-auto">
-        {POSITIONS.map((p) => (
-          <span key={p} className="inline-flex items-center gap-1 text-[10px] font-semibold text-suaza-ink">
-            <span
-              className="w-3 h-3 rounded-sm"
-              style={{ backgroundColor: POSITION_COLOR[p] }}
-            />
-            {p}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-type QuarterPlacement = {
-  id: string;
-  placed: number;
-  total: number;
-};
-
-function QuarterPlacementCounters({
-  placements,
-}: {
-  placements: QuarterPlacement[];
-}) {
-  return (
-    <div
-      className="grid gap-2 rounded-xl border border-suaza-border bg-white p-3"
-      style={{
-        gridTemplateColumns: `repeat(${Math.max(1, placements.length)}, minmax(0, 1fr))`,
-      }}
-    >
-      {placements.map((q) => {
-        const full = q.total > 0 && q.placed === q.total;
-        const partial = q.placed > 0 && !full;
-        const color = full ? "#22C55E" : partial ? "#3B82F6" : "#9CA3AF";
-        return (
-          <div key={q.id} className="flex flex-col items-center gap-0.5">
-            <span className="text-[10px] text-suaza-ink-muted">{q.id}</span>
-            <div className="inline-flex items-baseline gap-0.5 tabular-nums">
-              <span className="text-lg font-bold" style={{ color }}>
-                {q.placed}
-              </span>
-              <span className="text-[10px] text-suaza-ink-muted">
-                /{q.total}
-              </span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function computePlacements(
-  quarters: QuarterWithTeams[],
-  validIds: Set<string>,
-): QuarterPlacement[] {
-  return quarters.map((q) => {
-    const aSlots = buildSlots(q.shape);
-    const bSlots = q.teamB ? buildSlots(q.teamB.shape) : [];
-    // 슬롯 범위 내 + 실제 존재하는 회원(validIds) + unique 만 카운트.
-    // 출석에서 빠지거나 삭제된 회원 ID 가 슬롯에 잔존해도 화면엔 안 보이므로 제외.
-    const ids = new Set<string>();
-    for (let i = 0; i < aSlots.length; i++) {
-      const p = q.assignments[i];
-      if (p && validIds.has(p)) ids.add(p);
-    }
-    if (q.teamB) {
-      for (let i = 0; i < bSlots.length; i++) {
-        const p = q.teamB.assignments[i];
-        if (p && validIds.has(p)) ids.add(p);
-      }
-    }
-    return {
-      id: q.id,
-      placed: ids.size,
-      total: aSlots.length + bSlots.length,
-    };
-  });
-}
-
 function FilterTabsWithCounts({
   value,
   onChange,
   counts,
+  keys,
 }: {
   value: Filter;
   onChange: (v: Filter) => void;
   counts: Record<Filter, number>;
+  keys?: Filter[];
 }) {
-  const items: { key: Filter; label: string }[] = [
+  const allItems: { key: Filter; label: string }[] = [
     { key: "ALL", label: "전체" },
     ...POSITIONS.map((p) => ({ key: p as Filter, label: p })),
   ];
+  const items = keys
+    ? allItems.filter((it) => keys.includes(it.key))
+    : allItems;
   return (
     <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1">
       {items.map((it) => {
@@ -1619,7 +1538,7 @@ function FilterTabsWithCounts({
             key={it.key}
             type="button"
             onClick={() => onChange(it.key)}
-            className={`shrink-0 inline-flex items-center gap-1 h-[25px] px-[7px] rounded-full text-[11px] font-semibold transition ${
+            className={`shrink-0 inline-flex items-center gap-1 h-[22px] px-[6px] rounded-full text-[10px] font-semibold transition ${
               active
                 ? "text-white shadow-sm"
                 : "bg-white border border-suaza-border text-suaza-ink hover:bg-suaza-bg"
@@ -1677,10 +1596,6 @@ function PlayerRosterMobile({
   const sumQuarters = participations.reduce((s, p) => s + p.totalPlayed, 0);
   const avg = played > 0 ? (sumQuarters / played).toFixed(1) : "0.0";
 
-  const placements = useMemo(
-    () => computePlacements(quarters, validIds),
-    [quarters, validIds],
-  );
 
   const sorted = useMemo(() => {
     return [...participations].sort((a, b) => {
@@ -1729,8 +1644,6 @@ function PlayerRosterMobile({
           총 {total}명 · 출전 {played}명 · 평균 {avg}쿼터
         </p>
       </div>
-      <LegendBar />
-      <QuarterPlacementCounters placements={placements} />
       {isIntra ? (
         <div className="grid grid-cols-2 gap-2">
           {/* A팀 컬럼 */}
@@ -1890,7 +1803,6 @@ function PlayerRosterDesktop({
   teamLabel?: string;
   teamColor?: string;
 }) {
-  const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
 
   const participations = useMemo(
@@ -1913,25 +1825,12 @@ function PlayerRosterDesktop({
     }
     return c;
   }, [members]);
-  const placements = useMemo(
-    () => computePlacements(quarters, validIds),
-    [quarters, validIds],
-  );
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
     let out = participations;
     if (filter !== "ALL") {
       // 보유 포지션 중 하나라도 일치하면 포함
       out = out.filter((p) => (p.member.positions ?? []).includes(filter));
-    }
-    if (q) {
-      out = out.filter((p) => {
-        const name = p.member.name.toLowerCase();
-        const num =
-          p.member.jersey_number != null ? String(p.member.jersey_number) : "";
-        return name.includes(q) || num.includes(q);
-      });
     }
     return [...out].sort((a, b) => {
       if (b.totalPlayed !== a.totalPlayed)
@@ -1940,13 +1839,13 @@ function PlayerRosterDesktop({
       const bn = b.member.jersey_number ?? 9999;
       return an - bn;
     });
-  }, [participations, filter, query]);
+  }, [participations, filter]);
 
   return (
     <>
-      <div className="flex items-baseline gap-2">
+      <div className="flex items-center gap-2">
         {teamLabel ? (
-          <h2 className="inline-flex items-center gap-1.5 text-base font-bold text-suaza-ink">
+          <h2 className="shrink-0 inline-flex items-center gap-1.5 text-base font-bold text-suaza-ink">
             <span
               className="w-2.5 h-2.5 rounded-full"
               style={{ backgroundColor: teamColor }}
@@ -1954,18 +1853,23 @@ function PlayerRosterDesktop({
             {teamLabel}
           </h2>
         ) : (
-          <h2 className="text-base font-bold text-suaza-ink">선수 명단</h2>
+          <h2 className="shrink-0 text-base font-bold text-suaza-ink">
+            선수 명단
+          </h2>
         )}
-        <span className="text-xs text-suaza-ink-muted">{members.length}명</span>
+        <FilterTabsWithCounts
+          value={filter}
+          onChange={setFilter}
+          counts={posCounts}
+          keys={["ALL"]}
+        />
       </div>
-      <SearchInput value={query} onChange={setQuery} />
       <FilterTabsWithCounts
         value={filter}
         onChange={setFilter}
         counts={posCounts}
+        keys={["GK", "DF", "MF", "FW"]}
       />
-      <LegendBar />
-      <QuarterPlacementCounters placements={placements} />
       <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">
         {filtered.length === 0 ? (
           <p className="py-6 text-center text-sm text-suaza-ink-muted">
