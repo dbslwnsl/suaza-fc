@@ -371,11 +371,13 @@ export default function FormationEditor({
     if (slot != null) assignSlot(t, slot, playerId);
   }
 
-  function autoPlace() {
+  // 한 팀만 자동 배치. 자체전이면 team 인자에 해당하는 팀만, 상대전이면 항상 "A".
+  function autoPlaceTeam(team: "A" | "B") {
     setQuarters((prev) => {
       const q = prev[activeIdx];
       if (!q) return prev;
       const intra = !!q.teamB;
+      if (team === "B" && !q.teamB) return prev;
 
       // 다른 쿼터들에서의 배치 횟수 (현재 쿼터 제외) — 적은 선수 우선
       const playCount = new Map<string, number>();
@@ -389,105 +391,94 @@ export default function FormationEditor({
         }
       });
 
-      const aSlots = buildSlots(q.shape);
-      const aAssigns = [...q.assignments];
-      const bSlots = q.teamB ? buildSlots(q.teamB.shape) : [];
-      const bAssigns = q.teamB ? [...q.teamB.assignments] : [];
+      const slots =
+        team === "A" ? buildSlots(q.shape) : buildSlots(q.teamB!.shape);
+      const assigns =
+        team === "A"
+          ? [...q.assignments]
+          : [...q.teamB!.assignments];
 
-      // 자체전: 편성팀과 다른 팀 슬롯에 잘못 배치된 선수는 먼저 제거
+      // 자체전: 이 팀 슬롯에 편성팀이 다른 선수는 먼저 제거
       if (intra) {
-        for (let i = 0; i < aAssigns.length; i++) {
-          const pid = aAssigns[i];
-          if (pid && teamByPlayer[pid] !== "A") aAssigns[i] = null;
-        }
-        for (let i = 0; i < bAssigns.length; i++) {
-          const pid = bAssigns[i];
-          if (pid && teamByPlayer[pid] !== "B") bAssigns[i] = null;
+        for (let i = 0; i < assigns.length; i++) {
+          const pid = assigns[i];
+          if (pid && teamByPlayer[pid] !== team) assigns[i] = null;
         }
       }
 
+      // 이미 배치된 선수(양 팀 전체) — 중복 배치 방지
       const placed = new Set<string>();
-      for (const p of aAssigns) if (p) placed.add(p);
-      for (const p of bAssigns) if (p) placed.add(p);
+      for (const p of assigns) if (p) placed.add(p);
+      const otherAssigns =
+        team === "A" ? q.teamB?.assignments ?? [] : q.assignments;
+      for (const p of otherAssigns) if (p) placed.add(p);
 
-      // 팀별 후보 명단 (배치 횟수 오름차순, 동률은 랜덤)
-      //  - 자체전: 편성팀이 해당 팀인 선수만
-      //  - 상대전: 전원 A팀
-      const candidatesFor = (team: "A" | "B") => {
-        const base = intra
-          ? attendingMembers.filter((m) => teamByPlayer[m.id] === team)
-          : team === "A"
-            ? attendingMembers
-            : [];
-        return base
-          .map((m) => ({ m, c: playCount.get(m.id) ?? 0, r: Math.random() }))
-          .sort((a, b) => (a.c !== b.c ? a.c - b.c : a.r - b.r))
-          .map((x) => x.m);
-      };
+      // 후보 명단 (배치 횟수 오름차순, 동률은 랜덤)
+      const base = intra
+        ? attendingMembers.filter((m) => teamByPlayer[m.id] === team)
+        : attendingMembers;
+      const candidates = base
+        .map((m) => ({ m, c: playCount.get(m.id) ?? 0, r: Math.random() }))
+        .sort((a, b) => (a.c !== b.c ? a.c - b.c : a.r - b.r))
+        .map((x) => x.m);
 
-      // 한 팀 포메이션 채우기: GK 우선 → 포지션 매칭 → 아무 빈 슬롯
-      const fillTeam = (
-        slots: SlotDef[],
-        assigns: (string | null)[],
-        candidates: EditorMember[],
-      ) => {
-        for (let i = 0; i < slots.length; i++) {
-          if (slots[i].role !== "GK" || assigns[i]) continue;
-          const gk = candidates.find(
-            (m) => !placed.has(m.id) && (m.positions ?? []).includes("GK"),
-          );
-          if (gk) {
-            assigns[i] = gk.id;
-            placed.add(gk.id);
+      // GK 우선 → 포지션 매칭 → 아무 빈 슬롯
+      for (let i = 0; i < slots.length; i++) {
+        if (slots[i].role !== "GK" || assigns[i]) continue;
+        const gk = candidates.find(
+          (m) => !placed.has(m.id) && (m.positions ?? []).includes("GK"),
+        );
+        if (gk) {
+          assigns[i] = gk.id;
+          placed.add(gk.id);
+        }
+      }
+      for (const m of candidates) {
+        if (placed.has(m.id)) continue;
+        const positions = m.positions ?? [];
+        let done = false;
+        for (const pos of positions) {
+          const idx = slots.findIndex((s, i) => !assigns[i] && s.role === pos);
+          if (idx >= 0) {
+            assigns[idx] = m.id;
+            done = true;
+            break;
           }
         }
-        for (const m of candidates) {
-          if (placed.has(m.id)) continue;
-          const positions = m.positions ?? [];
-          let done = false;
-          for (const pos of positions) {
-            const idx = slots.findIndex((s, i) => !assigns[i] && s.role === pos);
-            if (idx >= 0) {
-              assigns[idx] = m.id;
-              done = true;
-              break;
-            }
+        if (!done) {
+          const idx = slots.findIndex((_, i) => !assigns[i]);
+          if (idx >= 0) {
+            assigns[idx] = m.id;
+            done = true;
           }
-          if (!done) {
-            const idx = slots.findIndex((_, i) => !assigns[i]);
-            if (idx >= 0) {
-              assigns[idx] = m.id;
-              done = true;
-            }
-          }
-          if (done) placed.add(m.id);
         }
-      };
+        if (done) placed.add(m.id);
+      }
 
-      fillTeam(aSlots, aAssigns, candidatesFor("A"));
-      if (q.teamB) fillTeam(bSlots, bAssigns, candidatesFor("B"));
-
-      const newQ: QuarterState = {
-        ...q,
-        assignments: aAssigns,
-        teamB: q.teamB ? { ...q.teamB, assignments: bAssigns } : q.teamB,
-      };
+      const newQ: QuarterState =
+        team === "A"
+          ? { ...q, assignments: assigns }
+          : { ...q, teamB: { ...q.teamB!, assignments: assigns } };
       return prev.map((x, i) => (i === activeIdx ? newQ : x));
     });
   }
 
-  function resetCurrent() {
-    if (!confirm(`${current.id} 배치를 모두 비우시겠습니까?`)) return;
-    patchQuarter(activeIdx, (q) => ({
-      ...q,
-      assignments: buildSlots(q.shape).map(() => null),
-      teamB: q.teamB
-        ? {
-            ...q.teamB,
-            assignments: buildSlots(q.teamB.shape).map(() => null),
-          }
-        : q.teamB,
-    }));
+  function resetTeam(team: "A" | "B") {
+    const teamName = isIntra ? (team === "A" ? "A팀 " : "B팀 ") : "";
+    if (!confirm(`${current.id} ${teamName}배치를 비우시겠습니까?`)) return;
+    patchQuarter(activeIdx, (q) => {
+      if (team === "A") {
+        return { ...q, assignments: buildSlots(q.shape).map(() => null) };
+      }
+      if (!q.teamB) return q;
+      return {
+        ...q,
+        teamB: {
+          ...q.teamB,
+          assignments: buildSlots(q.teamB.shape).map(() => null),
+        },
+      };
+    });
   }
 
   function addQuarter() {
@@ -511,7 +502,7 @@ export default function FormationEditor({
 
 
   return (
-    <div className="flex flex-col gap-5 desktop:flex-1 desktop:min-h-0">
+    <div className="flex flex-col gap-3 desktop:flex-1 desktop:min-h-0">
       {/* 쿼터 탭 + 추가 버튼 */}
       <div className="-mx-1 px-1 overflow-x-auto">
         <div className="flex gap-2 w-max">
@@ -563,35 +554,12 @@ export default function FormationEditor({
         />
       )}
 
-      {/* 액션 바: 카운터 + 초기화 + 자동배치 + 저장 상태 */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-suaza-ink-muted shrink-0">
-          배치{" "}
-          <span className="font-semibold text-suaza-ink">
-            {placedSet.size}/
-            {slotsA.length + (current.teamB ? slotsB.length : 0)}
-          </span>
-        </span>
-        {!readonly && (
-          <div className="flex-1 flex items-center justify-end gap-2">
-            <SaveStatusBadge status={saveStatus} />
-            <button
-              type="button"
-              onClick={resetCurrent}
-              className="h-9 px-3 rounded-lg border border-suaza-border text-sm font-medium text-suaza-ink bg-white hover:bg-suaza-bg"
-            >
-              초기화
-            </button>
-            <button
-              type="button"
-              onClick={autoPlace}
-              className="h-9 px-3 rounded-lg border border-suaza-border text-sm font-medium text-suaza-ink bg-white hover:bg-suaza-bg"
-            >
-              자동 배치
-            </button>
-          </div>
-        )}
-      </div>
+      {/* 저장 상태 — 떠 있는 토스트 (레이아웃 공간 차지 안 함) */}
+      {saveStatus !== "idle" && (
+        <div className="fixed top-4 right-4 z-50 shadow-md rounded-full">
+          <SaveStatusBadge status={saveStatus} />
+        </div>
+      )}
 
       {/* 메인 영역 — 데스크탑: 자체전 3열(A명단|경기장|B명단), 상대전 2열(경기장|명단) */}
       <div className="desktop:flex desktop:gap-3 desktop:flex-1 desktop:min-h-0">
@@ -615,6 +583,8 @@ export default function FormationEditor({
               }}
               onDragStart={(id) => setDraggingId(id)}
               onDragEnd={() => setDraggingId(null)}
+              onReset={() => resetTeam("A")}
+              onAutoPlace={() => autoPlaceTeam("A")}
             />
           </aside>
         )}
@@ -678,6 +648,8 @@ export default function FormationEditor({
             }}
             onDragStart={(id) => setDraggingId(id)}
             onDragEnd={() => setDraggingId(null)}
+            onReset={() => resetTeam(isIntra ? "B" : "A")}
+            onAutoPlace={() => autoPlaceTeam(isIntra ? "B" : "A")}
           />
         </aside>
       </div>
@@ -699,6 +671,8 @@ export default function FormationEditor({
         }}
         onDragStart={(id: string) => setDraggingId(id)}
         onDragEnd={() => setDraggingId(null)}
+        onResetTeam={(team) => resetTeam(team)}
+        onAutoPlaceTeam={(team) => autoPlaceTeam(team)}
       />
 
       {/* 모바일 바텀시트 */}
@@ -1562,6 +1536,33 @@ function FilterTabsWithCounts({
   );
 }
 
+function TeamMiniActions({
+  onReset,
+  onAutoPlace,
+}: {
+  onReset: () => void;
+  onAutoPlace: () => void;
+}) {
+  return (
+    <span className="flex items-center gap-1 shrink-0">
+      <button
+        type="button"
+        onClick={onReset}
+        className="h-6 px-2 rounded-md border border-suaza-border text-[10px] font-medium text-suaza-ink bg-white hover:bg-suaza-bg"
+      >
+        초기화
+      </button>
+      <button
+        type="button"
+        onClick={onAutoPlace}
+        className="h-6 px-2 rounded-md bg-suaza-button text-white text-[10px] font-medium hover:opacity-90"
+      >
+        자동
+      </button>
+    </span>
+  );
+}
+
 function PlayerRosterMobile({
   members,
   quarters,
@@ -1574,6 +1575,8 @@ function PlayerRosterMobile({
   onDragStart,
   onDragEnd,
   teamByPlayer = {},
+  onResetTeam,
+  onAutoPlaceTeam,
 }: {
   members: EditorMember[];
   quarters: QuarterWithTeams[];
@@ -1586,6 +1589,8 @@ function PlayerRosterMobile({
   onDragStart?: (id: string) => void;
   onDragEnd?: () => void;
   teamByPlayer?: Record<string, "A" | "B" | null>;
+  onResetTeam?: (team: "A" | "B") => void;
+  onAutoPlaceTeam?: (team: "A" | "B") => void;
 }) {
   const participations = useMemo(
     () => computeParticipations(members, quarters),
@@ -1648,27 +1653,53 @@ function PlayerRosterMobile({
         <div className="grid grid-cols-2 gap-2">
           {/* A팀 컬럼 */}
           <div className="flex flex-col gap-2">
-            <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
-              <span className="w-2 h-2 rounded-full bg-blue-500" />A팀{" "}
-              <span className="text-xs text-suaza-ink-muted font-normal">
-                {teamACards.length}
+            <div className="flex items-center justify-between gap-1">
+              <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
+                <span className="w-2 h-2 rounded-full bg-blue-500" />A팀{" "}
+                <span className="text-xs text-suaza-ink-muted font-normal">
+                  {teamACards.length}
+                </span>
               </span>
-            </span>
+              {!readonly && (
+                <TeamMiniActions
+                  onReset={() => onResetTeam?.("A")}
+                  onAutoPlace={() => onAutoPlaceTeam?.("A")}
+                />
+              )}
+            </div>
             {teamACards.map(renderCard)}
           </div>
           {/* B팀 컬럼 */}
           <div className="flex flex-col gap-2">
-            <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
-              <span className="w-2 h-2 rounded-full bg-red-500" />B팀{" "}
-              <span className="text-xs text-suaza-ink-muted font-normal">
-                {teamBCards.length}
+            <div className="flex items-center justify-between gap-1">
+              <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
+                <span className="w-2 h-2 rounded-full bg-red-500" />B팀{" "}
+                <span className="text-xs text-suaza-ink-muted font-normal">
+                  {teamBCards.length}
+                </span>
               </span>
-            </span>
+              {!readonly && (
+                <TeamMiniActions
+                  onReset={() => onResetTeam?.("B")}
+                  onAutoPlace={() => onAutoPlaceTeam?.("B")}
+                />
+              )}
+            </div>
             {teamBCards.map(renderCard)}
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-2">{sorted.map(renderCard)}</div>
+        <>
+          {!readonly && (
+            <div className="flex items-center justify-end">
+              <TeamMiniActions
+                onReset={() => onResetTeam?.("A")}
+                onAutoPlace={() => onAutoPlaceTeam?.("A")}
+              />
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">{sorted.map(renderCard)}</div>
+        </>
       )}
     </div>
   );
@@ -1789,6 +1820,8 @@ function PlayerRosterDesktop({
   onDragEnd,
   teamLabel,
   teamColor,
+  onReset,
+  onAutoPlace,
 }: {
   members: EditorMember[];
   quarters: QuarterWithTeams[];
@@ -1802,6 +1835,8 @@ function PlayerRosterDesktop({
   onDragEnd?: () => void;
   teamLabel?: string;
   teamColor?: string;
+  onReset?: () => void;
+  onAutoPlace?: () => void;
 }) {
   const [filter, setFilter] = useState<Filter>("ALL");
 
@@ -1863,6 +1898,28 @@ function PlayerRosterDesktop({
           counts={posCounts}
           keys={["ALL"]}
         />
+        {!readonly && (onReset || onAutoPlace) && (
+          <div className="ml-auto flex items-center gap-1.5 shrink-0">
+            {onReset && (
+              <button
+                type="button"
+                onClick={onReset}
+                className="h-7 px-2.5 rounded-md border border-suaza-border text-[11px] font-medium text-suaza-ink bg-white hover:bg-suaza-bg"
+              >
+                초기화
+              </button>
+            )}
+            {onAutoPlace && (
+              <button
+                type="button"
+                onClick={onAutoPlace}
+                className="h-7 px-2.5 rounded-md bg-suaza-button text-white text-[11px] font-medium hover:opacity-90"
+              >
+                자동
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <FilterTabsWithCounts
         value={filter}
