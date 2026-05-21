@@ -9,6 +9,7 @@ type TabDef = {
   href: string;
   label: string;
   Icon: (props: { className?: string }) => React.JSX.Element;
+  disabled?: boolean;
 };
 
 export default function BottomTabs({ isManager }: { isManager: boolean }) {
@@ -24,6 +25,7 @@ export default function BottomTabs({ isManager }: { isManager: boolean }) {
       href: "/settings",
       label: isManager ? "감독설정" : "선수설정",
       Icon: IconGear,
+      disabled: true, // 미구현 — 비활성화
     },
   ];
 
@@ -40,6 +42,20 @@ export default function BottomTabs({ isManager }: { isManager: boolean }) {
         <ul className="grid grid-cols-5 max-w-[600px] mx-auto">
           {tabs.map((t) => {
             const active = isActive(t.href);
+            if (t.disabled) {
+              return (
+                <li key={t.href}>
+                  <span
+                    aria-disabled
+                    title="준비 중"
+                    className="flex flex-col items-center justify-center gap-1 py-2.5 text-suaza-ink-faint opacity-50 cursor-not-allowed"
+                  >
+                    <t.Icon className="w-5 h-5" />
+                    <span className="text-[11px] font-medium">{t.label}</span>
+                  </span>
+                </li>
+              );
+            }
             return (
               <li key={t.href}>
                 <Link
