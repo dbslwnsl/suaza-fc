@@ -543,3 +543,114 @@ export async function setAttendance(
   revalidatePath("/");
   redirect(redirectTo);
 }
+
+// ─────────────────────────────────────────────────────────────
+// 자체전 A/B 팀 편성 (match_attendances.team)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * 한 선수의 팀 배정을 순환: null → 'A' → 'B' → null.
+ * 참석(attending) 회원만 대상. 매니저/코치만 가능.
+ */
+export async function cycleMatchTeam(matchId: string, playerId: string) {
+  const { supabase } = await requireStaff();
+
+  const { data: row } = await supabase
+    .from("match_attendances")
+    .select("status, team")
+    .eq("match_id", matchId)
+    .eq("player_id", playerId)
+    .maybeSingle();
+
+  // 참석자만 편성
+  if (!row || row.status !== "attending") return;
+
+  const next = row.team === null ? "A" : row.team === "A" ? "B" : null;
+
+  const { error } = await supabase
+    .from("match_attendances")
+    .update({ team: next, updated_at: new Date().toISOString() })
+    .eq("match_id", matchId)
+    .eq("player_id", playerId);
+
+  if (error) return;
+  revalidatePath(`/matches/${matchId}`);
+}
+
+/**
+ * 참석자를 A/B 로 균등 자동 배분 (랜덤 셔플 후 반반).
+ * 매니저/코치만 가능.
+ */
+export async function autoBalanceTeams(matchId: string) {
+  const { supabase } = await requireStaff();
+
+  const { data: attendees } = await supabase
+    .from("match_attendances")
+    .select("player_id")
+    .eq("match_id", matchId)
+    .eq("status", "attending");
+
+  const ids = (attendees ?? []).map((a) => a.player_id);
+  // Fisher-Yates 셔플
+  for (let i = ids.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+  }
+
+  // 앞 절반 A, 뒤 절반 B
+  const half = Math.ceil(ids.length / 2);
+  for (let i = 0; i < ids.length; i++) {
+    const team = i < half ? "A" : "B";
+    await supabase
+      .from("match_attendances")
+      .update({ team, updated_at: new Date().toISOString() })
+      .eq("match_id", matchId)
+      .eq("player_id", ids[i]);
+  }
+
+  revalidatePath(`/matches/${matchId}`);
+}
+
+/**
+ * 한 선수의 팀을 직접 지정 (드래그앤드롭용): 'A' | 'B' | null.
+ * 참석(attending) 회원만 대상. 매니저/코치만 가능.
+ */
+export async function setMatchTeam(
+  matchId: string,
+  playerId: string,
+  team: "A" | "B" | null,
+) {
+  const { supabase } = await requireStaff();
+
+  const { data: row } = await supabase
+    .from("match_attendances")
+    .select("status")
+    .eq("match_id", matchId)
+    .eq("player_id", playerId)
+    .maybeSingle();
+
+  if (!row || row.status !== "attending") return;
+
+  const { error } = await supabase
+    .from("match_attendances")
+    .update({ team, updated_at: new Date().toISOString() })
+    .eq("match_id", matchId)
+    .eq("player_id", playerId);
+
+  if (error) return;
+  revalidatePath(`/matches/${matchId}`);
+}
+
+/**
+ * 자체전 팀 편성 초기화: 참석자의 team 을 모두 null(미배정)로.
+ * 매니저/코치만 가능.
+ */
+export async function resetMatchTeams(matchId: string) {
+  const { supabase } = await requireStaff();
+  await supabase
+    .from("match_attendances")
+    .update({ team: null, updated_at: new Date().toISOString() })
+    .eq("match_id", matchId)
+    .eq("status", "attending");
+  revalidatePath(`/matches/${matchId}`);
+}

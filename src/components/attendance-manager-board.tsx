@@ -118,16 +118,16 @@ function DropRow({
         const playerId = e.dataTransfer.getData("text/plain");
         if (playerId) onDrop(playerId, status);
       }}
-      className={`flex items-start gap-2 p-1.5 rounded-md transition ${
-        dragging ? "border border-dashed border-suaza-border" : ""
+      className={`flex flex-col gap-1.5 p-1.5 rounded-md border border-dashed transition ${
+        dragging ? "border-suaza-border" : "border-transparent"
       } ${over ? hoverClass + " bg-blue-50" : ""}`}
     >
       <span
-        className={`shrink-0 text-xs px-2 py-0.5 rounded font-medium ${badgeClass}`}
+        className={`self-start shrink-0 text-xs px-2 py-0.5 rounded font-medium ${badgeClass}`}
       >
         {label} {members.length}
       </span>
-      <div className="flex-1 flex flex-wrap gap-1 min-h-[20px]">
+      <div className="flex flex-wrap gap-1 min-h-[20px]">
         {members.length === 0 ? (
           <span className="text-sm text-suaza-ink-muted">—</span>
         ) : (
@@ -166,16 +166,16 @@ function NonVoterDropRow({
         const playerId = e.dataTransfer.getData("text/plain");
         if (playerId) onDrop(playerId);
       }}
-      className={`flex flex-col gap-1 p-1.5 rounded-md transition ${
-        dragging ? "border border-dashed border-suaza-border" : ""
+      className={`flex flex-col gap-1.5 p-1.5 rounded-md border border-dashed transition ${
+        dragging ? "border-suaza-border" : "border-transparent"
       } ${over ? "ring-2 ring-gray-400 bg-blue-50" : ""}`}
     >
-      <span className="text-[11px] text-suaza-ink-faint font-medium">
-        미투표 ({members.length})
+      <span className="self-start shrink-0 text-xs px-2 py-0.5 rounded font-medium bg-gray-100 text-gray-500">
+        미투표 {members.length}
       </span>
       <div className="flex flex-wrap gap-1 min-h-[20px]">
         {members.length === 0 ? (
-          <span className="text-[11px] text-suaza-ink-faint">—</span>
+          <span className="text-sm text-suaza-ink-muted">—</span>
         ) : (
           members.map((m) => (
             <Chip
@@ -206,10 +206,12 @@ function Chip({
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", member.id);
         e.dataTransfer.effectAllowed = "move";
-        onDragStateChange(true);
+        // 드래그 시작 직후 동기 setState 는 일부 브라우저에서 드래그를
+        // 취소시키므로 다음 틱으로 미룬다.
+        setTimeout(() => onDragStateChange(true), 0);
       }}
       onDragEnd={() => onDragStateChange(false)}
-      className={`select-none cursor-grab active:cursor-grabbing px-2 py-0.5 rounded text-xs border border-suaza-border hover:bg-gray-50 ${
+      className={`select-none cursor-grab active:cursor-grabbing px-2.5 py-0.5 rounded-full text-xs border border-suaza-border hover:bg-gray-50 ${
         muted ? "text-suaza-ink-faint" : "text-suaza-ink-muted"
       }`}
     >

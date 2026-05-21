@@ -10,6 +10,7 @@ import {
 import AttendanceManagerBoard from "@/components/attendance-manager-board";
 import NewMatchForm from "@/app/matches/new/new-match-form";
 import ScoreControl from "./score-control";
+import TeamBuilder from "./team-builder";
 import ParticipationBoard, {
   type ParticipationData,
 } from "./participation-board";
@@ -88,7 +89,7 @@ export default async function MatchDetailPage({
     supabase
       .from("match_attendances")
       .select(
-        "status, player:profiles(id, name, jersey_number, positions, title)",
+        "status, team, player:profiles(id, name, jersey_number, positions, title)",
       )
       .eq("match_id", id),
     supabase
@@ -112,13 +113,24 @@ export default async function MatchDetailPage({
     undecided: VotePlayer[];
   } = { attending: [], absent: [], undecided: [] };
   const votedIds = new Set<string>();
+  // 자체전 팀 편성용: 참석자 + team 배정
+  const teamMembers: { id: string; name: string; team: "A" | "B" | null }[] =
+    [];
   for (const row of (attendancesRaw ?? []) as unknown as {
     status: keyof typeof byStatus;
+    team: "A" | "B" | null;
     player: VotePlayer | null;
   }[]) {
     if (row.player && row.status in byStatus) {
       byStatus[row.status].push(row.player);
       votedIds.add(row.player.id);
+      if (row.status === "attending") {
+        teamMembers.push({
+          id: row.player.id,
+          name: row.player.name,
+          team: row.team ?? null,
+        });
+      }
     }
   }
   const nonVoters = ((allMembers ?? []) as VotePlayer[]).filter(
@@ -273,42 +285,61 @@ export default async function MatchDetailPage({
 
         <VSCard m={m} isIntra={isIntra} isStaff={isStaff} isStarted={isStarted} />
 
-            <div className="grid grid-cols-1 desktop:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 desktop:grid-cols-2 gap-4 desktop:items-stretch">
+              {/* 출석투표: 좌측 상단 */}
               {m.status !== "canceled" && (
-                <AttendanceCard
-                  matchId={m.id}
-                  redirectTo={`/matches/${m.id}`}
-                  myStatus={myStatus}
-                  byStatus={byStatus}
-                  nonVoters={nonVoters}
-                  isManager={me?.role === "manager"}
-                  myName={me?.name ?? null}
-                  totalMembers={totalMembers}
-                  deadlineStr={deadlineStr}
-                  locked={isStarted}
-                />
+                <div className="order-1 desktop:h-full">
+                  <AttendanceCard
+                    matchId={m.id}
+                    redirectTo={`/matches/${m.id}`}
+                    myStatus={myStatus}
+                    byStatus={byStatus}
+                    nonVoters={nonVoters}
+                    isManager={me?.role === "manager"}
+                    myName={me?.name ?? null}
+                    totalMembers={totalMembers}
+                    deadlineStr={deadlineStr}
+                    locked={isStarted}
+                  />
+                </div>
               )}
-              <ParticipationBoard
-                matchId={m.id}
-                isStaff={isStaff}
-                isManager={me?.role === "manager"}
-                myUserId={user.id}
-                isStarted={isStarted}
-                isMyselfAttending={myStatus === "attending"}
-                myProfile={
-                  ((allMembers ?? []) as unknown as ParticipationData["player"][]).find(
-                    (mm) => mm?.id === user.id,
-                  ) ?? null
-                }
-                participations={
-                  participations as unknown as ParticipationData[]
-                }
-                attendingMembers={
-                  byStatus.attending.filter(
-                    (a) => !participatedIds.has(a.id),
-                  ) as unknown as ParticipationData["player"][]
-                }
-              />
+              {/* 자체전 선발: 출석 우측 상단 (높이 맞춤) */}
+              {isIntra && m.status !== "canceled" && (
+                <div className="order-2 desktop:h-full">
+                  <TeamBuilder
+                    matchId={m.id}
+                    attendees={teamMembers}
+                    absentCount={byStatus.absent.length}
+                    undecidedCount={byStatus.undecided.length}
+                    nonVoterCount={nonVoters.length}
+                    readonly={!isStaff}
+                  />
+                </div>
+              )}
+              {/* 선수별 기록: 전체 폭 하단 */}
+              <div className="order-3 desktop:col-span-2">
+                <ParticipationBoard
+                  matchId={m.id}
+                  isStaff={isStaff}
+                  isManager={me?.role === "manager"}
+                  myUserId={user.id}
+                  isStarted={isStarted}
+                  isMyselfAttending={myStatus === "attending"}
+                  myProfile={
+                    ((allMembers ?? []) as unknown as ParticipationData["player"][]).find(
+                      (mm) => mm?.id === user.id,
+                    ) ?? null
+                  }
+                  participations={
+                    participations as unknown as ParticipationData[]
+                  }
+                  attendingMembers={
+                    byStatus.attending.filter(
+                      (a) => !participatedIds.has(a.id),
+                    ) as unknown as ParticipationData["player"][]
+                  }
+                />
+              </div>
             </div>
 
             {isStaff && (
@@ -596,7 +627,7 @@ function AttendanceCard({
   };
 
   return (
-    <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4">
+    <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4 desktop:h-full">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-baseline gap-2">
           <h2 className="font-bold text-suaza-ink text-lg">출석 투표</h2>
