@@ -771,21 +771,24 @@ function PlayerInfo({
           )}
         </div>
         <div className="flex items-center gap-1.5 text-xs flex-wrap">
-          {primary && (
+          {positions.map((pos) => (
             <span
+              key={pos}
               className="inline-flex items-center gap-1 font-bold"
-              style={{ color: POSITION_COLOR[primary] }}
+              style={{ color: POSITION_COLOR[pos] }}
             >
               <span
                 className="w-1.5 h-1.5 rounded-full"
-                style={{ backgroundColor: POSITION_COLOR[primary] }}
+                style={{ backgroundColor: POSITION_COLOR[pos] }}
               />
-              {primary}
+              {pos}
             </span>
-          )}
+          ))}
           {player.title && (
             <>
-              {primary && <span className="text-suaza-ink-faint">·</span>}
+              {positions.length > 0 && (
+                <span className="text-suaza-ink-faint">·</span>
+              )}
               <span className="text-suaza-ink-muted">
                 {TITLE_LABEL[player.title]}
               </span>
