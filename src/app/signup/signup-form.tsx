@@ -179,7 +179,7 @@ export default function SignupForm() {
           <Link
             href="/terms"
             target="_blank"
-            rel="noopener noreferrer"
+            rel="noreferrer"
             className="text-xs text-suaza-ink-muted hover:text-suaza-ink underline shrink-0"
           >
             보기
@@ -202,7 +202,7 @@ export default function SignupForm() {
           <Link
             href="/privacy"
             target="_blank"
-            rel="noopener noreferrer"
+            rel="noreferrer"
             className="text-xs text-suaza-ink-muted hover:text-suaza-ink underline shrink-0"
           >
             보기
