@@ -497,6 +497,8 @@ export default async function Home() {
               ))}
             <AttendanceVote
               matchId={upcoming.id}
+              meId={user!.id}
+              myName={profile?.name ?? null}
               myStatus={myStatus}
               byStatus={byStatus}
               nonVoters={nonVoters}

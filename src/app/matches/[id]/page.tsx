@@ -4,7 +4,10 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { deleteMatch, startMatch } from "@/lib/matches/actions";
 import AttendanceManagerBoard from "@/components/attendance-manager-board";
-import AttendanceVoteButtons from "./attendance-vote-buttons";
+import {
+  AttendanceCardVote,
+  AttendanceCompactVote,
+} from "./attendance-vote-panel";
 import NewMatchForm from "@/app/matches/new/new-match-form";
 import ScoreControl from "./score-control";
 import TeamBuilder from "./team-builder";
@@ -288,6 +291,7 @@ export default async function MatchDetailPage({
                 <div className="order-1 desktop:h-full">
                   <AttendanceCard
                     matchId={m.id}
+                    meId={user.id}
                     myStatus={myStatus}
                     byStatus={byStatus}
                     nonVoters={nonVoters}
@@ -590,6 +594,7 @@ type AttendancePlayer = {
 
 function AttendanceCard({
   matchId,
+  meId,
   myStatus,
   byStatus,
   nonVoters,
@@ -600,6 +605,7 @@ function AttendanceCard({
   locked,
 }: {
   matchId: string;
+  meId: string;
   myStatus: string | null;
   byStatus: {
     attending: AttendancePlayer[];
@@ -613,13 +619,6 @@ function AttendanceCard({
   deadlineStr: string;
   locked?: boolean;
 }) {
-  const counts = {
-    attending: byStatus.attending.length,
-    absent: byStatus.absent.length,
-    undecided: byStatus.undecided.length,
-    nonVoters: nonVoters.length,
-  };
-
   return (
     <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4 desktop:h-full">
       <div className="flex items-center justify-between gap-2">
@@ -636,146 +635,25 @@ function AttendanceCard({
         </span>
       </div>
 
-      {/* My response */}
-      {locked ? (
-        <div className="bg-gray-50 rounded-xl p-3 text-center text-xs text-suaza-ink-muted">
-          🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다
-        </div>
-      ) : (
-        <div className="bg-red-50/50 rounded-xl p-3 flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <span className="w-7 h-7 rounded-full bg-suaza-accent text-white text-xs font-bold flex items-center justify-center shrink-0">
-              {myName?.charAt(0) ?? "?"}
-            </span>
-            <span className="text-sm font-medium text-suaza-ink">
-              <span className="desktop:hidden">내 응답을 알려주세요</span>
-              <span className="hidden desktop:inline">
-                {myName
-                  ? `${myName} 님의 응답을 알려주세요`
-                  : "응답을 알려주세요"}
-              </span>
-            </span>
-          </div>
-          <AttendanceVoteButtons matchId={matchId} myStatus={myStatus} />
-        </div>
-      )}
-
-      {/* Stats row */}
-      <div className="grid grid-cols-4 gap-2 py-2">
-        <StatCount label="참석" value={counts.attending} color="#22C55E" />
-        <StatCount label="불참" value={counts.absent} color="#EF3E3E" />
-        <StatCount label="미정" value={counts.undecided} color="#9CA3AF" />
-        <StatCount label="미투표" value={counts.nonVoters} color="#D1D5DB" />
-      </div>
-
-      {/* Member pills */}
-      {isManager && !locked ? (
-        <>
-          <h3 className="text-sm font-bold text-suaza-ink">멤버별 응답</h3>
+      <AttendanceCardVote
+        matchId={matchId}
+        me={{ id: meId, name: myName ?? "" }}
+        myName={myName}
+        myStatus={myStatus}
+        byStatus={byStatus}
+        nonVoters={nonVoters}
+        isManager={!!isManager}
+        locked={!!locked}
+      >
+        {isManager && !locked && (
           <AttendanceManagerBoard
             matchId={matchId}
             byStatus={byStatus}
             nonVoters={nonVoters}
           />
-        </>
-      ) : (
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-bold text-suaza-ink">멤버별 응답</h3>
-          <MemberGroup
-            label="참석"
-            count={counts.attending}
-            color="#22C55E"
-            members={byStatus.attending}
-          />
-          <MemberGroup
-            label="불참"
-            count={counts.absent}
-            color="#EF3E3E"
-            members={byStatus.absent}
-          />
-          <MemberGroup
-            label="미정"
-            count={counts.undecided}
-            color="#9CA3AF"
-            members={byStatus.undecided}
-          />
-          <MemberGroup
-            label="미투표"
-            count={counts.nonVoters}
-            color="#D1D5DB"
-            members={nonVoters}
-            muted
-          />
-        </div>
-      )}
-    </section>
-  );
-}
-
-function StatCount({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: string;
-}) {
-  return (
-    <div className="flex flex-col items-center gap-0.5 border-r border-suaza-border last:border-r-0">
-      <div className="flex items-center gap-1">
-        <span
-          className="w-1.5 h-1.5 rounded-full"
-          style={{ backgroundColor: color }}
-        />
-        <span className="text-xl font-bold text-suaza-ink">{value}</span>
-      </div>
-      <span className="text-[11px] text-suaza-ink-muted">{label}</span>
-    </div>
-  );
-}
-
-function MemberGroup({
-  label,
-  count,
-  color,
-  members,
-  muted = false,
-}: {
-  label: string;
-  count: number;
-  color: string;
-  members: AttendancePlayer[];
-  muted?: boolean;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-1.5">
-        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
-        <span
-          className={`text-xs font-bold ${muted ? "text-suaza-ink-muted" : "text-suaza-ink"}`}
-        >
-          {label} {count}
-        </span>
-      </div>
-      <div className="flex flex-wrap gap-1">
-        {members.length === 0 ? (
-          <span className="text-xs text-suaza-ink-faint">—</span>
-        ) : (
-          members.map((m) => (
-            <span
-              key={m.id}
-              className={`text-xs px-2.5 py-0.5 rounded-full border ${
-                muted ? "text-suaza-ink-muted bg-gray-50" : "text-suaza-ink bg-white"
-              }`}
-              style={{ borderColor: muted ? "#E5E7EB" : color }}
-            >
-              {m.name}
-            </span>
-          ))
         )}
-      </div>
-    </div>
+      </AttendanceCardVote>
+    </section>
   );
 }
 
@@ -850,12 +728,16 @@ type VotePlayer = {
 
 export function AttendanceVote({
   matchId,
+  meId,
+  myName,
   myStatus,
   byStatus,
   nonVoters,
   isManager,
 }: {
   matchId: string;
+  meId: string;
+  myName: string | null;
   myStatus: string | null;
   byStatus: {
     attending: VotePlayer[];
@@ -869,82 +751,23 @@ export function AttendanceVote({
     <section className="flex flex-col gap-3 p-4 border border-suaza-border rounded-lg">
       <h2 className="font-bold text-suaza-ink">출석 투표</h2>
 
-      <AttendanceVoteButtons matchId={matchId} myStatus={myStatus} />
-
-      {isManager ? (
-        <AttendanceManagerBoard
-          matchId={matchId}
-          byStatus={byStatus}
-          nonVoters={nonVoters}
-        />
-      ) : (
-        <div className="flex flex-col gap-2 pt-1">
-          <AttendanceRow
-            label="참석"
-            count={byStatus.attending.length}
-            badgeClass="bg-green-100 text-green-700"
-            members={byStatus.attending}
-          />
-          <AttendanceRow
-            label="불참"
-            count={byStatus.absent.length}
-            badgeClass="bg-red-100 text-red-700"
-            members={byStatus.absent}
-          />
-          <AttendanceRow
-            label="미정"
-            count={byStatus.undecided.length}
-            badgeClass="bg-gray-200 text-gray-700"
-            members={byStatus.undecided}
-          />
-          <div className="h-px bg-suaza-border my-1" />
-          <NonVoterRow members={nonVoters} />
-        </div>
-      )}
-    </section>
-  );
-}
-
-function AttendanceRow({
-  label,
-  count,
-  badgeClass,
-  members,
-}: {
-  label: string;
-  count: number;
-  badgeClass: string;
-  members: VotePlayer[];
-}) {
-  const names = members.map((m) => m.name);
-  return (
-    <div className="flex items-start gap-2">
-      <span
-        className={`shrink-0 text-xs px-2 py-0.5 rounded font-medium ${badgeClass}`}
+      <AttendanceCompactVote
+        matchId={matchId}
+        me={{ id: meId, name: myName ?? "" }}
+        myStatus={myStatus}
+        byStatus={byStatus}
+        nonVoters={nonVoters}
+        isManager={!!isManager}
       >
-        {label} {count}
-      </span>
-      <span className="text-sm text-suaza-ink-muted leading-relaxed break-keep">
-        {names.length > 0 ? names.join(", ") : "—"}
-      </span>
-    </div>
-  );
-}
-
-function NonVoterRow({ members }: { members: VotePlayer[] }) {
-  if (members.length === 0) {
-    return (
-      <p className="text-[11px] text-suaza-ink-faint">
-        모두 투표를 완료했어요 ✓
-      </p>
-    );
-  }
-  const names = members.map((m) => m.name).join(", ");
-  return (
-    <div className="flex flex-col gap-0.5 text-[11px] text-suaza-ink-faint">
-      <span className="font-medium">미투표 ({members.length})</span>
-      <span className="break-keep">{names}</span>
-    </div>
+        {isManager && (
+          <AttendanceManagerBoard
+            matchId={matchId}
+            byStatus={byStatus}
+            nonVoters={nonVoters}
+          />
+        )}
+      </AttendanceCompactVote>
+    </section>
   );
 }
 
