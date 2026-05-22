@@ -13,7 +13,7 @@ export const DEFAULT_CATEGORY: PostCategory = "free";
 export const CATEGORY_LABEL: Record<PostCategory, string> = {
   notice: "공지",
   free: "자유게시판",
-  tactics: "전술",
+  tactics: "훈련",
   qna: "질문",
   suggestion: "건의",
 };
@@ -33,6 +33,18 @@ export function canUseCategory(
 ): boolean {
   if (STAFF_ONLY_CATEGORIES.includes(category)) return isStaffTitle(title);
   return true;
+}
+
+// 홈 화면 노출(is_notice) 체크 가능 여부.
+// - 매니저(회장·감독 등): 모든 카테고리
+// - 감독/코치: '훈련(tactics)' 카테고리 글에 한해 가능
+export function canHomeExpose(
+  role: string | null | undefined,
+  title: string | null | undefined,
+  category: PostCategory,
+): boolean {
+  if (role === "manager") return true;
+  return (title === "head_coach" || title === "coach") && category === "tactics";
 }
 
 // 목록/상세 뱃지 스타일 (pill)

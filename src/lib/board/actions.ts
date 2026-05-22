@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
   DEFAULT_CATEGORY,
+  canHomeExpose,
   canUseCategory,
   isPostCategory,
   type PostCategory,
@@ -40,11 +41,13 @@ export async function createPost(formData: FormData) {
   const { supabase, userId, role, title: myTitle } = await getUserAndRole();
   const title = String(formData.get("title") ?? "").trim();
   const content = String(formData.get("content") ?? "").trim();
-  const isNotice = formData.get("is_notice") === "on" && role === "manager";
   const category = resolveCategory(
     String(formData.get("category") ?? ""),
     myTitle,
   );
+  const isNotice =
+    formData.get("is_notice") === "on" &&
+    canHomeExpose(role, myTitle, category);
 
   if (!title) {
     redirect(`/board/new?error=${encodeURIComponent("제목을 입력해 주세요")}`);
@@ -86,11 +89,12 @@ export async function updatePost(postId: string, formData: FormData) {
   const { supabase, role, title: myTitle } = await getUserAndRole();
   const title = String(formData.get("title") ?? "").trim();
   const content = String(formData.get("content") ?? "").trim();
-  const isNotice = formData.get("is_notice") === "on" && role === "manager";
   const category = resolveCategory(
     String(formData.get("category") ?? ""),
     myTitle,
   );
+  const exposeAllowed = canHomeExpose(role, myTitle, category);
+  const isNotice = formData.get("is_notice") === "on" && exposeAllowed;
 
   if (!title) {
     redirect(`/board/${postId}?error=${encodeURIComponent("제목을 입력해 주세요")}`);
@@ -108,10 +112,11 @@ export async function updatePost(postId: string, formData: FormData) {
     updated_at: new Date().toISOString(),
     category,
   };
-  if (role === "manager") patch.is_notice = isNotice;
+  // 노출 권한이 있는 경우에만 is_notice 갱신 (권한 없으면 기존값 유지)
+  if (exposeAllowed) patch.is_notice = isNotice;
 
   // 이 글을 공지로 전환하면 다른 모든 공지를 일반 글로 (단일 공지 제약)
-  if (role === "manager" && isNotice) {
+  if (exposeAllowed && isNotice) {
     await supabase
       .from("posts")
       .update({ is_notice: false })

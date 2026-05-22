@@ -5,13 +5,12 @@ import { deletePost, updatePost } from "@/lib/board/actions";
 import {
   CATEGORY_LABEL,
   DEFAULT_CATEGORY,
-  POST_CATEGORIES,
-  canUseCategory,
   categoryBadgeClass,
   formatPostDate,
   type PostCategory,
 } from "@/lib/board/helpers";
 import CommentSection, { type Comment } from "./comment-section";
+import PostFields from "../post-fields";
 
 type Post = {
   id: string;
@@ -67,7 +66,8 @@ export default async function PostDetailPage({
   if (!post) notFound();
   const p = post as unknown as Post;
   const isAuthor = p.author_id === user.id;
-  const isManager = me?.role === "manager";
+  const myRole = me?.role ?? "player";
+  const isManager = myRole === "manager";
   const myTitle = me?.title ?? "player";
   const canEdit = isAuthor || isManager;
   const editing = edit === "1" && canEdit;
@@ -98,37 +98,12 @@ export default async function PostDetailPage({
 
         {editing ? (
           <form action={updatePost.bind(null, p.id)} className="flex flex-col gap-4">
-            <label className="flex flex-col gap-2">
-              <span className="text-suaza-ink text-base">카테고리</span>
-              <select
-                name="category"
-                defaultValue={p.category ?? DEFAULT_CATEGORY}
-                className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink bg-white focus:outline-none focus:border-suaza-button"
-              >
-                {POST_CATEGORIES.filter((c) =>
-                  canUseCategory(c, myTitle),
-                ).map((c) => (
-                  <option key={c} value={c}>
-                    {CATEGORY_LABEL[c]}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {isManager && (
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="is_notice"
-                  defaultChecked={p.is_notice}
-                  className="w-4 h-4 rounded border-suaza-border accent-suaza-button"
-                />
-                <span className="text-sm text-suaza-ink">
-                  <span className="text-suaza-accent font-medium">공지</span>로
-                  등록
-                </span>
-              </label>
-            )}
+            <PostFields
+              role={myRole}
+              title={myTitle}
+              defaultCategory={p.category ?? DEFAULT_CATEGORY}
+              defaultIsNotice={p.is_notice}
+            />
 
             <label className="flex flex-col gap-2">
               <span className="text-suaza-ink text-base">제목</span>

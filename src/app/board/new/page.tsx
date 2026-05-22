@@ -1,12 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createPost } from "@/lib/board/actions";
-import {
-  CATEGORY_LABEL,
-  DEFAULT_CATEGORY,
-  POST_CATEGORIES,
-  canUseCategory,
-} from "@/lib/board/helpers";
+import { DEFAULT_CATEGORY } from "@/lib/board/helpers";
+import PostFields from "../post-fields";
 
 export default async function NewPostPage({
   searchParams,
@@ -26,7 +22,7 @@ export default async function NewPostPage({
     .select("role, title")
     .eq("id", user.id)
     .single();
-  const isManager = me?.role === "manager";
+  const myRole = me?.role ?? "player";
   const myTitle = me?.title ?? "player";
 
   return (
@@ -51,35 +47,11 @@ export default async function NewPostPage({
         )}
 
         <form action={createPost} className="flex flex-col gap-4">
-          <label className="flex flex-col gap-2">
-            <span className="text-suaza-ink text-base">카테고리</span>
-            <select
-              name="category"
-              defaultValue={DEFAULT_CATEGORY}
-              className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink bg-white focus:outline-none focus:border-suaza-button"
-            >
-              {POST_CATEGORIES.filter((c) => canUseCategory(c, myTitle)).map(
-                (c) => (
-                <option key={c} value={c}>
-                  {CATEGORY_LABEL[c]}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {isManager && (
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                name="is_notice"
-                className="w-4 h-4 rounded border-suaza-border accent-suaza-button"
-              />
-              <span className="text-sm text-suaza-ink">
-                <span className="text-suaza-accent font-medium">공지</span>로
-                등록 (홈에 노출됨)
-              </span>
-            </label>
-          )}
+          <PostFields
+            role={myRole}
+            title={myTitle}
+            defaultCategory={DEFAULT_CATEGORY}
+          />
 
           <label className="flex flex-col gap-2">
             <span className="text-suaza-ink text-base">제목</span>

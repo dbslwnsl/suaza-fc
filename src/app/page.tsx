@@ -20,7 +20,11 @@ import {
   getResult,
   type Match,
 } from "@/lib/matches/helpers";
-import { formatPostDate } from "@/lib/board/helpers";
+import {
+  CATEGORY_LABEL,
+  formatPostDate,
+  type PostCategory,
+} from "@/lib/board/helpers";
 import { AttendanceVote } from "./matches/[id]/page";
 import {
   fetchWeatherDebug,
@@ -32,6 +36,8 @@ import {
 type NoticeRow = {
   id: string;
   title: string;
+  content: string;
+  category: PostCategory;
   created_at: string;
   author: { name: string; avatar_url: string | null } | null;
 };
@@ -155,7 +161,9 @@ export default async function Home() {
       .single(),
     supabase
       .from("posts")
-      .select("id, title, created_at, author:profiles(name, avatar_url)")
+      .select(
+        "id, title, content, category, created_at, author:profiles(name, avatar_url)",
+      )
       .eq("is_notice", true)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -424,7 +432,7 @@ export default async function Home() {
         {notice ? (
           <Link
             href={`/board/${notice.id}`}
-            className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border hover:bg-gray-50 transition flex items-center gap-3"
+            className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border hover:bg-gray-50 transition flex items-start gap-3"
           >
             <NoticeAvatar
               name={notice.author?.name ?? null}
@@ -433,7 +441,9 @@ export default async function Home() {
             <div className="flex-1 min-w-0 flex flex-col gap-1.5">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium shrink-0">
-                  공지
+                  {notice.category && notice.category !== "notice"
+                    ? CATEGORY_LABEL[notice.category]
+                    : "공지"}
                 </span>
                 <span className="text-xs text-suaza-ink-muted truncate">
                   {notice.author?.name ?? ""} · {formatPostDate(notice.created_at)}
@@ -442,6 +452,9 @@ export default async function Home() {
               <span className="font-bold text-suaza-ink truncate">
                 {notice.title}
               </span>
+              <p className="text-sm text-suaza-ink-muted whitespace-pre-wrap line-clamp-3">
+                {notice.content}
+              </p>
             </div>
           </Link>
         ) : (
