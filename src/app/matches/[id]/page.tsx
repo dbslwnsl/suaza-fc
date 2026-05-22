@@ -158,15 +158,20 @@ export default async function MatchDetailPage({
 
   const participatedIds = new Set(participations.map((p) => p.player_id));
 
-  // D-day 계산
-  const matchTs = new Date(m.match_date).getTime();
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const matchStart = new Date(m.match_date);
-  matchStart.setHours(0, 0, 0, 0);
-  const diffDays = Math.round(
-    (matchStart.getTime() - todayStart.getTime()) / 86400000,
+  // D-day 계산 — 단말/서버 타임존과 무관하게 서울(Asia/Seoul) 달력 기준
+  const matchYMD = kstParts(m.match_date);
+  const nowYMD = kstParts(new Date().toISOString());
+  const matchMidUTC = Date.UTC(
+    Number(matchYMD.year),
+    Number(matchYMD.month) - 1,
+    Number(matchYMD.day),
   );
+  const todayMidUTC = Date.UTC(
+    Number(nowYMD.year),
+    Number(nowYMD.month) - 1,
+    Number(nowYMD.day),
+  );
+  const diffDays = Math.round((matchMidUTC - todayMidUTC) / 86400000);
   const dDay =
     m.status === "scheduled"
       ? diffDays > 0
@@ -176,10 +181,9 @@ export default async function MatchDetailPage({
           : null
       : null;
 
-  // 출석 마감 (경기 전날)
-  const deadline = new Date(matchTs);
-  deadline.setDate(deadline.getDate() - 1);
-  const deadlineStr = `${deadline.getMonth() + 1}/${deadline.getDate()}`;
+  // 출석 마감 (경기 전날) — 서울 달력 기준 하루 전
+  const deadlineDate = new Date(matchMidUTC - 86400000);
+  const deadlineStr = `${deadlineDate.getUTCMonth() + 1}/${deadlineDate.getUTCDate()}`;
 
   const isIntra = m.opponent === "자체전";
   const isStarted = isMatchStarted(m);

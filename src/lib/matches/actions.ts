@@ -23,12 +23,22 @@ type MatchInput = {
   duration_hours: number;
 };
 
+// datetime-local 입력("YYYY-MM-DDTHH:mm")을 항상 서울(KST, +09:00) 기준으로
+// 해석해 절대 UTC ISO 로 변환. 서버/단말 타임존과 무관하게 동작.
+function kstLocalToISO(local: string): string {
+  const m = local.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return "";
+  const [, y, mo, d, h, mi] = m;
+  const utcMs =
+    Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi)) -
+    9 * 60 * 60 * 1000;
+  return new Date(utcMs).toISOString();
+}
+
 function parseForm(formData: FormData): MatchInput {
   const opponent = String(formData.get("opponent") ?? "").trim();
   const matchDateLocal = String(formData.get("match_date") ?? "");
-  const match_date = matchDateLocal
-    ? new Date(matchDateLocal).toISOString()
-    : "";
+  const match_date = matchDateLocal ? kstLocalToISO(matchDateLocal) : "";
   const location = String(formData.get("location") ?? "").trim() || null;
   const ourScoreRaw = String(formData.get("our_score") ?? "").trim();
   const oppScoreRaw = String(formData.get("opponent_score") ?? "").trim();

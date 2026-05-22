@@ -409,16 +409,38 @@ function DurationSegmented({
   );
 }
 
-function isoToLocalDate(iso: string): string {
+// 저장된 절대 시각(UTC ISO)을 단말 타임존과 무관하게 서울(KST) 기준으로 분해.
+function kstParts(iso: string) {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (Number.isNaN(d.getTime())) return null;
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const parts = fmt.formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour"),
+    minute: get("minute"),
+  };
+}
+
+function isoToLocalDate(iso: string): string {
+  const p = kstParts(iso);
+  return p ? `${p.year}-${p.month}-${p.day}` : "";
 }
 
 function isoToLocalTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const p = kstParts(iso);
+  return p ? `${p.hour}:${p.minute}` : "";
 }
 
 function MatchTypeCard({
