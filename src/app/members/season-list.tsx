@@ -25,6 +25,7 @@ type SortKey =
   | "appearances"
   | "goals"
   | "assists"
+  | "attackPoints"
   | "cleanSheets"
   | "refereeCount";
 
@@ -33,6 +34,7 @@ const SORT_OPTIONS: { key: SortKey; label: string; desktopOnly?: boolean }[] = [
   { key: "appearances", label: "출전" },
   { key: "goals", label: "골" },
   { key: "assists", label: "어시" },
+  { key: "attackPoints", label: "공격P" },
   { key: "cleanSheets", label: "CS" },
   { key: "refereeCount", label: "심판", desktopOnly: true },
 ];
@@ -537,7 +539,12 @@ function DesktopTable({
             <SortTh label="출전" k="appearances" sortKey={sortKey} onSort={onSort} />
             <SortTh label="골" k="goals" sortKey={sortKey} onSort={onSort} />
             <SortTh label="어시" k="assists" sortKey={sortKey} onSort={onSort} />
-            <Th className="text-center">공격P</Th>
+            <SortTh
+              label="공격P"
+              k="attackPoints"
+              sortKey={sortKey}
+              onSort={onSort}
+            />
             <SortTh label="CS" k="cleanSheets" sortKey={sortKey} onSort={onSort} />
             <SortTh
               label="심판"
