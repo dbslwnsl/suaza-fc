@@ -365,8 +365,10 @@ export default function FormationEditor({
   }
 
   function placeByClick(playerId: string) {
-    // 이미 배치된 팀이 있으면 그 팀에 재배치, 아니면 A팀 기본
-    const t: "A" | "B" = teamOfPlayer.get(playerId) ?? "A";
+    // 자체전이면 편성팀(teamByPlayer)으로 고정, 상대전이면 A팀
+    const t: "A" | "B" = isIntra
+      ? teamByPlayer[playerId] ?? teamOfPlayer.get(playerId) ?? "A"
+      : "A";
     const slot = findSlotForPlayer(playerId, t);
     if (slot != null) assignSlot(t, slot, playerId);
   }
@@ -683,7 +685,13 @@ export default function FormationEditor({
               ? slotsA[openSlot.idx]
               : slotsB[openSlot.idx]
           }
-          members={attendingMembers}
+          members={
+            isIntra
+              ? attendingMembers.filter(
+                  (m) => teamByPlayer[m.id] === openSlot.team,
+                )
+              : attendingMembers
+          }
           placedSet={placedSet}
           currentPlayerId={
             openSlot.team === "A"
