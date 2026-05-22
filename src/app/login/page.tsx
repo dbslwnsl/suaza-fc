@@ -99,7 +99,7 @@ export default async function LoginPage({
 
           <button
             type="submit"
-            className="h-[52px] rounded-lg bg-suaza-button text-white text-base font-medium hover:opacity-90 transition"
+            className="h-[52px] rounded-lg bg-suaza-button text-white text-base font-medium hover:brightness-125 transition"
           >
             로그인
           </button>

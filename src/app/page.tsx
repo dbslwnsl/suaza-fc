@@ -294,7 +294,7 @@ export default async function Home() {
           <form action={logout}>
             <button
               type="submit"
-              className="text-[13px] border border-suaza-border rounded-md px-3 py-1.5 text-suaza-ink hover:bg-gray-50 transition"
+              className="text-[13px] border border-suaza-border rounded-md px-3 py-1.5 text-suaza-ink hover:bg-gray-100 transition"
             >
               로그아웃
             </button>

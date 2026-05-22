@@ -128,7 +128,7 @@ function VoteButtons({
             className={`h-11 rounded-lg border text-sm font-medium transition flex items-center justify-center gap-1 ${
               active
                 ? o.activeClass
-                : "bg-white border-suaza-border text-suaza-ink hover:bg-gray-50"
+                : "bg-white border-suaza-border text-suaza-ink hover:bg-gray-100"
             }`}
           >
             {o.icon && active && <span>{o.icon}</span>}
