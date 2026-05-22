@@ -382,9 +382,6 @@ function StepTab({
       </span>
       <span>{label}</span>
       {value && <span className="font-bold">{value}</span>}
-      {value && (
-        <span className={active ? "text-white" : "text-emerald-600"}>✓</span>
-      )}
     </button>
   );
 }
