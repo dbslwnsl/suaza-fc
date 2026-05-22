@@ -1620,13 +1620,10 @@ function PlayerRosterMobile({
 
 
   const sorted = useMemo(() => {
-    return [...participations].sort((a, b) => {
-      if (b.totalPlayed !== a.totalPlayed)
-        return b.totalPlayed - a.totalPlayed;
-      const an = a.member.jersey_number ?? 9999;
-      const bn = b.member.jersey_number ?? 9999;
-      return an - bn;
-    });
+    // 가나다순 정렬
+    return [...participations].sort((a, b) =>
+      a.member.name.localeCompare(b.member.name, "ko"),
+    );
   }, [participations]);
 
   if (members.length === 0) {
@@ -1884,13 +1881,10 @@ function PlayerRosterDesktop({
       // 보유 포지션 중 하나라도 일치하면 포함
       out = out.filter((p) => (p.member.positions ?? []).includes(filter));
     }
-    return [...out].sort((a, b) => {
-      if (b.totalPlayed !== a.totalPlayed)
-        return b.totalPlayed - a.totalPlayed;
-      const an = a.member.jersey_number ?? 9999;
-      const bn = b.member.jersey_number ?? 9999;
-      return an - bn;
-    });
+    // 가나다순 정렬
+    return [...out].sort((a, b) =>
+      a.member.name.localeCompare(b.member.name, "ko"),
+    );
   }, [participations, filter]);
 
   return (
