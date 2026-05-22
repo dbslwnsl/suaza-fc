@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createPost } from "@/lib/board/actions";
+import {
+  CATEGORY_LABEL,
+  DEFAULT_CATEGORY,
+  POST_CATEGORIES,
+  canUseCategory,
+} from "@/lib/board/helpers";
 
 export default async function NewPostPage({
   searchParams,
@@ -17,10 +23,11 @@ export default async function NewPostPage({
 
   const { data: me } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, title")
     .eq("id", user.id)
     .single();
   const isManager = me?.role === "manager";
+  const myTitle = me?.title ?? "player";
 
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
@@ -44,6 +51,22 @@ export default async function NewPostPage({
         )}
 
         <form action={createPost} className="flex flex-col gap-4">
+          <label className="flex flex-col gap-2">
+            <span className="text-suaza-ink text-base">카테고리</span>
+            <select
+              name="category"
+              defaultValue={DEFAULT_CATEGORY}
+              className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink bg-white focus:outline-none focus:border-suaza-button"
+            >
+              {POST_CATEGORIES.filter((c) => canUseCategory(c, myTitle)).map(
+                (c) => (
+                <option key={c} value={c}>
+                  {CATEGORY_LABEL[c]}
+                </option>
+              ))}
+            </select>
+          </label>
+
           {isManager && (
             <label className="flex items-center gap-2 cursor-pointer">
               <input

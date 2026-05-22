@@ -2,7 +2,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { deletePost, updatePost } from "@/lib/board/actions";
-import { formatPostDate } from "@/lib/board/helpers";
+import {
+  CATEGORY_LABEL,
+  DEFAULT_CATEGORY,
+  POST_CATEGORIES,
+  canUseCategory,
+  categoryBadgeClass,
+  formatPostDate,
+  type PostCategory,
+} from "@/lib/board/helpers";
 import CommentSection, { type Comment } from "./comment-section";
 
 type Post = {
@@ -10,6 +18,7 @@ type Post = {
   title: string;
   content: string;
   is_notice: boolean;
+  category: PostCategory;
   author_id: string;
   created_at: string;
   updated_at: string;
@@ -37,11 +46,15 @@ export default async function PostDetailPage({
       supabase
         .from("posts")
         .select(
-          "id, title, content, is_notice, author_id, created_at, updated_at, author:profiles(name)",
+          "id, title, content, is_notice, category, author_id, created_at, updated_at, author:profiles(name)",
         )
         .eq("id", id)
         .single(),
-      supabase.from("profiles").select("role").eq("id", user.id).single(),
+      supabase
+        .from("profiles")
+        .select("role, title")
+        .eq("id", user.id)
+        .single(),
       supabase
         .from("post_comments")
         .select(
@@ -55,6 +68,7 @@ export default async function PostDetailPage({
   const p = post as unknown as Post;
   const isAuthor = p.author_id === user.id;
   const isManager = me?.role === "manager";
+  const myTitle = me?.title ?? "player";
   const canEdit = isAuthor || isManager;
   const editing = edit === "1" && canEdit;
   const comments = (commentsRaw ?? []) as unknown as Comment[];
@@ -84,6 +98,23 @@ export default async function PostDetailPage({
 
         {editing ? (
           <form action={updatePost.bind(null, p.id)} className="flex flex-col gap-4">
+            <label className="flex flex-col gap-2">
+              <span className="text-suaza-ink text-base">카테고리</span>
+              <select
+                name="category"
+                defaultValue={p.category ?? DEFAULT_CATEGORY}
+                className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink bg-white focus:outline-none focus:border-suaza-button"
+              >
+                {POST_CATEGORIES.filter((c) =>
+                  canUseCategory(c, myTitle),
+                ).map((c) => (
+                  <option key={c} value={c}>
+                    {CATEGORY_LABEL[c]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             {isManager && (
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -141,9 +172,17 @@ export default async function PostDetailPage({
           <>
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2 flex-wrap">
-                {p.is_notice && (
+                {/* 공지 카테고리는 카테고리 뱃지가 "공지"를 표시하므로 중복 방지 */}
+                {p.is_notice && p.category !== "notice" && (
                   <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium">
                     공지
+                  </span>
+                )}
+                {p.category && (
+                  <span
+                    className={`text-[11px] px-2 py-0.5 rounded font-medium ${categoryBadgeClass(p.category, p.is_notice)}`}
+                  >
+                    {CATEGORY_LABEL[p.category]}
                   </span>
                 )}
                 <h1 className="text-xl sm:text-2xl font-bold text-suaza-ink">

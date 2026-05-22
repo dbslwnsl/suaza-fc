@@ -3,6 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import {
+  DEFAULT_CATEGORY,
+  canUseCategory,
+  isPostCategory,
+  type PostCategory,
+} from "@/lib/board/helpers";
+
+// 폼에서 받은 카테고리를 검증. 직책자 전용 카테고리(공지)는 권한 없으면 기본값으로.
+function resolveCategory(raw: string, title: string | null): PostCategory {
+  if (!isPostCategory(raw)) return DEFAULT_CATEGORY;
+  if (!canUseCategory(raw, title)) return DEFAULT_CATEGORY;
+  return raw;
+}
 
 async function getUserAndRole() {
   const supabase = await createClient();
@@ -12,17 +25,26 @@ async function getUserAndRole() {
   if (!user) redirect("/login");
   const { data: me } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, title")
     .eq("id", user.id)
     .single();
-  return { supabase, userId: user.id, role: me?.role ?? "player" };
+  return {
+    supabase,
+    userId: user.id,
+    role: me?.role ?? "player",
+    title: (me?.title ?? "player") as string,
+  };
 }
 
 export async function createPost(formData: FormData) {
-  const { supabase, userId, role } = await getUserAndRole();
+  const { supabase, userId, role, title: myTitle } = await getUserAndRole();
   const title = String(formData.get("title") ?? "").trim();
   const content = String(formData.get("content") ?? "").trim();
   const isNotice = formData.get("is_notice") === "on" && role === "manager";
+  const category = resolveCategory(
+    String(formData.get("category") ?? ""),
+    myTitle,
+  );
 
   if (!title) {
     redirect(`/board/new?error=${encodeURIComponent("제목을 입력해 주세요")}`);
@@ -46,6 +68,7 @@ export async function createPost(formData: FormData) {
       title,
       content,
       is_notice: isNotice,
+      category,
     })
     .select("id")
     .single();
@@ -60,19 +83,30 @@ export async function createPost(formData: FormData) {
 }
 
 export async function updatePost(postId: string, formData: FormData) {
-  const { supabase, role } = await getUserAndRole();
+  const { supabase, role, title: myTitle } = await getUserAndRole();
   const title = String(formData.get("title") ?? "").trim();
   const content = String(formData.get("content") ?? "").trim();
   const isNotice = formData.get("is_notice") === "on" && role === "manager";
+  const category = resolveCategory(
+    String(formData.get("category") ?? ""),
+    myTitle,
+  );
 
   if (!title) {
     redirect(`/board/${postId}?error=${encodeURIComponent("제목을 입력해 주세요")}`);
   }
 
-  const patch: { title: string; content: string; updated_at: string; is_notice?: boolean } = {
+  const patch: {
+    title: string;
+    content: string;
+    updated_at: string;
+    category: PostCategory;
+    is_notice?: boolean;
+  } = {
     title,
     content,
     updated_at: new Date().toISOString(),
+    category,
   };
   if (role === "manager") patch.is_notice = isNotice;
 

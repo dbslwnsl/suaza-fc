@@ -3,12 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import PageHeader from "@/components/page-header";
 import PostList, { type ListPost } from "./post-list";
 import { type Comment } from "./[id]/comment-section";
+import { type PostCategory } from "@/lib/board/helpers";
 
 type PostRow = {
   id: string;
   title: string;
   content: string;
   is_notice: boolean;
+  category: PostCategory;
   created_at: string;
   author_id: string;
   author: { name: string; avatar_url: string | null } | null;
@@ -43,7 +45,7 @@ export default async function BoardPage({
       supabase
         .from("posts")
         .select(
-          "id, title, content, is_notice, created_at, author_id, author:profiles(name, avatar_url)",
+          "id, title, content, is_notice, category, created_at, author_id, author:profiles(name, avatar_url)",
         )
         .order("is_notice", { ascending: false })
         .order("created_at", { ascending: false }),
@@ -80,6 +82,7 @@ export default async function BoardPage({
     title: p.title,
     content: p.content,
     is_notice: p.is_notice,
+    category: p.category,
     created_at: p.created_at,
     author_id: p.author_id,
     author: p.author,
