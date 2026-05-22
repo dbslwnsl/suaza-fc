@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   POSITION_COLOR,
   POSITIONS,
@@ -229,6 +230,7 @@ function MemberCard({
     role: m.role,
   });
   const age = calcAge(m.birthDate);
+  const [lightbox, setLightbox] = useState(false);
 
   return (
     <Link
@@ -243,9 +245,21 @@ function MemberCard({
         <div className="shrink-0 flex flex-col items-center gap-1">
           <div className="relative">
             <div
-              className="relative w-12 h-12 desktop:w-14 desktop:h-14 rounded-full bg-gray-100 flex items-center justify-center border-2 overflow-hidden"
+              role={m.avatarUrl ? "button" : undefined}
+              aria-label={m.avatarUrl ? `${m.name} 사진 보기` : undefined}
+              onClick={
+                m.avatarUrl
+                  ? (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setLightbox(true);
+                    }
+                  : undefined
+              }
+              className={`relative w-12 h-12 desktop:w-14 desktop:h-14 rounded-full bg-gray-100 flex items-center justify-center border-2 overflow-hidden ${
+                m.avatarUrl ? "cursor-zoom-in" : ""
+              }`}
               style={{ borderColor: ringColor }}
-              aria-hidden
             >
               {m.avatarUrl ? (
                 <Image
@@ -330,6 +344,33 @@ function MemberCard({
           </div>
         </div>
       </div>
+
+      {lightbox &&
+        m.avatarUrl &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-label={`${m.name} 사진`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setLightbox(false);
+            }}
+            className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-6"
+          >
+            <div className="relative w-full h-full max-w-[90vw] max-h-[85vh]">
+              <Image
+                src={m.avatarUrl}
+                alt={m.name}
+                fill
+                sizes="90vw"
+                className="object-contain"
+              />
+            </div>
+          </div>,
+          document.body,
+        )}
     </Link>
   );
 }
