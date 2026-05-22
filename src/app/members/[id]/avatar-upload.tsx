@@ -3,6 +3,8 @@
 import Image from "next/image";
 import { useRef, useState, useTransition } from "react";
 import { uploadAvatar } from "./actions";
+import AvatarBadges from "@/components/avatar-badges";
+import type { MemberBadge } from "@/lib/members/badges";
 
 const MAX_DIMENSION = 512;
 const JPEG_QUALITY = 0.85;
@@ -12,11 +14,15 @@ export default function AvatarUpload({
   src,
   name,
   canEdit,
+  titleBadges = [],
+  awardBadges = [],
 }: {
   profileId: string;
   src: string | null;
   name: string;
   canEdit: boolean;
+  titleBadges?: MemberBadge[];
+  awardBadges?: MemberBadge[];
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isPending, startTransition] = useTransition();
@@ -25,8 +31,11 @@ export default function AvatarUpload({
 
   if (!canEdit) {
     return (
-      <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
-        <AvatarContent src={src} name={name} />
+      <div className="relative inline-block">
+        <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
+          <AvatarContent src={src} name={name} />
+        </div>
+        <AvatarBadges titleBadges={titleBadges} awardBadges={awardBadges} />
       </div>
     );
   }
@@ -100,10 +109,10 @@ export default function AvatarUpload({
         </span>
       </button>
 
-      {/* 항상 보이는 카메라 어포던스 배지 */}
+      {/* 항상 보이는 카메라 어포던스 배지 (우상단) */}
       <span
         aria-hidden
-        className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-suaza-button text-white flex items-center justify-center shadow-md ring-2 ring-white pointer-events-none"
+        className="absolute top-0 right-0 w-8 h-8 rounded-full bg-suaza-button text-white flex items-center justify-center shadow-md ring-2 ring-white pointer-events-none"
       >
         <svg
           width="16"
@@ -119,6 +128,8 @@ export default function AvatarUpload({
           <circle cx="12" cy="13" r="4" />
         </svg>
       </span>
+
+      <AvatarBadges titleBadges={titleBadges} awardBadges={awardBadges} />
 
       {menuOpen && !isPending && (
         <div className="absolute z-20 left-1/2 -translate-x-1/2 top-full mt-2 bg-white border border-suaza-border rounded-lg shadow-lg overflow-hidden w-32">

@@ -11,6 +11,8 @@ import {
   type MemberTitle,
   type Position,
 } from "@/lib/members/positions";
+import { getMemberBadges } from "@/lib/members/badges";
+import AvatarBadges from "@/components/avatar-badges";
 
 export type RosterMember = {
   id: string;
@@ -19,6 +21,7 @@ export type RosterMember = {
   initial: string;
   nickname: string | null;
   title: MemberTitle;
+  role: string | null;
   positions: Position[];
   jerseyNumber: number | null;
   avatarUrl: string | null;
@@ -151,6 +154,10 @@ function MemberCard({
 }) {
   const primary = m.positions[0] ?? null;
   const ringColor = primary ? POSITION_COLOR[primary] : "var(--suaza-border)";
+  const { titleBadges, awardBadges } = getMemberBadges({
+    title: m.title,
+    role: m.role,
+  });
 
   return (
     <Link
@@ -162,24 +169,31 @@ function MemberCard({
       }`}
     >
       <div className="flex items-center gap-3 desktop:gap-4">
-        <div
-          className="relative shrink-0 w-12 h-12 desktop:w-14 desktop:h-14 rounded-full bg-gray-100 flex items-center justify-center border-2 overflow-hidden"
-          style={{ borderColor: ringColor }}
-          aria-hidden
-        >
-          {m.avatarUrl ? (
-            <Image
-              src={m.avatarUrl}
-              alt={m.name}
-              fill
-              sizes="(min-width: 768px) 56px, 48px"
-              className="object-cover"
-            />
-          ) : (
-            <span className="text-base desktop:text-lg font-bold text-suaza-ink">
-              {m.initial}
-            </span>
-          )}
+        <div className="relative shrink-0">
+          <div
+            className="relative w-12 h-12 desktop:w-14 desktop:h-14 rounded-full bg-gray-100 flex items-center justify-center border-2 overflow-hidden"
+            style={{ borderColor: ringColor }}
+            aria-hidden
+          >
+            {m.avatarUrl ? (
+              <Image
+                src={m.avatarUrl}
+                alt={m.name}
+                fill
+                sizes="(min-width: 768px) 56px, 48px"
+                className="object-cover"
+              />
+            ) : (
+              <span className="text-base desktop:text-lg font-bold text-suaza-ink">
+                {m.initial}
+              </span>
+            )}
+          </div>
+          <AvatarBadges
+            titleBadges={titleBadges}
+            awardBadges={awardBadges}
+            size="xs"
+          />
         </div>
 
         <div className="flex-1 min-w-0 flex flex-col gap-1.5">

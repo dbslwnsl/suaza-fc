@@ -15,6 +15,7 @@ import {
   type Position,
   type PreferredFoot,
 } from "@/lib/members/positions";
+import { getMemberBadges } from "@/lib/members/badges";
 import ProfileEditForm from "./profile-edit-form";
 import AvatarUpload from "./avatar-upload";
 import DeleteMemberButton from "./delete-member-button";
@@ -167,6 +168,7 @@ export default async function MemberDetailPage({
               src={avatarSrc}
               name={profile.name}
               canEdit={canEdit}
+              {...getMemberBadges({ title, role: profile.role })}
             />
           </div>
           <div className="grid grid-cols-[repeat(3,auto)] gap-x-1 gap-y-2">

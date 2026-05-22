@@ -18,6 +18,7 @@ type MemberRow = {
   name: string;
   nickname: string | null;
   title: MemberTitle;
+  role: string | null;
   positions: Position[] | null;
   jersey_number: number | null;
   avatar_url: string | null;
@@ -35,7 +36,7 @@ export default async function RosterView({ year }: { year: number }) {
   const { data: members } = await supabase
     .from("profiles")
     .select(
-      "id, name, nickname, title, positions, jersey_number, avatar_url",
+      "id, name, nickname, title, role, positions, jersey_number, avatar_url",
     )
     .is("deleted_at", null)
     .order("name", { ascending: true });
@@ -96,6 +97,7 @@ export default async function RosterView({ year }: { year: number }) {
       initial: m.name.charAt(0),
       nickname: m.nickname,
       title: m.title,
+      role: m.role,
       positions: (m.positions ?? []) as Position[],
       jerseyNumber: m.jersey_number,
       avatarUrl: m.avatar_url,
