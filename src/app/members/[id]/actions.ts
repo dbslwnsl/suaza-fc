@@ -46,10 +46,14 @@ export async function updateProfile(profileId: string, formData: FormData) {
     );
   }
 
-  const rawPositions = formData.getAll("positions").map(String);
-  const positions = POSITIONS.filter((p) =>
-    rawPositions.includes(p),
-  ) as Position[];
+  // 제출 순서 = [주포지션, 부포지션]. 순서 보존 + 중복 제거 + 최대 2개.
+  const valid = new Set<string>(POSITIONS);
+  const positions = formData
+    .getAll("positions")
+    .map(String)
+    .filter((p) => valid.has(p))
+    .filter((p, i, arr) => arr.indexOf(p) === i)
+    .slice(0, 2) as Position[];
 
   const jerseyRaw = String(formData.get("jersey_number") ?? "").trim();
   const birthRaw = String(formData.get("birth_date") ?? "").trim();
