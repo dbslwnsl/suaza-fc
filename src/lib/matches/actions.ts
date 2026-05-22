@@ -8,6 +8,7 @@ import {
   DEFAULT_MATCH_DURATION_HOURS,
   MATCH_DURATION_OPTIONS,
   MATCH_STATUS,
+  UNIFORM_COLORS,
   isMatchStarted,
 } from "./helpers";
 
@@ -759,6 +760,46 @@ export async function setMatchTeam(
   if (error) return;
   // 팀이 바뀐 선수의 기존 포메이션 배치를 모든 쿼터에서 제거
   await resetPlayersInFormation(supabase, matchId, [playerId]);
+  revalidatePath(`/matches/${matchId}`);
+  revalidatePath(`/matches/${matchId}/formation`);
+}
+
+/**
+ * 본인 컨디션(1~5) 변경. 누구나 자기 것만 변경 가능.
+ */
+export async function setMyCondition(matchId: string, level: number) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  if (![1, 2, 3, 4, 5].includes(level)) return;
+
+  await supabase
+    .from("profiles")
+    .update({ condition: level })
+    .eq("id", user.id);
+
+  revalidatePath(`/matches/${matchId}/formation`);
+  revalidatePath(`/matches/${matchId}`);
+}
+
+/**
+ * 자체전 팀 유니폼 색상 지정. 매니저/코치만 가능.
+ */
+export async function setTeamColor(
+  matchId: string,
+  team: "A" | "B",
+  color: string,
+) {
+  const { supabase } = await requireStaff();
+  if (!(UNIFORM_COLORS as readonly string[]).includes(color)) return;
+  const col = team === "A" ? "team_a_color" : "team_b_color";
+  const { error } = await supabase
+    .from("matches")
+    .update({ [col]: color })
+    .eq("id", matchId);
+  if (error) return;
   revalidatePath(`/matches/${matchId}`);
   revalidatePath(`/matches/${matchId}/formation`);
 }

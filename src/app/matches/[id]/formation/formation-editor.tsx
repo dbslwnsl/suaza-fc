@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { saveFormation } from "@/lib/formations/actions";
+import { setMyCondition } from "@/lib/matches/actions";
 import {
+  DEFAULT_QUARTER_IDS,
   FORMATIONS,
   MAX_QUARTERS,
   buildSlots,
@@ -48,8 +50,78 @@ const TITLE_SHORT: Record<MemberTitle, string> = {
   player: "",
 };
 
+// 컨디션 1~5단계. 1=최상(빨강·12시) → 5=최하(파랑·6시).
+// 색: 빨강 → 파랑 균등, 화살표 회전: 3시(0°) 기준.
+const CONDITION_COLOR = [
+  "#EF4444", // 1 빨강
+  "#EAB308", // 2 노랑
+  "#22C55E", // 3 초록 (기본)
+  "#06B6D4", // 4 청록
+  "#3B82F6", // 5 파랑
+];
+const CONDITION_DEG = [-90, -45, 0, 45, 90]; // 12시, 1:30, 3시, 4:30, 6시
+
+function ConditionArrow({
+  level,
+  interactive = false,
+  onCycle,
+}: {
+  level: number;
+  interactive?: boolean;
+  onCycle?: () => void;
+}) {
+  const idx = Math.min(5, Math.max(1, level)) - 1;
+  const color = CONDITION_COLOR[idx];
+  const deg = CONDITION_DEG[idx];
+  const inner = (
+    <span
+      className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full"
+      style={{ backgroundColor: `${color}26` }}
+    >
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        style={{ transform: `rotate(${deg}deg)` }}
+      >
+        {/* 기본: 오른쪽(3시) 화살표 */}
+        <path
+          d="M4 12 H17 M12 7 L18 12 L12 17"
+          fill="none"
+          stroke={color}
+          strokeWidth="2.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  );
+  if (interactive && onCycle) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onCycle();
+        }}
+        aria-label={`내 컨디션 ${level}단계 (눌러서 변경)`}
+        title="내 컨디션 변경"
+        className="shrink-0 hover:scale-110 active:scale-95 transition"
+      >
+        {inner}
+      </button>
+    );
+  }
+  return (
+    <span className="shrink-0" aria-label={`컨디션 ${level}단계`}>
+      {inner}
+    </span>
+  );
+}
+
 export default function FormationEditor({
   matchId,
+  myUserId,
   members,
   attendingIds,
   teamByPlayer = {},
@@ -58,6 +130,7 @@ export default function FormationEditor({
   readonly,
 }: {
   matchId: string;
+  myUserId: string;
   members: EditorMember[];
   attendingIds: string[];
   teamByPlayer?: Record<string, "A" | "B" | null>;
@@ -100,6 +173,15 @@ export default function FormationEditor({
     "idle" | "saving" | "saved" | "error"
   >("idle");
   const [, startTransition] = useTransition();
+  // 본인 컨디션 (낙관적). 클릭하면 1→2→…→5→1 순환.
+  const [myCondition, setMyConditionLocal] = useState<number>(
+    () => members.find((m) => m.id === myUserId)?.condition ?? 3,
+  );
+  const cycleMyCondition = () => {
+    const next = myCondition >= 5 ? 1 : myCondition + 1;
+    setMyConditionLocal(next);
+    startTransition(() => setMyCondition(matchId, next));
+  };
   const initialMount = useRef(true);
   const saveDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   // unmount 시 강제 저장을 위해 최신 pending payload 보관
@@ -502,27 +584,62 @@ export default function FormationEditor({
     setActiveIdx(quarters.length);
   }
 
+  // 추가한 쿼터(기본 1Q~4Q 이후)만 삭제 가능
+  function removeQuarter(idx: number) {
+    if (readonly) return;
+    if (idx < DEFAULT_QUARTER_IDS.length) return;
+    const q = quarters[idx];
+    if (!confirm(`${q?.id ?? "쿼터"}를 삭제할까요? 해당 쿼터 배치도 사라집니다.`))
+      return;
+    setQuarters((prev) =>
+      prev
+        .filter((_, i) => i !== idx)
+        // id 1Q,2Q,… 로 재정렬
+        .map((qq, i) => ({ ...qq, id: `${i + 1}Q` })),
+    );
+    setActiveIdx((cur) => {
+      if (cur === idx) return idx - 1;
+      if (cur > idx) return cur - 1;
+      return cur;
+    });
+  }
+
 
   return (
     <div className="flex flex-col gap-3 desktop:flex-1 desktop:min-h-0">
-      {/* 쿼터 탭 + 추가 버튼 */}
-      <div className="-mx-1 px-1 overflow-x-auto">
+      {/* 쿼터 탭 + 추가 버튼 (pt-2: 삭제 X 가 위에서 잘리지 않도록) */}
+      <div className="-mx-1 px-1 pt-2 overflow-x-auto">
         <div className="flex gap-2 w-max">
           {quarters.map((q, i) => {
             const active = i === activeIdx;
+            const removable = !readonly && i >= DEFAULT_QUARTER_IDS.length;
             return (
-              <button
-                key={q.id}
-                type="button"
-                onClick={() => setActiveIdx(i)}
-                className={`shrink-0 min-w-[64px] h-10 px-4 rounded-lg text-sm font-medium transition ${
-                  active
-                    ? "bg-suaza-button text-white shadow-sm"
-                    : "bg-white text-suaza-ink-muted border border-suaza-border hover:text-suaza-ink"
-                }`}
-              >
-                {q.id}
-              </button>
+              <div key={q.id} className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setActiveIdx(i)}
+                  className={`min-w-[64px] h-10 px-4 rounded-lg text-sm font-medium transition ${
+                    active
+                      ? "bg-suaza-button text-white shadow-sm"
+                      : "bg-white text-suaza-ink-muted border border-suaza-border hover:text-suaza-ink"
+                  }`}
+                >
+                  {q.id}
+                </button>
+                {removable && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeQuarter(i);
+                    }}
+                    aria-label={`${q.id} 삭제`}
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-suaza-accent text-white text-[10px] leading-none flex items-center justify-center shadow ring-2 ring-white hover:bg-red-600 transition"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             );
           })}
           {!readonly && quarters.length < MAX_QUARTERS && (
@@ -572,6 +689,9 @@ export default function FormationEditor({
               members={teamAMembers}
               teamLabel="A팀"
               teamColor="#3B82F6"
+              myUserId={myUserId}
+              myCondition={myCondition}
+              onCycleCondition={cycleMyCondition}
               quarters={quarters}
               validIds={validIds}
               placedSet={placedSet}
@@ -637,6 +757,9 @@ export default function FormationEditor({
             members={isIntra ? teamBMembers : attendingMembers}
             teamLabel={isIntra ? "B팀" : undefined}
             teamColor={isIntra ? "#EF4444" : undefined}
+            myUserId={myUserId}
+            myCondition={myCondition}
+            onCycleCondition={cycleMyCondition}
             quarters={quarters}
             validIds={validIds}
             placedSet={placedSet}
@@ -659,6 +782,9 @@ export default function FormationEditor({
       {/* 모바일 전용 선수 명단 (쿼터별 출전 현황) */}
       <PlayerRosterMobile
         members={attendingMembers}
+        myUserId={myUserId}
+        myCondition={myCondition}
+        onCycleCondition={cycleMyCondition}
         quarters={quarters}
         validIds={validIds}
         placedSet={placedSet}
@@ -1594,6 +1720,9 @@ function PlayerRosterMobile({
   teamByPlayer = {},
   onResetTeam,
   onAutoPlaceTeam,
+  myUserId,
+  myCondition,
+  onCycleCondition,
 }: {
   members: EditorMember[];
   quarters: QuarterWithTeams[];
@@ -1608,6 +1737,9 @@ function PlayerRosterMobile({
   teamByPlayer?: Record<string, "A" | "B" | null>;
   onResetTeam?: (team: "A" | "B") => void;
   onAutoPlaceTeam?: (team: "A" | "B") => void;
+  myUserId: string;
+  myCondition: number;
+  onCycleCondition: () => void;
 }) {
   const participations = useMemo(
     () => computeParticipations(members, quarters),
@@ -1648,6 +1780,11 @@ function PlayerRosterMobile({
       onTap={onTap}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      isMe={p.member.id === myUserId}
+      conditionLevel={
+        p.member.id === myUserId ? myCondition : p.member.condition ?? 3
+      }
+      onCycleCondition={onCycleCondition}
     />
   );
 
@@ -1727,6 +1864,9 @@ function PlayerRowMobile({
   onTap,
   onDragStart,
   onDragEnd,
+  isMe,
+  conditionLevel,
+  onCycleCondition,
 }: {
   participation: PlayerParticipation;
   placed: boolean;
@@ -1735,6 +1875,9 @@ function PlayerRowMobile({
   onTap: (id: string, placed: boolean) => void;
   onDragStart?: (id: string) => void;
   onDragEnd?: () => void;
+  isMe: boolean;
+  conditionLevel: number;
+  onCycleCondition: () => void;
 }) {
   const m = participation.member;
   const memberPositions = m.positions ?? [];
@@ -1768,15 +1911,15 @@ function PlayerRowMobile({
       } ${!hasPlayed && !placed ? "opacity-80" : ""}`}
     >
       <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-1.5">
+        <div className="flex items-center gap-1.5">
           <span className="text-sm font-semibold text-suaza-ink truncate">
             {m.name}
           </span>
-          {m.jersey_number != null && (
-            <span className="text-[11px] font-mono text-suaza-ink-muted shrink-0">
-              #{m.jersey_number}
-            </span>
-          )}
+          <ConditionArrow
+            level={conditionLevel}
+            interactive={isMe}
+            onCycle={onCycleCondition}
+          />
         </div>
         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
           {memberPositions.length === 0 ? (
@@ -1805,7 +1948,7 @@ function PlayerRowMobile({
         {participation.byQuarter.map((pos, i) => (
           <span
             key={i}
-            className={`w-3 h-6 rounded-sm ${pos ? "" : "bg-gray-200"}`}
+            className={`w-2 h-6 rounded-sm ${pos ? "" : "bg-gray-200"}`}
             style={pos ? { backgroundColor: POSITION_COLOR[pos] } : undefined}
           />
         ))}
@@ -1836,6 +1979,9 @@ function PlayerRosterDesktop({
   teamColor,
   onReset,
   onAutoPlace,
+  myUserId,
+  myCondition,
+  onCycleCondition,
 }: {
   members: EditorMember[];
   quarters: QuarterWithTeams[];
@@ -1851,6 +1997,9 @@ function PlayerRosterDesktop({
   teamColor?: string;
   onReset?: () => void;
   onAutoPlace?: () => void;
+  myUserId: string;
+  myCondition: number;
+  onCycleCondition: () => void;
 }) {
   const [filter, setFilter] = useState<Filter>("ALL");
 
@@ -1957,6 +2106,13 @@ function PlayerRosterDesktop({
                 onTap={onTap}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
+                isMe={p.member.id === myUserId}
+                conditionLevel={
+                  p.member.id === myUserId
+                    ? myCondition
+                    : p.member.condition ?? 3
+                }
+                onCycleCondition={onCycleCondition}
               />
             ))}
           </div>
@@ -1974,6 +2130,9 @@ function DesktopPlayerCard({
   onTap,
   onDragStart,
   onDragEnd,
+  isMe,
+  conditionLevel,
+  onCycleCondition,
 }: {
   participation: PlayerParticipation;
   placed: boolean;
@@ -1982,6 +2141,9 @@ function DesktopPlayerCard({
   onTap: (id: string, placed: boolean) => void;
   onDragStart?: (id: string) => void;
   onDragEnd?: () => void;
+  isMe: boolean;
+  conditionLevel: number;
+  onCycleCondition: () => void;
 }) {
   const m = participation.member;
   const teamBg = team === "A" ? "#3B82F6" : team === "B" ? "#EF4444" : null;
@@ -2017,18 +2179,22 @@ function DesktopPlayerCard({
         </span>
       )}
       <div className="flex-1 min-w-0">
-        <div className="text-xs font-semibold text-suaza-ink truncate">
-          {m.name}
-        </div>
-        <div className="text-[10px] text-suaza-ink-muted">
-          {m.jersey_number != null ? `#${m.jersey_number}` : "—"}
+        <div className="flex items-center gap-1">
+          <span className="text-xs font-semibold text-suaza-ink truncate">
+            {m.name}
+          </span>
+          <ConditionArrow
+            level={conditionLevel}
+            interactive={isMe}
+            onCycle={onCycleCondition}
+          />
         </div>
       </div>
       <div className="flex gap-0.5 shrink-0">
         {participation.byQuarter.map((pos, i) => (
           <span
             key={i}
-            className={`w-3 h-5 rounded-sm ${pos ? "" : "bg-gray-200"}`}
+            className={`w-2 h-5 rounded-sm ${pos ? "" : "bg-gray-200"}`}
             style={pos ? { backgroundColor: POSITION_COLOR[pos] } : undefined}
           />
         ))}

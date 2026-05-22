@@ -7,7 +7,12 @@ import {
   cycleMatchTeam,
   resetMatchTeams,
   setMatchTeam,
+  setTeamColor,
 } from "@/lib/matches/actions";
+import {
+  DEFAULT_TEAM_COLOR,
+  UNIFORM_COLORS,
+} from "@/lib/matches/helpers";
 import { displayMemberName } from "@/lib/members/name";
 
 export type TeamMember = {
@@ -22,6 +27,8 @@ export default function TeamBuilder({
   absentCount,
   undecidedCount,
   nonVoterCount,
+  teamAColor,
+  teamBColor,
   readonly,
 }: {
   matchId: string;
@@ -29,11 +36,23 @@ export default function TeamBuilder({
   absentCount: number;
   undecidedCount: number;
   nonVoterCount: number;
+  teamAColor: string | null;
+  teamBColor: string | null;
   readonly: boolean;
 }) {
   const [, startTransition] = useTransition();
   // 데스크탑 드래그앤드롭 상태
   const [dragging, setDragging] = useState(false);
+  // 유니폼 색 (낙관적)
+  const [colorA, setColorA] = useState(teamAColor ?? DEFAULT_TEAM_COLOR.A);
+  const [colorB, setColorB] = useState(teamBColor ?? DEFAULT_TEAM_COLOR.B);
+
+  const changeColor = (team: "A" | "B", color: string) => {
+    if (readonly) return;
+    if (team === "A") setColorA(color);
+    else setColorB(color);
+    startTransition(() => setTeamColor(matchId, team, color));
+  };
 
   const sorted = useMemo(
     () => [...attendees].sort((a, b) => a.name.localeCompare(b.name, "ko")),
@@ -104,6 +123,8 @@ export default function TeamBuilder({
         team="A"
         readonly={readonly}
         dragging={dragging}
+        uniformColor={colorA}
+        onColorChange={(c) => changeColor("A", c)}
         onCycle={cycle}
         onDropTo={dropTo}
         onDragStateChange={setDragging}
@@ -117,6 +138,8 @@ export default function TeamBuilder({
         team="B"
         readonly={readonly}
         dragging={dragging}
+        uniformColor={colorB}
+        onColorChange={(c) => changeColor("B", c)}
         onCycle={cycle}
         onDropTo={dropTo}
         onDragStateChange={setDragging}
@@ -183,6 +206,27 @@ export default function TeamBuilder({
         </Link>
       )}
     </section>
+  );
+}
+
+function JerseyIcon({ color }: { color: string }) {
+  // 유니폼 상의(반팔 티셔츠) 실루엣. 흰색/밝은 색도 보이도록 외곽선 추가.
+  return (
+    <svg
+      width="34"
+      height="34"
+      viewBox="0 0 24 24"
+      aria-hidden
+      className="shrink-0 drop-shadow-sm"
+    >
+      <path
+        d="M8.6 3 L4 5.2 L2.2 9 L5.1 10.7 L6.5 9.5 V21 H17.5 V9.5 L18.9 10.7 L21.8 9 L20 5.2 L15.4 3 C15.4 4.5 13.9 5.4 12 5.4 C10.1 5.4 8.6 4.5 8.6 3 Z"
+        fill={color}
+        stroke="rgba(0,0,0,0.28)"
+        strokeWidth="0.9"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -272,6 +316,8 @@ function TeamGroup({
   team,
   readonly,
   dragging,
+  uniformColor,
+  onColorChange,
   onCycle,
   onDropTo,
   onDragStateChange,
@@ -283,6 +329,8 @@ function TeamGroup({
   team: "A" | "B";
   readonly: boolean;
   dragging: boolean;
+  uniformColor: string;
+  onColorChange: (color: string) => void;
   onCycle: (playerId: string) => void;
   onDropTo: (playerId: string, team: "A" | "B" | null) => void;
   onDragStateChange: (dragging: boolean) => void;
@@ -299,6 +347,35 @@ function TeamGroup({
         </span>
         <span className="font-bold text-suaza-ink">{members.length}명</span>
       </div>
+
+      {/* 유니폼 상의 + 색 선택 */}
+      <div className="flex items-center gap-2.5">
+        <JerseyIcon color={uniformColor} />
+        {readonly ? (
+          <span className="text-xs text-suaza-ink-muted">유니폼</span>
+        ) : (
+          <div className="flex items-center gap-1 flex-wrap">
+            {UNIFORM_COLORS.map((c) => {
+              const active = c.toLowerCase() === uniformColor.toLowerCase();
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => onColorChange(c)}
+                  aria-label={`${label} 유니폼 색`}
+                  className={`w-5 h-5 rounded-full transition ${
+                    active
+                      ? "ring-2 ring-offset-1 ring-suaza-ink"
+                      : "ring-1 ring-suaza-border hover:scale-110"
+                  }`}
+                  style={{ backgroundColor: c }}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       <DropZone
         team={team}
         readonly={readonly}

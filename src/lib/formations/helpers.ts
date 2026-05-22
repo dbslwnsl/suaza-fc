@@ -70,7 +70,7 @@ export type FormationData = {
 };
 
 export const DEFAULT_QUARTER_IDS = ["1Q", "2Q", "3Q", "4Q"] as const;
-export const MAX_QUARTERS = 12;
+export const MAX_QUARTERS = 6;
 
 export type Team = "A" | "B" | "single";
 

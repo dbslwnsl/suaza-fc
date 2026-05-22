@@ -312,6 +312,8 @@ export default async function MatchDetailPage({
                     absentCount={byStatus.absent.length}
                     undecidedCount={byStatus.undecided.length}
                     nonVoterCount={nonVoters.length}
+                    teamAColor={m.team_a_color}
+                    teamBColor={m.team_b_color}
                     readonly={!isStaff}
                   />
                 </div>

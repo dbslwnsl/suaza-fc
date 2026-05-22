@@ -19,6 +19,7 @@ export type EditorMember = {
   positions: Position[] | null;
   title: MemberTitle | null;
   avatar_url: string | null;
+  condition: number;
 };
 
 type FormationRow = {
@@ -107,7 +108,9 @@ export default async function FormationPage({
       .maybeSingle(),
     supabase
       .from("profiles")
-      .select("id, name, jersey_number, positions, title, avatar_url")
+      .select(
+        "id, name, jersey_number, positions, title, avatar_url, condition",
+      )
       .is("deleted_at", null)
       .order("jersey_number", { ascending: true, nullsFirst: false }),
     supabase
@@ -167,6 +170,7 @@ export default async function FormationPage({
 
         <FormationEditor
           matchId={id}
+          myUserId={user.id}
           members={(members ?? []) as EditorMember[]}
           attendingIds={attendingIds}
           teamByPlayer={teamByPlayer}

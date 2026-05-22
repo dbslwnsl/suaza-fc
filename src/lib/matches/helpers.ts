@@ -20,6 +20,21 @@ export type Match = {
   updated_at: string;
   status_overridden_at: string | null;
   duration_hours: number;
+  team_a_color: string | null;
+  team_b_color: string | null;
+};
+
+// 자체전 유니폼 색상 팔레트 (선택지): 주황 · 검정 · 흰색
+export const UNIFORM_COLORS = [
+  "#F97316", // 주황
+  "#1F2937", // 검정
+  "#F9FAFB", // 흰색
+] as const;
+
+// 팀 기본 유니폼 색 (DB 값이 없을 때)
+export const DEFAULT_TEAM_COLOR: Record<"A" | "B", string> = {
+  A: "#F97316", // 주황
+  B: "#1F2937", // 검정
 };
 
 export const DEFAULT_MATCH_DURATION_HOURS = 2;
