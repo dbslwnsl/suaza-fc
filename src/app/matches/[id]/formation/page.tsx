@@ -10,7 +10,11 @@ import {
   DEFAULT_QUARTER_IDS,
   type SavedQuarter,
 } from "@/lib/formations/helpers";
-import type { Position, MemberTitle } from "@/lib/members/positions";
+import type {
+  Position,
+  MemberTitle,
+  PreferredFoot,
+} from "@/lib/members/positions";
 
 export type EditorMember = {
   id: string;
@@ -20,6 +24,7 @@ export type EditorMember = {
   title: MemberTitle | null;
   avatar_url: string | null;
   condition: number;
+  preferred_foot: PreferredFoot | null;
 };
 
 type FormationRow = {
@@ -109,7 +114,7 @@ export default async function FormationPage({
     supabase
       .from("profiles")
       .select(
-        "id, name, jersey_number, positions, title, avatar_url, condition",
+        "id, name, jersey_number, positions, title, avatar_url, condition, preferred_foot",
       )
       .is("deleted_at", null)
       .order("jersey_number", { ascending: true, nullsFirst: false }),

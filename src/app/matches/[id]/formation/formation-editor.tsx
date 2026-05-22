@@ -21,6 +21,7 @@ import {
   POSITION_COLOR,
   type Position,
   type MemberTitle,
+  type PreferredFoot,
 } from "@/lib/members/positions";
 import type { EditorMember } from "./page";
 
@@ -115,6 +116,78 @@ function ConditionArrow({
   return (
     <span className="shrink-0" aria-label={`컨디션 ${level}단계`}>
       {inner}
+    </span>
+  );
+}
+
+const FOOT_SHORT: Record<PreferredFoot, string> = {
+  left: "L",
+  right: "R",
+  both: "LR",
+};
+const FOOT_LABEL_KO: Record<PreferredFoot, string> = {
+  left: "왼발",
+  right: "오른발",
+  both: "양발",
+};
+
+function FootBadge({ foot }: { foot: PreferredFoot | null }) {
+  if (!foot) return null;
+  return (
+    <span
+      className={`shrink-0 inline-flex items-center justify-center h-[18px] min-w-[18px] rounded-full bg-suaza-bg text-suaza-ink-muted text-[9px] font-bold leading-none ${
+        foot === "both" ? "px-0" : "px-1"
+      }`}
+      aria-label={`주발 ${FOOT_LABEL_KO[foot]}`}
+    >
+      {FOOT_SHORT[foot]}
+    </span>
+  );
+}
+
+/**
+ * 이름이 가용 폭을 넘으면 맨 앞 "성"을 떼고 표기.
+ * 숨김 측정용 span(전체 이름)의 자연 너비를 컨테이너 가용 폭과 비교해 판단.
+ */
+function PlayerName({
+  name,
+  className,
+}: {
+  name: string;
+  className?: string;
+}) {
+  const wrapRef = useRef<HTMLSpanElement>(null);
+  const fullRef = useRef<HTMLSpanElement>(null);
+  const [dropSurname, setDropSurname] = useState(false);
+
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    const full = fullRef.current;
+    if (!wrap || !full) return;
+    const measure = () => {
+      setDropSurname(
+        name.length > 1 && full.scrollWidth > wrap.clientWidth + 1,
+      );
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [name]);
+
+  return (
+    <span
+      ref={wrapRef}
+      className={`relative block min-w-0 truncate ${className ?? ""}`}
+    >
+      <span
+        ref={fullRef}
+        aria-hidden
+        className="absolute left-0 top-0 whitespace-nowrap invisible pointer-events-none"
+      >
+        {name}
+      </span>
+      {dropSurname ? name.slice(1) : name}
     </span>
   );
 }
@@ -1912,14 +1985,16 @@ function PlayerRowMobile({
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-sm font-semibold text-suaza-ink truncate">
-            {m.name}
-          </span>
+          <PlayerName
+            name={m.name}
+            className="text-sm font-semibold text-suaza-ink"
+          />
           <ConditionArrow
             level={conditionLevel}
             interactive={isMe}
             onCycle={onCycleCondition}
           />
+          <FootBadge foot={m.preferred_foot} />
         </div>
         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
           {memberPositions.length === 0 ? (
@@ -2180,14 +2255,16 @@ function DesktopPlayerCard({
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1">
-          <span className="text-xs font-semibold text-suaza-ink truncate">
-            {m.name}
-          </span>
+          <PlayerName
+            name={m.name}
+            className="text-xs font-semibold text-suaza-ink"
+          />
           <ConditionArrow
             level={conditionLevel}
             interactive={isMe}
             onCycle={onCycleCondition}
           />
+          <FootBadge foot={m.preferred_foot} />
         </div>
       </div>
       <div className="flex gap-0.5 shrink-0">
