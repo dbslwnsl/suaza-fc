@@ -591,6 +591,71 @@ export async function voteAttendance(matchId: string, status: AttendanceStatus) 
 // 자체전 A/B 팀 편성 (match_attendances.team)
 // ─────────────────────────────────────────────────────────────
 
+type ServerClient = Awaited<ReturnType<typeof createClient>>;
+
+type FormationPositions = {
+  player_ids?: (string | null)[];
+  quarters?: {
+    id: string;
+    shape: string;
+    player_ids?: (string | null)[];
+    teamB?: { shape: string; player_ids?: (string | null)[] };
+  }[];
+};
+
+/**
+ * 팀이 바뀐 선수의 포메이션 배치를 모든 쿼터(A·B 양 팀)에서 제거.
+ * 변경 후 해당 선수는 새 팀 명단에 '미배치' 상태로 나타난다.
+ */
+async function resetPlayersInFormation(
+  supabase: ServerClient,
+  matchId: string,
+  playerIds: string[],
+) {
+  if (playerIds.length === 0) return;
+  const ids = new Set(playerIds);
+
+  const { data: formation } = await supabase
+    .from("formations")
+    .select("positions")
+    .eq("match_id", matchId)
+    .maybeSingle();
+  if (!formation) return;
+
+  const positions = formation.positions as FormationPositions | null;
+  if (!positions) return;
+
+  let changed = false;
+  const strip = (arr?: (string | null)[]) =>
+    arr?.map((pid) => {
+      if (pid && ids.has(pid)) {
+        changed = true;
+        return null;
+      }
+      return pid;
+    });
+
+  const next: FormationPositions = { ...positions };
+  if (Array.isArray(positions.quarters)) {
+    next.quarters = positions.quarters.map((q) => ({
+      ...q,
+      player_ids: strip(q.player_ids),
+      teamB: q.teamB
+        ? { ...q.teamB, player_ids: strip(q.teamB.player_ids) }
+        : q.teamB,
+    }));
+  }
+  if (Array.isArray(positions.player_ids)) {
+    next.player_ids = strip(positions.player_ids);
+  }
+
+  if (!changed) return;
+  await supabase
+    .from("formations")
+    .update({ positions: next })
+    .eq("match_id", matchId);
+}
+
 /**
  * 한 선수의 팀 배정을 순환: null → 'A' → 'B' → null.
  * 참석(attending) 회원만 대상. 매니저/코치만 가능.
@@ -617,7 +682,10 @@ export async function cycleMatchTeam(matchId: string, playerId: string) {
     .eq("player_id", playerId);
 
   if (error) return;
+  // 팀이 바뀐 선수의 기존 포메이션 배치를 모든 쿼터에서 제거
+  await resetPlayersInFormation(supabase, matchId, [playerId]);
   revalidatePath(`/matches/${matchId}`);
+  revalidatePath(`/matches/${matchId}/formation`);
 }
 
 /**
@@ -629,10 +697,13 @@ export async function autoBalanceTeams(matchId: string) {
 
   const { data: attendees } = await supabase
     .from("match_attendances")
-    .select("player_id")
+    .select("player_id, team")
     .eq("match_id", matchId)
     .eq("status", "attending");
 
+  const oldTeam = new Map(
+    (attendees ?? []).map((a) => [a.player_id, a.team as "A" | "B" | null]),
+  );
   const ids = (attendees ?? []).map((a) => a.player_id);
   // Fisher-Yates 셔플
   for (let i = ids.length - 1; i > 0; i--) {
@@ -642,8 +713,10 @@ export async function autoBalanceTeams(matchId: string) {
 
   // 앞 절반 A, 뒤 절반 B
   const half = Math.ceil(ids.length / 2);
+  const changed: string[] = [];
   for (let i = 0; i < ids.length; i++) {
     const team = i < half ? "A" : "B";
+    if (oldTeam.get(ids[i]) !== team) changed.push(ids[i]);
     await supabase
       .from("match_attendances")
       .update({ team, updated_at: new Date().toISOString() })
@@ -651,7 +724,10 @@ export async function autoBalanceTeams(matchId: string) {
       .eq("player_id", ids[i]);
   }
 
+  // 팀이 바뀐 선수들의 포메이션 배치 제거
+  await resetPlayersInFormation(supabase, matchId, changed);
   revalidatePath(`/matches/${matchId}`);
+  revalidatePath(`/matches/${matchId}/formation`);
 }
 
 /**
@@ -681,7 +757,10 @@ export async function setMatchTeam(
     .eq("player_id", playerId);
 
   if (error) return;
+  // 팀이 바뀐 선수의 기존 포메이션 배치를 모든 쿼터에서 제거
+  await resetPlayersInFormation(supabase, matchId, [playerId]);
   revalidatePath(`/matches/${matchId}`);
+  revalidatePath(`/matches/${matchId}/formation`);
 }
 
 /**
@@ -690,10 +769,25 @@ export async function setMatchTeam(
  */
 export async function resetMatchTeams(matchId: string) {
   const { supabase } = await requireStaff();
+
+  const { data: attendees } = await supabase
+    .from("match_attendances")
+    .select("player_id")
+    .eq("match_id", matchId)
+    .eq("status", "attending");
+
   await supabase
     .from("match_attendances")
     .update({ team: null, updated_at: new Date().toISOString() })
     .eq("match_id", matchId)
     .eq("status", "attending");
+
+  // 팀이 모두 해제되므로 참석자 전원의 포메이션 배치 제거
+  await resetPlayersInFormation(
+    supabase,
+    matchId,
+    (attendees ?? []).map((a) => a.player_id),
+  );
   revalidatePath(`/matches/${matchId}`);
+  revalidatePath(`/matches/${matchId}/formation`);
 }
