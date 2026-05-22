@@ -901,7 +901,7 @@ function Pitch({
   return (
     <div
       ref={pitchRef}
-      className={`relative w-full ${
+      className={`relative w-full [container-type:size] ${
         isIntra ? "aspect-[3/5]" : "aspect-[3/4]"
       } desktop:w-auto desktop:h-full bg-gradient-to-b from-emerald-600 to-emerald-700 rounded-2xl overflow-hidden shadow-lg`}
     >
@@ -1172,15 +1172,21 @@ function PlayerCircle({
 }) {
   const color = POSITION_COLOR[role];
   const text = label ?? role;
-  const stateRing = hovered ? "ring-4 ring-white/60 scale-110" : "";
-  const sizeClass = compact
-    ? "w-8 h-8 sm:w-9 sm:h-9 text-[9px]"
-    : "w-11 h-11 sm:w-12 sm:h-12 text-[10px]";
+  const stateRing = hovered ? "ring-4 ring-white/60 scale-105" : "";
+  // 경기장 크기에 비례(cqmin) + 상·하한(clamp). 자체전은 두 팀을 절반씩 욱여넣어
+  // 세로 간격이 좁으므로 더 작은 비율 사용. (인라인 스타일로 확실히 적용)
+  const dim = compact
+    ? "clamp(24px, 5.5cqmin, 32px)"
+    : "clamp(38px, 11cqmin, 50px)";
+  const fontSize = compact
+    ? "clamp(8px, 1.5cqmin, 10px)"
+    : "clamp(9px, 2.6cqmin, 11px)";
+  const sizeStyle = { width: dim, height: dim, fontSize };
   if (player) {
     return (
       <div
-        className={`relative ${sizeClass} rounded-full bg-white border-[3px] flex items-center justify-center font-bold shadow-md transition ${stateRing}`}
-        style={{ borderColor: color }}
+        className={`relative rounded-full bg-white border-[3px] flex items-center justify-center font-bold shadow-md transition ${stateRing}`}
+        style={{ borderColor: color, ...sizeStyle }}
       >
         <span style={{ color }}>{text}</span>
       </div>
@@ -1188,11 +1194,14 @@ function PlayerCircle({
   }
   return (
     <div
-      className={`${sizeClass} rounded-full border-2 border-dashed flex items-center justify-center transition group-hover:bg-white/10 ${stateRing} ${hint ? "animate-pulse" : ""}`}
-      style={{ borderColor: color, backgroundColor: `${color}33` }}
+      className={`rounded-full border-2 border-dashed flex items-center justify-center transition group-hover:bg-white/10 ${stateRing} ${hint ? "animate-pulse" : ""}`}
+      style={{ borderColor: color, backgroundColor: `${color}33`, ...sizeStyle }}
     >
       <span
-        className={`${compact ? "text-sm" : "text-lg"} text-white/85 leading-none font-light`}
+        className="text-white/85 leading-none font-light"
+        style={{
+          fontSize: compact ? "clamp(13px, 3cqmin, 17px)" : "clamp(16px, 4cqmin, 22px)",
+        }}
       >
         +
       </span>
