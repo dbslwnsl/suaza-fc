@@ -153,6 +153,7 @@ export function AttendanceCardVote({
   nonVoters,
   isManager,
   locked,
+  lockedMessage = "🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다",
   children,
 }: {
   matchId: string;
@@ -163,6 +164,7 @@ export function AttendanceCardVote({
   nonVoters: VotePlayer[];
   isManager: boolean;
   locked: boolean;
+  lockedMessage?: string;
   /** 매니저용 멤버 보드 (서버에서 전달) */
   children?: ReactNode;
 }) {
@@ -176,7 +178,7 @@ export function AttendanceCardVote({
       {/* My response */}
       {locked ? (
         <div className="bg-gray-50 rounded-xl p-3 text-center text-xs text-suaza-ink-muted">
-          🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다
+          {lockedMessage}
         </div>
       ) : (
         <div className="bg-red-50/50 rounded-xl p-3 flex flex-col gap-2">
@@ -253,6 +255,8 @@ export function AttendanceCompactVote({
   byStatus,
   nonVoters,
   isManager,
+  locked = false,
+  lockedMessage = "🔒 투표가 마감되었습니다",
   children,
 }: {
   matchId: string;
@@ -261,6 +265,8 @@ export function AttendanceCompactVote({
   byStatus: Groups;
   nonVoters: VotePlayer[];
   isManager: boolean;
+  locked?: boolean;
+  lockedMessage?: string;
   children?: ReactNode;
 }) {
   const { optimisticStatus, vote, groups, nonVoters: nv } =
@@ -268,7 +274,13 @@ export function AttendanceCompactVote({
 
   return (
     <>
-      <VoteButtons status={optimisticStatus} onVote={vote} />
+      {locked ? (
+        <div className="bg-gray-50 rounded-lg p-3 text-center text-xs text-suaza-ink-muted">
+          {lockedMessage}
+        </div>
+      ) : (
+        <VoteButtons status={optimisticStatus} onVote={vote} />
+      )}
 
       {isManager ? (
         children

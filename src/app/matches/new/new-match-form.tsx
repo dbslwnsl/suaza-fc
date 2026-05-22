@@ -52,7 +52,54 @@ type Initial = {
   status: Status;
   notes: string | null;
   durationHours?: number | null;
+  voteDeadline?: string | null; // ISO from DB
 };
+
+// 투표 마감: 경기 시작 N시간 전, 또는 직접 설정
+type VoteMode = 24 | 6 | 3 | 1 | "custom";
+const VOTE_TABS: { value: VoteMode; label: string }[] = [
+  { value: 24, label: "하루 전" },
+  { value: 6, label: "6시간 전" },
+  { value: 3, label: "3시간 전" },
+  { value: 1, label: "1시간 전" },
+  { value: "custom", label: "직접 설정" },
+];
+// 로컬 wall-clock 에서 offsetHours 만큼 앞으로 당긴 datetime-local 문자열 반환.
+function shiftLocalDatetime(
+  dateStr: string,
+  timeStr: string,
+  offsetHours: number,
+): string {
+  if (!dateStr || !timeStr) return "";
+  const [y, mo, d] = dateStr.split("-").map(Number);
+  const [h, mi] = timeStr.split(":").map(Number);
+  if ([y, mo, d, h, mi].some((n) => Number.isNaN(n))) return "";
+  const dt = new Date(y, mo - 1, d, h, mi);
+  dt.setTime(dt.getTime() - offsetHours * 3600 * 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
+// 기본 직접설정 마감: 경기 날짜 기준 2일 전 12:00
+function defaultCustomDeadline(dateStr: string): string {
+  if (!dateStr) return "";
+  const [y, mo, d] = dateStr.split("-").map(Number);
+  if ([y, mo, d].some((n) => Number.isNaN(n))) return "";
+  const dt = new Date(y, mo - 1, d);
+  dt.setDate(dt.getDate() - 2);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T12:00`;
+}
+
+const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+function formatDeadlineLabel(local: string): string {
+  if (!local) return "";
+  const [datePart, timePart] = local.split("T");
+  const [y, mo, d] = datePart.split("-").map(Number);
+  if ([y, mo, d].some((n) => Number.isNaN(n))) return "";
+  const dow = DOW[new Date(y, mo - 1, d).getDay()];
+  return `${mo}월 ${d}일 (${dow}) ${timePart}`;
+}
 
 export default function NewMatchForm({
   mode = "create",
@@ -93,13 +140,41 @@ export default function NewMatchForm({
           DEFAULT_MATCH_DURATION_HOURS) as MatchDurationHours)
       : (DEFAULT_MATCH_DURATION_HOURS as MatchDurationHours),
   );
+  // 투표 마감 모드 + 직접설정 값
+  // 신규 등록 기본값: 직접 설정(경기일 2일 전 12:00)
+  const [voteMode, setVoteMode] = useState<VoteMode>(() => {
+    if (!initial?.voteDeadline) return "custom";
+    const dl = `${isoToLocalDate(initial.voteDeadline)}T${isoToLocalTime(initial.voteDeadline)}`;
+    const md = isoToLocalDate(initial.matchDate);
+    const mt = isoToLocalTime(initial.matchDate);
+    for (const off of [24, 6, 3, 1] as const) {
+      if (shiftLocalDatetime(md, mt, off) === dl) return off;
+    }
+    return "custom";
+  });
+  const [customDeadline, setCustomDeadline] = useState<string>(() =>
+    initial?.voteDeadline
+      ? `${isoToLocalDate(initial.voteDeadline)}T${isoToLocalTime(initial.voteDeadline)}`
+      : "",
+  );
+  // 직접설정 값을 사용자가 직접 만졌는지 (만지기 전엔 경기일 기준 자동 계산)
+  const [customTouched, setCustomTouched] = useState(false);
+
   const opponentInputRef = useRef<HTMLInputElement>(null);
 
   const matchDate = date && time ? `${date}T${time}` : "";
   const effectiveOpponent = matchType === "intra" ? "자체전" : opponent;
   const finishTimeLabel = computeFinishTime(time, durationHours);
 
-  // 생성 모드일 때만 오늘 날짜 + 현재 시간(30분 단위 반올림) 기본값
+  // 계산된 투표 마감(datetime-local 문자열)
+  const voteDeadline =
+    voteMode === "custom"
+      ? customDeadline
+      : date && time
+        ? shiftLocalDatetime(date, time, voteMode)
+        : "";
+
+  // 생성 모드일 때만 오늘 날짜 + 킥오프 06:00 기본값
   useEffect(() => {
     if (isEdit) return;
     const now = new Date();
@@ -107,18 +182,18 @@ export default function NewMatchForm({
     const m = String(now.getMonth() + 1).padStart(2, "0");
     const d = String(now.getDate()).padStart(2, "0");
     setDate((cur) => cur || `${y}-${m}-${d}`);
-
-    let hh = now.getHours();
-    let mm = now.getMinutes();
-    if (mm < 15) mm = 0;
-    else if (mm < 45) mm = 30;
-    else {
-      mm = 0;
-      hh = (hh + 1) % 24;
-    }
-    const timeStr = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-    setTime((cur) => cur || timeStr);
+    setTime((cur) => cur || "06:00");
   }, [isEdit]);
+
+  // 신규 등록 + 직접설정 모드 + 사용자가 안 만진 경우:
+  // 경기 날짜가 정해지면 마감을 '경기일 2일 전 12:00'으로 자동 설정/갱신
+  useEffect(() => {
+    if (isEdit) return;
+    if (voteMode !== "custom") return;
+    if (customTouched) return;
+    if (!date) return;
+    setCustomDeadline(defaultCustomDeadline(date));
+  }, [isEdit, voteMode, customTouched, date]);
 
   const formAction =
     isEdit && matchId ? updateMatch.bind(null, matchId) : createMatch;
@@ -133,6 +208,7 @@ export default function NewMatchForm({
       <input type="hidden" name="status" value={status} />
       <input type="hidden" name="notes" value={notes} />
       <input type="hidden" name="duration_hours" value={durationHours} />
+      <input type="hidden" name="vote_deadline" value={voteDeadline} />
 
       {/* 경기 유형 */}
       <div className="flex flex-col gap-2">
@@ -274,6 +350,63 @@ export default function NewMatchForm({
           />
         )}
       </Field>
+
+      {/* 투표 마감 */}
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-baseline gap-2">
+          <span className="text-suaza-ink text-base font-medium">투표 마감</span>
+          <span className="text-suaza-ink-faint text-xs">경기 시작 기준</span>
+        </div>
+        <div className="bg-gray-100 rounded-xl p-1 grid grid-cols-5 gap-1">
+          {VOTE_TABS.map((t) => {
+            const on = voteMode === t.value;
+            return (
+              <button
+                key={String(t.value)}
+                type="button"
+                onClick={() => setVoteMode(t.value)}
+                className={`h-10 rounded-lg text-xs desktop:text-sm font-bold transition ${
+                  on
+                    ? "bg-suaza-accent text-white shadow-sm"
+                    : "text-suaza-ink-muted hover:text-suaza-ink"
+                }`}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+        {voteMode === "custom" && (
+          <input
+            type="datetime-local"
+            value={customDeadline}
+            onChange={(e) => {
+              setCustomDeadline(e.target.value);
+              setCustomTouched(true);
+            }}
+            className={inputCls}
+          />
+        )}
+        {voteDeadline ? (
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-blue-50 text-sm flex-wrap">
+            <span aria-hidden>🔔</span>
+            <span className="font-bold text-blue-600">
+              {formatDeadlineLabel(voteDeadline)} 마감
+            </span>
+            {time && (
+              <span className="text-suaza-ink-muted">
+                · 경기 {time} 시작 기준
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="px-3 py-2.5 rounded-lg bg-gray-50 text-sm text-suaza-ink-faint">
+            {voteMode === "custom"
+              ? "마감 일시를 직접 선택해 주세요"
+              : "경기 날짜·시간을 먼저 입력하면 마감 시각이 표시됩니다"}
+          </div>
+        )}
+      </div>
 
       {/* 경기 상태 — 새 경기 등록이므로 예정만 가능 */}
       <div className="flex flex-col gap-2">

@@ -181,12 +181,22 @@ export default async function MatchDetailPage({
           : null
       : null;
 
-  // 출석 마감 (경기 전날) — 서울 달력 기준 하루 전
-  const deadlineDate = new Date(matchMidUTC - 86400000);
-  const deadlineStr = `${deadlineDate.getUTCMonth() + 1}/${deadlineDate.getUTCDate()}`;
+  // 출석 마감 문구 — vote_deadline 이 있으면 그 시각, 없으면 경기 전날 23:59
+  let deadlineStr: string;
+  if (m.vote_deadline) {
+    const dl = kstParts(m.vote_deadline);
+    deadlineStr = `${Number(dl.month)}/${Number(dl.day)} ${dl.hour}:${dl.minute}`;
+  } else {
+    const deadlineDate = new Date(matchMidUTC - 86400000);
+    deadlineStr = `${deadlineDate.getUTCMonth() + 1}/${deadlineDate.getUTCDate()} 23:59`;
+  }
 
   const isIntra = m.opponent === "자체전";
   const isStarted = isMatchStarted(m);
+  // 투표 마감 경과 여부 (매니저/감독은 마감 후에도 변경 가능)
+  const deadlinePassed = m.vote_deadline
+    ? Date.now() > new Date(m.vote_deadline).getTime()
+    : false;
   // 상태 자동 진행은 위에서 auto_progress_due_matches 로 이미 처리됨
   // (조회한 match 는 갱신 후 최신 상태)
 
@@ -235,6 +245,7 @@ export default async function MatchDetailPage({
               status: m.status,
               notes: m.notes,
               durationHours: m.duration_hours,
+              voteDeadline: m.vote_deadline,
             }}
             recentOpponents={[]}
             recentLocations={[]}
@@ -303,7 +314,15 @@ export default async function MatchDetailPage({
                     myName={me?.name ?? null}
                     totalMembers={totalMembers}
                     deadlineStr={deadlineStr}
-                    locked={isStarted}
+                    locked={
+                      isStarted ||
+                      (deadlinePassed && me?.role !== "manager")
+                    }
+                    lockedMessage={
+                      isStarted
+                        ? "🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다"
+                        : "🔒 투표가 마감되었습니다 (매니저·감독만 변경 가능)"
+                    }
                   />
                 </div>
               )}
@@ -609,6 +628,7 @@ function AttendanceCard({
   totalMembers,
   deadlineStr,
   locked,
+  lockedMessage,
 }: {
   matchId: string;
   meId: string;
@@ -624,6 +644,7 @@ function AttendanceCard({
   totalMembers: number;
   deadlineStr: string;
   locked?: boolean;
+  lockedMessage?: string;
 }) {
   return (
     <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4 desktop:h-full">
@@ -637,7 +658,6 @@ function AttendanceCard({
         </div>
         <span className="text-xs text-suaza-ink-muted">
           마감 {deadlineStr}
-          <span className="hidden desktop:inline"> 23:59</span>
         </span>
       </div>
 
@@ -650,6 +670,7 @@ function AttendanceCard({
         nonVoters={nonVoters}
         isManager={!!isManager}
         locked={!!locked}
+        lockedMessage={lockedMessage}
       >
         {isManager && !locked && (
           <AttendanceManagerBoard
@@ -740,6 +761,8 @@ export function AttendanceVote({
   byStatus,
   nonVoters,
   isManager,
+  locked,
+  lockedMessage,
 }: {
   matchId: string;
   meId: string;
@@ -752,6 +775,8 @@ export function AttendanceVote({
   };
   nonVoters: VotePlayer[];
   isManager?: boolean;
+  locked?: boolean;
+  lockedMessage?: string;
 }) {
   return (
     <section className="flex flex-col gap-3 p-4 border border-suaza-border rounded-lg">
@@ -764,6 +789,8 @@ export function AttendanceVote({
         byStatus={byStatus}
         nonVoters={nonVoters}
         isManager={!!isManager}
+        locked={!!locked}
+        lockedMessage={lockedMessage}
       >
         {isManager && (
           <AttendanceManagerBoard

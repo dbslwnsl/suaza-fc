@@ -21,6 +21,7 @@ type MatchInput = {
   status: MatchStatus;
   notes: string | null;
   duration_hours: number;
+  vote_deadline: string | null;
 };
 
 // datetime-local 입력("YYYY-MM-DDTHH:mm")을 항상 서울(KST, +09:00) 기준으로
@@ -57,6 +58,9 @@ function parseForm(formData: FormData): MatchInput {
     ? durationRaw
     : DEFAULT_MATCH_DURATION_HOURS;
 
+  const deadlineLocal = String(formData.get("vote_deadline") ?? "");
+  const vote_deadline = deadlineLocal ? kstLocalToISO(deadlineLocal) : null;
+
   return {
     opponent,
     match_date,
@@ -66,6 +70,7 @@ function parseForm(formData: FormData): MatchInput {
     status,
     notes,
     duration_hours,
+    vote_deadline,
   };
 }
 
@@ -447,6 +452,36 @@ export async function unrecordParticipant(
 const ATTENDANCE_VALUES = ["attending", "absent", "undecided"] as const;
 type AttendanceStatus = (typeof ATTENDANCE_VALUES)[number];
 
+/**
+ * 본인 출석 투표가 허용되는지.
+ * - 매니저/감독(role=manager): 항상 허용
+ * - 일반 회원: 경기 시작 전 + 투표 마감 전에만 허용
+ */
+async function memberVoteAllowed(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  matchId: string,
+  userId: string,
+): Promise<boolean> {
+  const [{ data: me }, { data: match }] = await Promise.all([
+    supabase.from("profiles").select("role").eq("id", userId).single(),
+    supabase
+      .from("matches")
+      .select("status, match_date, vote_deadline")
+      .eq("id", matchId)
+      .single(),
+  ]);
+  if (me?.role === "manager") return true;
+  if (!match) return false;
+  if (isMatchStarted(match)) return false;
+  if (
+    match.vote_deadline &&
+    Date.now() > new Date(match.vote_deadline).getTime()
+  ) {
+    return false;
+  }
+  return true;
+}
+
 async function requireManager() {
   const supabase = await createClient();
   const {
@@ -518,6 +553,12 @@ export async function setAttendance(
     redirect(`${redirectTo}?error=${encodeURIComponent("올바르지 않은 값입니다")}`);
   }
 
+  if (!(await memberVoteAllowed(supabase, matchId, user.id))) {
+    redirect(
+      `${redirectTo}?error=${encodeURIComponent("투표가 마감되어 변경할 수 없습니다")}`,
+    );
+  }
+
   // 토글 동작: 같은 status 가 이미 선택돼 있으면 row 삭제(=미투표)
   const { data: existing } = await supabase
     .from("match_attendances")
@@ -568,6 +609,12 @@ export async function voteAttendance(matchId: string, status: AttendanceStatus) 
   if (!user) redirect("/login");
 
   if (!ATTENDANCE_VALUES.includes(status)) return;
+
+  // 마감/시작 후엔 매니저·감독만 변경 가능
+  if (!(await memberVoteAllowed(supabase, matchId, user.id))) {
+    revalidatePath(`/matches/${matchId}`);
+    return;
+  }
 
   const { data: existing } = await supabase
     .from("match_attendances")

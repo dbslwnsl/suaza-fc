@@ -22,6 +22,7 @@ export type Match = {
   duration_hours: number;
   team_a_color: string | null;
   team_b_color: string | null;
+  vote_deadline: string | null;
 };
 
 // 자체전 유니폼 색상 팔레트 (선택지): 주황 · 검정 · 흰색

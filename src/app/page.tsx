@@ -18,6 +18,7 @@ import {
   RESULT_LABEL,
   formatMatchDate,
   getResult,
+  isMatchStarted,
   type Match,
 } from "@/lib/matches/helpers";
 import {
@@ -516,6 +517,17 @@ export default async function Home() {
               byStatus={byStatus}
               nonVoters={nonVoters}
               isManager={profile?.role === "manager"}
+              locked={
+                isMatchStarted(upcoming) ||
+                (!!upcoming.vote_deadline &&
+                  Date.now() > new Date(upcoming.vote_deadline).getTime() &&
+                  profile?.role !== "manager")
+              }
+              lockedMessage={
+                isMatchStarted(upcoming)
+                  ? "🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다"
+                  : "🔒 투표가 마감되었습니다 (매니저·감독만 변경 가능)"
+              }
             />
           </section>
         )}
