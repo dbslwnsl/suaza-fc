@@ -497,7 +497,6 @@ export default async function Home() {
               ))}
             <AttendanceVote
               matchId={upcoming.id}
-              redirectTo="/"
               myStatus={myStatus}
               byStatus={byStatus}
               nonVoters={nonVoters}

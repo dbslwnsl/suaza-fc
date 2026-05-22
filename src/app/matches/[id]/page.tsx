@@ -2,12 +2,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import {
-  deleteMatch,
-  setAttendance,
-  startMatch,
-} from "@/lib/matches/actions";
+import { deleteMatch, startMatch } from "@/lib/matches/actions";
 import AttendanceManagerBoard from "@/components/attendance-manager-board";
+import AttendanceVoteButtons from "./attendance-vote-buttons";
 import NewMatchForm from "@/app/matches/new/new-match-form";
 import ScoreControl from "./score-control";
 import TeamBuilder from "./team-builder";
@@ -291,7 +288,6 @@ export default async function MatchDetailPage({
                 <div className="order-1 desktop:h-full">
                   <AttendanceCard
                     matchId={m.id}
-                    redirectTo={`/matches/${m.id}`}
                     myStatus={myStatus}
                     byStatus={byStatus}
                     nonVoters={nonVoters}
@@ -594,7 +590,6 @@ type AttendancePlayer = {
 
 function AttendanceCard({
   matchId,
-  redirectTo,
   myStatus,
   byStatus,
   nonVoters,
@@ -605,7 +600,6 @@ function AttendanceCard({
   locked,
 }: {
   matchId: string;
-  redirectTo: string;
   myStatus: string | null;
   byStatus: {
     attending: AttendancePlayer[];
@@ -662,29 +656,7 @@ function AttendanceCard({
               </span>
             </span>
           </div>
-          <form action={setAttendance.bind(null, matchId, redirectTo)}>
-            <div className="grid grid-cols-3 gap-2">
-              <AttendanceVoteButton
-                value="attending"
-                label="참석"
-                icon="✓"
-                active={myStatus === "attending"}
-                activeClass="bg-green-600 text-white border-green-600"
-              />
-              <AttendanceVoteButton
-                value="absent"
-                label="불참"
-                active={myStatus === "absent"}
-                activeClass="bg-red-600 text-white border-red-600"
-              />
-              <AttendanceVoteButton
-                value="undecided"
-                label="미정"
-                active={myStatus === "undecided"}
-                activeClass="bg-gray-700 text-white border-gray-700"
-              />
-            </div>
-          </form>
+          <AttendanceVoteButtons matchId={matchId} myStatus={myStatus} />
         </div>
       )}
 
@@ -737,36 +709,6 @@ function AttendanceCard({
         </div>
       )}
     </section>
-  );
-}
-
-function AttendanceVoteButton({
-  value,
-  label,
-  icon,
-  active,
-  activeClass,
-}: {
-  value: string;
-  label: string;
-  icon?: string;
-  active: boolean;
-  activeClass: string;
-}) {
-  return (
-    <button
-      type="submit"
-      name="status"
-      value={value}
-      className={`h-11 rounded-lg border text-sm font-medium transition flex items-center justify-center gap-1 ${
-        active
-          ? activeClass
-          : "bg-white border-suaza-border text-suaza-ink hover:bg-gray-50"
-      }`}
-    >
-      {icon && active && <span>{icon}</span>}
-      {label}
-    </button>
   );
 }
 
@@ -908,14 +850,12 @@ type VotePlayer = {
 
 export function AttendanceVote({
   matchId,
-  redirectTo,
   myStatus,
   byStatus,
   nonVoters,
   isManager,
 }: {
   matchId: string;
-  redirectTo: string;
   myStatus: string | null;
   byStatus: {
     attending: VotePlayer[];
@@ -925,50 +865,11 @@ export function AttendanceVote({
   nonVoters: VotePlayer[];
   isManager?: boolean;
 }) {
-  const opts: { value: string; label: string; activeClass: string }[] = [
-    {
-      value: "attending",
-      label: "참석",
-      activeClass: "bg-green-600 text-white border-green-600",
-    },
-    {
-      value: "absent",
-      label: "불참",
-      activeClass: "bg-red-600 text-white border-red-600",
-    },
-    {
-      value: "undecided",
-      label: "미정",
-      activeClass: "bg-gray-700 text-white border-gray-700",
-    },
-  ];
-
   return (
     <section className="flex flex-col gap-3 p-4 border border-suaza-border rounded-lg">
       <h2 className="font-bold text-suaza-ink">출석 투표</h2>
 
-      <form action={setAttendance.bind(null, matchId, redirectTo)}>
-        <div className="grid grid-cols-3 gap-2">
-          {opts.map((o) => {
-            const active = myStatus === o.value;
-            return (
-              <button
-                key={o.value}
-                type="submit"
-                name="status"
-                value={o.value}
-                className={`h-10 rounded-lg border text-sm font-medium transition ${
-                  active
-                    ? o.activeClass
-                    : "border-suaza-border text-suaza-ink hover:bg-gray-50"
-                }`}
-              >
-                {o.label}
-              </button>
-            );
-          })}
-        </div>
-      </form>
+      <AttendanceVoteButtons matchId={matchId} myStatus={myStatus} />
 
       {isManager ? (
         <AttendanceManagerBoard

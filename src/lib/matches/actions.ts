@@ -544,6 +544,49 @@ export async function setAttendance(
   redirect(redirectTo);
 }
 
+/**
+ * 본인 출석 투표 (낙관적 UI용). status 를 인자로 받고 redirect 하지 않는다.
+ * 같은 status 가 이미 선택돼 있으면 row 삭제(=미투표 토글).
+ * 클라이언트가 즉시 화면을 갱신하고, 저장/revalidate 는 백그라운드로 처리.
+ */
+export async function voteAttendance(matchId: string, status: AttendanceStatus) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!ATTENDANCE_VALUES.includes(status)) return;
+
+  const { data: existing } = await supabase
+    .from("match_attendances")
+    .select("status")
+    .eq("match_id", matchId)
+    .eq("player_id", user.id)
+    .maybeSingle();
+
+  if (existing?.status === status) {
+    await supabase
+      .from("match_attendances")
+      .delete()
+      .eq("match_id", matchId)
+      .eq("player_id", user.id);
+  } else {
+    await supabase.from("match_attendances").upsert(
+      {
+        match_id: matchId,
+        player_id: user.id,
+        status,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "match_id,player_id" },
+    );
+  }
+
+  revalidatePath(`/matches/${matchId}`);
+  revalidatePath("/");
+}
+
 // ─────────────────────────────────────────────────────────────
 // 자체전 A/B 팀 편성 (match_attendances.team)
 // ─────────────────────────────────────────────────────────────
