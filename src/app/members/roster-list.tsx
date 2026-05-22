@@ -25,6 +25,7 @@ export type RosterMember = {
   positions: Position[];
   jerseyNumber: number | null;
   avatarUrl: string | null;
+  birthDate: string | null;
   appearances: number;
   goals: number;
   assists: number;
@@ -33,6 +34,26 @@ export type RosterMember = {
 };
 
 type Filter = "ALL" | Position;
+type SortKey = "name" | "age";
+
+// 생년월일(YYYY-MM-DD)에서 만나이 계산. 타임존 영향 없도록 문자열로 파싱.
+function calcAge(birthDate: string | null): number | null {
+  if (!birthDate) return null;
+  const [y, mo, d] = birthDate.slice(0, 10).split("-").map(Number);
+  if (!y || !mo || !d) return null;
+  const now = new Date();
+  let age = now.getFullYear() - y;
+  const beforeBirthday =
+    now.getMonth() + 1 < mo ||
+    (now.getMonth() + 1 === mo && now.getDate() < d);
+  if (beforeBirthday) age -= 1;
+  return age >= 0 ? age : null;
+}
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "name", label: "가나다순" },
+  { key: "age", label: "나이순" },
+];
 
 export default function RosterList({
   members,
@@ -42,6 +63,7 @@ export default function RosterList({
   myId: string | null;
 }) {
   const [filter, setFilter] = useState<Filter>("ALL");
+  const [sort, setSort] = useState<SortKey>("name");
 
   const counts = useMemo(() => {
     const c: Record<Position, number> = { GK: 0, DF: 0, MF: 0, FW: 0 };
@@ -52,20 +74,33 @@ export default function RosterList({
   }, [members]);
 
   const filtered = useMemo(() => {
-    if (filter === "ALL") return members;
-    return members.filter((m) => m.positions.includes(filter));
-  }, [members, filter]);
+    const base =
+      filter === "ALL"
+        ? members
+        : members.filter((m) => m.positions.includes(filter));
+
+    const byName = (a: RosterMember, b: RosterMember) =>
+      a.name.localeCompare(b.name, "ko");
+    // 나이순: 생년월일이 빠른(나이 많은) 순. 미입력은 뒤로.
+    const byAge = (a: RosterMember, b: RosterMember) => {
+      if (!a.birthDate && !b.birthDate) return byName(a, b);
+      if (!a.birthDate) return 1;
+      if (!b.birthDate) return -1;
+      return a.birthDate.localeCompare(b.birthDate) || byName(a, b);
+    };
+
+    const sorted = [...base].sort(sort === "age" ? byAge : byName);
+
+    // 로그인 본인은 항상 맨 위로 (하이라이트 유지)
+    if (myId) {
+      const idx = sorted.findIndex((m) => m.id === myId);
+      if (idx > 0) sorted.unshift(sorted.splice(idx, 1)[0]);
+    }
+    return sorted;
+  }, [members, filter, sort, myId]);
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 헤더: 포지션 라벨 + 총 인원 */}
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm text-suaza-ink-muted shrink-0">포지션</span>
-        <span className="text-sm text-suaza-ink-muted bg-gray-100 px-3 py-1 rounded-full">
-          총 {members.length}명
-        </span>
-      </div>
-
       {/* 포지션 필터 칩 (한 줄) */}
       <div className="flex items-center gap-1.5 desktop:gap-2">
         <FilterChip
@@ -87,6 +122,18 @@ export default function RosterList({
         ))}
       </div>
 
+      {/* 정렬 칩 */}
+      <div className="flex items-center gap-1.5 desktop:gap-2">
+        {SORT_OPTIONS.map((opt) => (
+          <SortChip
+            key={opt.key}
+            label={opt.label}
+            active={sort === opt.key}
+            onClick={() => setSort(opt.key)}
+          />
+        ))}
+      </div>
+
       {filtered.length === 0 ? (
         <p className="text-suaza-ink-muted text-sm py-8 text-center">
           해당 포지션 회원이 없습니다.
@@ -101,6 +148,31 @@ export default function RosterList({
         </ul>
       )}
     </div>
+  );
+}
+
+function SortChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 desktop:gap-1.5 px-2 desktop:px-3 py-0.5 desktop:py-1 rounded-full text-xs desktop:text-sm font-medium transition shrink-0 ${
+        active
+          ? "bg-suaza-ink text-white border border-suaza-ink"
+          : "bg-white text-suaza-ink border border-suaza-border hover:bg-gray-100"
+      }`}
+    >
+      {label}
+      {active && <span className="text-[10px]">↓</span>}
+    </button>
   );
 }
 
@@ -158,6 +230,7 @@ function MemberCard({
     title: m.title,
     role: m.role,
   });
+  const age = calcAge(m.birthDate);
 
   return (
     <Link
@@ -210,6 +283,11 @@ function MemberCard({
               {m.nickname && (
                 <span className="text-sm text-suaza-ink-muted truncate">
                   ({m.nickname})
+                </span>
+              )}
+              {age != null && (
+                <span className="text-sm text-suaza-ink-muted shrink-0">
+                  ({age}세)
                 </span>
               )}
             </div>
