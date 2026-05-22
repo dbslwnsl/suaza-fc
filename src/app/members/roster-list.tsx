@@ -6,8 +6,6 @@ import { useMemo, useState } from "react";
 import {
   POSITION_COLOR,
   POSITIONS,
-  TITLE_BADGE,
-  TITLE_LABEL,
   type MemberTitle,
   type Position,
 } from "@/lib/members/positions";
@@ -242,56 +240,63 @@ function MemberCard({
       }`}
     >
       <div className="flex items-center gap-3 desktop:gap-4">
-        <div className="relative shrink-0">
-          <div
-            className="relative w-12 h-12 desktop:w-14 desktop:h-14 rounded-full bg-gray-100 flex items-center justify-center border-2 overflow-hidden"
-            style={{ borderColor: ringColor }}
-            aria-hidden
-          >
-            {m.avatarUrl ? (
-              <Image
-                src={m.avatarUrl}
-                alt={m.name}
-                fill
-                sizes="(min-width: 768px) 56px, 48px"
-                className="object-cover"
-              />
-            ) : (
-              <span className="text-base desktop:text-lg font-bold text-suaza-ink">
-                {m.initial}
-              </span>
-            )}
+        <div className="shrink-0 flex flex-col items-center gap-1">
+          <div className="relative">
+            <div
+              className="relative w-12 h-12 desktop:w-14 desktop:h-14 rounded-full bg-gray-100 flex items-center justify-center border-2 overflow-hidden"
+              style={{ borderColor: ringColor }}
+              aria-hidden
+            >
+              {m.avatarUrl ? (
+                <Image
+                  src={m.avatarUrl}
+                  alt={m.name}
+                  fill
+                  sizes="(min-width: 768px) 56px, 48px"
+                  className="object-cover"
+                />
+              ) : (
+                <span className="text-base desktop:text-lg font-bold text-suaza-ink">
+                  {m.initial}
+                </span>
+              )}
+            </div>
+            <AvatarBadges
+              titleBadges={titleBadges}
+              awardBadges={awardBadges}
+              size="xs"
+            />
           </div>
-          <AvatarBadges
-            titleBadges={titleBadges}
-            awardBadges={awardBadges}
-            size="xs"
-          />
+          {m.jerseyNumber != null && (
+            <span className="mt-1 text-suaza-accent font-bold text-sm leading-none">
+              #{m.jerseyNumber}
+            </span>
+          )}
         </div>
 
         <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
             <div className="flex items-baseline gap-1.5 min-w-0">
               <span className="font-bold text-suaza-ink truncate">
                 {m.displayName}
               </span>
-              {m.jerseyNumber != null && (
-                <span className="text-suaza-accent font-bold shrink-0">
-                  #{m.jerseyNumber}
-                </span>
-              )}
               {m.nickname && (
-                <span className="text-sm text-suaza-ink-muted truncate">
-                  ({m.nickname})
+                <span
+                  className="text-sm font-medium truncate"
+                  style={{ color: "#338CF2" }}
+                >
+                  @{m.nickname}
                 </span>
               )}
               {age != null && (
-                <span className="text-sm text-suaza-ink-muted shrink-0">
-                  ({age}세)
+                <span
+                  className="text-xs shrink-0"
+                  style={{ color: "#BDC4CF" }}
+                >
+                  {age}세
                 </span>
               )}
             </div>
-            <TitleBadge title={m.title} />
           </div>
 
           {m.positions.length > 0 && (
@@ -331,17 +336,6 @@ function MemberCard({
 
 function Dot() {
   return <span className="text-suaza-ink-faint">·</span>;
-}
-
-function TitleBadge({ title }: { title: MemberTitle }) {
-  return (
-    <span
-      className={`shrink-0 inline-flex items-center gap-1 text-[11px] desktop:text-xs px-2 py-0.5 rounded-full font-medium ${TITLE_BADGE[title] ?? TITLE_BADGE.player}`}
-    >
-      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
-      {TITLE_LABEL[title] ?? title}
-    </span>
-  );
 }
 
 function PositionChip({ position }: { position: Position }) {
