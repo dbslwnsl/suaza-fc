@@ -749,7 +749,7 @@ function RateCell({ rate, accent }: { rate: number; accent?: boolean }) {
       </span>
       <div className="h-1 rounded-full bg-gray-200 overflow-hidden">
         <div
-          className="h-full rounded-full transition-all"
+          className="h-full rounded-full"
           style={{
             width: `${pct}%`,
             backgroundColor: barColor,
