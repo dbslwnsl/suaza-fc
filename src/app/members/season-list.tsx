@@ -417,7 +417,7 @@ function MobileTable({
 }) {
   return (
     <div className="rounded-xl border border-suaza-border overflow-x-auto">
-      <table className="w-full text-xs border-separate border-spacing-0 min-w-[700px]">
+      <table className="w-full text-xs border-separate border-spacing-0 min-w-[520px]">
         <thead className="bg-gray-50 text-suaza-ink-muted">
           <tr>
             <MTh className="w-7 text-center sticky left-0 bg-gray-50 z-20 pl-1 pr-0.5">
@@ -446,7 +446,7 @@ function MobileTable({
               sortKey={sortKey}
               sortDir={sortDir}
               onSort={onSort}
-              className="min-w-[80px]"
+              className="!w-[64px] !max-w-[64px]"
             />
             <MSortTh
               label="최근 5경기"
@@ -470,6 +470,8 @@ function MobileTable({
           {rows.map((row) => {
             const isMe = row.player_id === myId;
             const rowBg = isMe ? "bg-red-50" : "bg-white";
+            const hl = (k: SortKey) =>
+              sortKey === k ? "!font-bold !text-[#338CF2]" : "";
             return (
               <tr key={row.player_id} className={rowBg}>
                 <MTd
@@ -482,28 +484,32 @@ function MobileTable({
                 <MTd
                   className={`font-bold sticky left-7 z-10 !pl-0 pr-0 ${rowBg} ${
                     isMe ? "text-suaza-accent" : "text-suaza-ink"
-                  }`}
+                  } ${hl("name")}`}
                 >
                   {displayMemberName(row.name)}
                 </MTd>
-                <MTd className="text-center tabular-nums !pl-0">{row.appearances}</MTd>
-                <MTd className="text-center tabular-nums">{row.wins}</MTd>
-                <MTd className="text-center tabular-nums font-bold">{row.goals}</MTd>
-                <MTd className="text-center tabular-nums">{row.assists}</MTd>
-                <MTd className="text-center tabular-nums font-bold">{row.attackPoints}</MTd>
-                <MTd className="text-center tabular-nums text-suaza-ink-muted">{row.cleanSheets}</MTd>
-                <MTd className="text-center tabular-nums">{row.mom}</MTd>
-                <MTd className="text-center tabular-nums text-suaza-ink-muted">{row.refereeCount}</MTd>
+                <MTd className={`text-center tabular-nums !pl-0 ${hl("appearances")}`}>{row.appearances}</MTd>
+                <MTd className={`text-center tabular-nums ${hl("wins")}`}>{row.wins}</MTd>
+                <MTd className={`text-center tabular-nums ${hl("goals")}`}>{row.goals}</MTd>
+                <MTd className={`text-center tabular-nums ${hl("assists")}`}>{row.assists}</MTd>
+                <MTd className={`text-center tabular-nums ${hl("attackPoints")}`}>{row.attackPoints}</MTd>
+                <MTd className={`text-center tabular-nums text-suaza-ink-muted ${hl("cleanSheets")}`}>{row.cleanSheets}</MTd>
+                <MTd className={`text-center tabular-nums ${hl("mom")}`}>{row.mom}</MTd>
+                <MTd className={`text-center tabular-nums text-suaza-ink-muted ${hl("refereeCount")}`}>{row.refereeCount}</MTd>
                 <MTd>
-                  <RateCell rate={row.attendanceRate} accent={isMe} />
+                  <RateCell
+                    rate={row.attendanceRate}
+                    accent={isMe}
+                    highlight={sortKey === "attendanceRate"}
+                  />
                 </MTd>
                 <MTd className="text-center !pr-0">
                   <Recent5 results={row.recent5} compact />
                 </MTd>
                 <MTd
-                  className={`text-right pr-2 !pl-0 tabular-nums font-bold text-base sticky right-0 z-10 ${rowBg} ${
+                  className={`text-right pr-2 !pl-0 tabular-nums text-base sticky right-0 z-10 ${rowBg} ${
                     isMe ? "text-suaza-accent" : "text-suaza-ink"
-                  }`}
+                  } ${hl("points")}`}
                 >
                   {row.points}
                   <span className="text-[9px] text-suaza-ink-muted font-normal ml-0.5">
@@ -680,6 +686,8 @@ function DesktopTable({
         <tbody>
           {rows.map((row) => {
             const isMe = row.player_id === myId;
+            const hl = (k: SortKey) =>
+              sortKey === k ? "!font-bold !text-[#338CF2]" : "";
             return (
               <tr
                 key={row.player_id}
@@ -695,34 +703,38 @@ function DesktopTable({
                 <Td
                   className={`font-bold ${
                     isMe ? "text-suaza-accent" : "text-suaza-ink"
-                  }`}
+                  } ${hl("name")}`}
                 >
                   {displayMemberName(row.name)}
                 </Td>
-                <Td className="text-center tabular-nums">{row.appearances}</Td>
-                <Td className="text-center tabular-nums">{row.wins}</Td>
-                <Td className="text-center tabular-nums font-bold">{row.goals}</Td>
-                <Td className="text-center tabular-nums">{row.assists}</Td>
-                <Td className="text-center tabular-nums font-bold">
+                <Td className={`text-center tabular-nums ${hl("appearances")}`}>{row.appearances}</Td>
+                <Td className={`text-center tabular-nums ${hl("wins")}`}>{row.wins}</Td>
+                <Td className={`text-center tabular-nums ${hl("goals")}`}>{row.goals}</Td>
+                <Td className={`text-center tabular-nums ${hl("assists")}`}>{row.assists}</Td>
+                <Td className={`text-center tabular-nums ${hl("attackPoints")}`}>
                   {row.attackPoints}
                 </Td>
-                <Td className="text-center tabular-nums text-suaza-ink-muted">
+                <Td className={`text-center tabular-nums text-suaza-ink-muted ${hl("cleanSheets")}`}>
                   {row.cleanSheets}
                 </Td>
-                <Td className="text-center tabular-nums">{row.mom}</Td>
-                <Td className="text-center tabular-nums text-suaza-ink-muted">
+                <Td className={`text-center tabular-nums ${hl("mom")}`}>{row.mom}</Td>
+                <Td className={`text-center tabular-nums text-suaza-ink-muted ${hl("refereeCount")}`}>
                   {row.refereeCount}
                 </Td>
                 <Td>
-                  <RateCell rate={row.attendanceRate} accent={isMe} />
+                  <RateCell
+                    rate={row.attendanceRate}
+                    accent={isMe}
+                    highlight={sortKey === "attendanceRate"}
+                  />
                 </Td>
                 <Td className="text-center">
                   <Recent5 results={row.recent5} />
                 </Td>
                 <Td
-                  className={`text-right pr-4 tabular-nums font-bold text-lg ${
+                  className={`text-right pr-4 tabular-nums text-lg ${
                     isMe ? "text-suaza-accent" : "text-suaza-ink"
-                  }`}
+                  } ${hl("points")}`}
                 >
                   {row.points}
                   <span className="text-[10px] text-suaza-ink-muted font-normal ml-0.5">
@@ -822,14 +834,31 @@ function Td({
   );
 }
 
-function RateCell({ rate, accent }: { rate: number; accent?: boolean }) {
+function RateCell({
+  rate,
+  accent,
+  highlight,
+}: {
+  rate: number;
+  accent?: boolean;
+  highlight?: boolean;
+}) {
   const pct = Math.round(rate * 100);
-  const barColor = accent ? "#EF3E3E" : "#3B82F6";
+  // 20% 단위 신호등 색 (낮음→높음)
+  const barColor =
+    pct < 20 ? "#EF4444"
+    : pct < 40 ? "#F97316"
+    : pct < 60 ? "#EAB308"
+    : pct < 80 ? "#84CC16"
+    : "#16A34A";
+  const pctTextCls = highlight
+    ? "font-bold text-[#338CF2]"
+    : accent
+      ? "text-suaza-accent"
+      : "text-suaza-ink";
   return (
     <div className="flex flex-col gap-1 px-1 tabular-nums">
-      <span
-        className={`text-xs font-bold text-right ${accent ? "text-suaza-accent" : "text-suaza-ink"}`}
-      >
+      <span className={`text-xs text-right ${pctTextCls}`}>
         {pct}%
       </span>
       <div className="h-1 rounded-full bg-gray-200 overflow-hidden">
