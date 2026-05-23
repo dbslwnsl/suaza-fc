@@ -34,21 +34,6 @@ type SortKey =
   | "recent5Wins"
   | "name";
 
-const SORT_OPTIONS: { key: SortKey; label: string; desktopOnly?: boolean }[] = [
-  { key: "points", label: "포인트" },
-  { key: "appearances", label: "출전" },
-  { key: "wins", label: "승리" },
-  { key: "goals", label: "골" },
-  { key: "assists", label: "어시" },
-  { key: "attackPoints", label: "공격P" },
-  { key: "cleanSheets", label: "CS" },
-  { key: "mom", label: "MOM" },
-  { key: "refereeCount", label: "심판", desktopOnly: true },
-  { key: "attendanceRate", label: "출전율", desktopOnly: true },
-  { key: "recent5Wins", label: "최근 5경기", desktopOnly: true },
-  { key: "name", label: "선수", desktopOnly: true },
-];
-
 // "선수"(이름) 컬럼은 클릭 시 asc(가나다 정순) 가 자연스러움
 const DEFAULT_DIR: Partial<Record<SortKey, "desc" | "asc">> = {
   name: "asc",
@@ -174,29 +159,6 @@ export default function SeasonList({
       {/* 나의 기록 카드 */}
       {me && <MyCard me={me} />}
 
-      {/* 정렬 칩 (모바일 전용 — 데스크탑은 표 헤더 클릭으로 정렬) */}
-      <div className="flex items-center gap-2 desktop:hidden">
-        <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
-          {SORT_OPTIONS.filter((opt) => !opt.desktopOnly).map((opt) => (
-            <SortChip
-              key={opt.key}
-              active={sortKey === opt.key}
-              label={opt.label}
-              dir={sortKey === opt.key ? sortDir : null}
-              onClick={() => onSelectSort(opt.key)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* 전체 명단 헤더 */}
-      <div className="flex items-baseline justify-between">
-        <h3 className="text-sm font-bold text-suaza-ink">전체 명단</h3>
-        <span className="text-xs text-suaza-ink-muted">
-          {ranked.length}명 · {SORT_OPTIONS.find((o) => o.key === sortKey)?.label} {sortDir === "desc" ? "내림차순" : "오름차순"}
-        </span>
-      </div>
-
       {filtered.length === 0 ? (
         <p className="text-center text-sm text-suaza-ink-muted py-10">
           이번 시즌 출전 기록이 없습니다
@@ -213,14 +175,16 @@ export default function SeasonList({
               myId={myId}
             />
           </div>
-          {/* 모바일 카드 리스트 */}
-          <ul className="desktop:hidden flex flex-col">
-            {filtered.map((s) => (
-              <li key={s.player_id}>
-                <MobileRow row={s} isMe={s.player_id === myId} />
-              </li>
-            ))}
-          </ul>
+          {/* 모바일 테이블 (가로 스크롤 + 좌우 sticky) */}
+          <div className="desktop:hidden">
+            <MobileTable
+              rows={filtered}
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={onSelectSort}
+              myId={myId}
+            />
+          </div>
         </>
       )}
 
@@ -247,7 +211,7 @@ function SeasonSelector({ year, years }: { year: number; years: number[] }) {
           <Link
             key={y}
             href={href}
-            className={`shrink-0 inline-flex items-center px-3 py-1 rounded-lg text-sm font-bold transition ${
+            className={`shrink-0 inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold transition ${
               active
                 ? "bg-suaza-ink text-white border border-suaza-ink"
                 : "bg-white text-suaza-ink border border-suaza-border hover:bg-gray-50"
@@ -279,7 +243,7 @@ function MonthDropdown({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-bold border transition ${
+        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold border transition ${
           active
             ? "bg-suaza-ink text-white border-suaza-ink"
             : "bg-white text-suaza-ink border-suaza-border hover:bg-gray-50"
@@ -330,35 +294,6 @@ function MonthDropdown({
   );
 }
 
-function SortChip({
-  active,
-  label,
-  dir,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  dir: "desc" | "asc" | null;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold transition ${
-        active
-          ? "bg-suaza-ink text-white border border-suaza-ink"
-          : "bg-white text-suaza-ink border border-suaza-border hover:bg-gray-50"
-      }`}
-    >
-      {label}
-      {active && dir && (
-        <span className="text-[10px]">{dir === "desc" ? "↓" : "↑"}</span>
-      )}
-    </button>
-  );
-}
-
 // ───────────────────────────────────────────────────────────
 // 나의 기록 카드
 // ───────────────────────────────────────────────────────────
@@ -368,26 +303,22 @@ type RowWithRank = RichPlayerSeasonStat & { rank: number };
 function MyCard({ me }: { me: RowWithRank }) {
   return (
     <div className="rounded-2xl border-2 border-suaza-accent bg-red-50/60 p-4 desktop:px-5 desktop:py-4 flex flex-col gap-3 desktop:gap-4">
-      {/* 모바일 레이아웃: 기존 한 줄 */}
-      <div className="desktop:hidden flex items-center gap-3">
-        <div className="flex items-center justify-between gap-1 shrink-0">
-          <span className="inline-flex items-center gap-1 text-sm font-bold text-suaza-accent">
-            <span>★</span> 나의 기록
-          </span>
-        </div>
-        <span className="text-[11px] text-suaza-ink-muted font-medium ml-auto shrink-0">
-          전체 {me.rank}위
+      {/* 모바일 레이아웃: 한 줄 (★나의기록 · 이름 · 전체순위 · 포인트) */}
+      <div className="desktop:hidden flex items-center gap-2">
+        <span className="inline-flex items-center gap-1 text-sm font-bold text-suaza-accent shrink-0">
+          <span>★</span> 나의 기록
         </span>
-      </div>
-      <div className="desktop:hidden flex items-center justify-between gap-3">
-        <span className="text-xl font-bold text-suaza-ink shrink-0">
+        <span className="text-base font-bold text-suaza-ink shrink-0">
           {displayMemberName(me.name)}
         </span>
-        <div className="flex items-baseline gap-1 shrink-0">
-          <span className="text-3xl font-bold text-suaza-accent tabular-nums">
+        <span className="text-[11px] text-suaza-ink-muted font-medium shrink-0">
+          전체 {me.rank}위
+        </span>
+        <div className="ml-auto flex items-baseline gap-0.5 shrink-0">
+          <span className="text-xl font-bold text-suaza-accent tabular-nums leading-none">
             {me.points}
           </span>
-          <span className="text-xs font-bold text-suaza-accent">POINT</span>
+          <span className="text-[10px] font-bold text-suaza-accent">P</span>
         </div>
       </div>
       <div className="desktop:hidden text-sm text-suaza-ink-muted flex flex-wrap gap-x-2 gap-y-1">
@@ -471,47 +402,201 @@ function StatBlock({
 // 모바일 행
 // ───────────────────────────────────────────────────────────
 
-function MobileRow({ row, isMe }: { row: RowWithRank; isMe: boolean }) {
+function MobileTable({
+  rows,
+  sortKey,
+  sortDir,
+  onSort,
+  myId,
+}: {
+  rows: RowWithRank[];
+  sortDir: "desc" | "asc";
+  sortKey: SortKey;
+  onSort: (k: SortKey) => void;
+  myId: string | null;
+}) {
   return (
-    <div
-      className={`flex items-center gap-3 py-3 border-b border-suaza-border/60 ${
-        isMe ? "bg-red-50/40" : ""
-      }`}
+    <div className="rounded-xl border border-suaza-border overflow-x-auto">
+      <table className="w-full text-xs border-separate border-spacing-0 min-w-[700px]">
+        <thead className="bg-gray-50 text-suaza-ink-muted">
+          <tr>
+            <MTh className="w-7 text-center sticky left-0 bg-gray-50 z-20 pl-1 pr-0.5">
+              #
+            </MTh>
+            <MSortTh
+              label="선수"
+              k="name"
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={onSort}
+              align="left"
+              className="sticky left-7 bg-gray-50 z-20 !pl-0 pr-0 w-[52px]"
+            />
+            <MSortTh label="출전" k="appearances" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="!pl-0" />
+            <MSortTh label="승리" k="wins" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            <MSortTh label="골" k="goals" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            <MSortTh label="어시" k="assists" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            <MSortTh label="공P" k="attackPoints" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            <MSortTh label="CS" k="cleanSheets" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            <MSortTh label="🏆" k="mom" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            <MSortTh label="심판" k="refereeCount" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            <MSortTh
+              label="출전율"
+              k="attendanceRate"
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={onSort}
+              className="min-w-[80px]"
+            />
+            <MSortTh
+              label="최근 5경기"
+              k="recent5Wins"
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={onSort}
+              className="w-[100px] !pr-0"
+            />
+            <MSortTh
+              label="포인트"
+              k="points"
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={onSort}
+              className="text-right pr-2 !pl-0 sticky right-0 bg-gray-50 z-20 w-[44px]"
+            />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const isMe = row.player_id === myId;
+            const rowBg = isMe ? "bg-red-50" : "bg-white";
+            return (
+              <tr key={row.player_id} className={rowBg}>
+                <MTd
+                  className={`text-center font-bold sticky left-0 z-10 pl-1 pr-0.5 ${rowBg} ${
+                    isMe ? "text-suaza-accent" : "text-suaza-ink"
+                  }`}
+                >
+                  {row.rank}
+                </MTd>
+                <MTd
+                  className={`font-bold sticky left-7 z-10 !pl-0 pr-0 ${rowBg} ${
+                    isMe ? "text-suaza-accent" : "text-suaza-ink"
+                  }`}
+                >
+                  {displayMemberName(row.name)}
+                </MTd>
+                <MTd className="text-center tabular-nums !pl-0">{row.appearances}</MTd>
+                <MTd className="text-center tabular-nums">{row.wins}</MTd>
+                <MTd className="text-center tabular-nums font-bold">{row.goals}</MTd>
+                <MTd className="text-center tabular-nums">{row.assists}</MTd>
+                <MTd className="text-center tabular-nums font-bold">{row.attackPoints}</MTd>
+                <MTd className="text-center tabular-nums text-suaza-ink-muted">{row.cleanSheets}</MTd>
+                <MTd className="text-center tabular-nums">{row.mom}</MTd>
+                <MTd className="text-center tabular-nums text-suaza-ink-muted">{row.refereeCount}</MTd>
+                <MTd>
+                  <RateCell rate={row.attendanceRate} accent={isMe} />
+                </MTd>
+                <MTd className="text-center !pr-0">
+                  <Recent5 results={row.recent5} compact />
+                </MTd>
+                <MTd
+                  className={`text-right pr-2 !pl-0 tabular-nums font-bold text-base sticky right-0 z-10 ${rowBg} ${
+                    isMe ? "text-suaza-accent" : "text-suaza-ink"
+                  }`}
+                >
+                  {row.points}
+                  <span className="text-[9px] text-suaza-ink-muted font-normal ml-0.5">
+                    P
+                  </span>
+                </MTd>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── 모바일 전용 셀 컴포넌트 (콤팩트 패딩 + 작은 폰트, -2pt) ─────────
+function MTh({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <th
+      className={`py-2 px-1 text-[10px] font-medium border-b border-suaza-border ${className}`}
     >
-      <span
-        className={`w-6 text-sm font-bold shrink-0 text-right ${
-          isMe ? "text-suaza-accent" : row.rank <= 3 ? "text-suaza-ink" : "text-suaza-ink-muted"
+      {children}
+    </th>
+  );
+}
+
+function MTd({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <td className={`py-1.5 px-1 text-suaza-ink border-b border-suaza-border/60 ${className}`}>
+      {children}
+    </td>
+  );
+}
+
+function MSortTh({
+  label,
+  k,
+  sortKey,
+  sortDir,
+  onSort,
+  className = "",
+  align = "center",
+}: {
+  label: string;
+  k: SortKey;
+  sortKey: SortKey;
+  sortDir: "desc" | "asc";
+  onSort: (k: SortKey) => void;
+  className?: string;
+  align?: "left" | "center" | "right";
+}) {
+  const active = sortKey === k;
+  const alignTh =
+    align === "left" ? "text-left" : align === "right" ? "text-right" : "text-center";
+  return (
+    <th
+      className={`py-2 px-1 text-[10px] font-medium border-b border-suaza-border align-top ${alignTh} ${className}`}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(k)}
+        className={`inline-flex flex-col items-center gap-0.5 hover:text-suaza-ink transition ${
+          active ? "text-suaza-ink font-bold" : "text-suaza-ink-muted"
         }`}
       >
-        {row.rank}
-      </span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2">
-          <span className="font-bold text-suaza-ink truncate">
-            {displayMemberName(row.name)}
-          </span>
-        </div>
-        <div className="text-xs text-suaza-ink-muted flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
-          <span>출 {row.appearances}</span>
-          <span>승 {row.wins}</span>
-          <span>골 {row.goals}</span>
-          <span>어시 {row.assists}</span>
-          <span>CS {row.cleanSheets}</span>
-          <span>MOM {row.mom}</span>
-          <span>심 {row.refereeCount}</span>
-        </div>
-      </div>
-      <span className="shrink-0 inline-flex items-baseline gap-0.5 tabular-nums">
-        <span
-          className={`text-xl font-bold ${
-            isMe ? "text-suaza-accent" : "text-suaza-ink"
-          }`}
+        <span className="whitespace-nowrap">{label}</span>
+        <svg
+          viewBox="0 0 12 8"
+          className={`w-2 h-1.5 shrink-0 transition-transform ${
+            active && sortDir === "asc" ? "rotate-180" : ""
+          } ${active ? "" : "text-suaza-ink-faint"}`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
         >
-          {row.points}
-        </span>
-        <span className="text-[10px] text-suaza-ink-muted">P</span>
-      </span>
-    </div>
+          <path d="M2 2L6 6L10 2" />
+        </svg>
+      </button>
+    </th>
   );
 }
 
