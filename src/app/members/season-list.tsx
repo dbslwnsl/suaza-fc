@@ -415,7 +415,7 @@ function MyCard({ me }: { me: RowWithRank }) {
           value={`${Math.round(me.attendanceRate * 100)}%`}
         />
         <div className="flex flex-col items-start gap-0.5">
-          <span className="text-[10px] text-suaza-ink-muted">최근 5</span>
+          <span className="text-[10px] text-suaza-ink-muted">최근 5경기</span>
           <Recent5 results={me.recent5} compact />
         </div>
       </div>
@@ -541,7 +541,7 @@ function DesktopTable({
               onSort={onSort}
             />
             <Th className="text-center min-w-[96px]">출전율</Th>
-            <Th className="text-center w-[110px]">최근 5</Th>
+            <Th className="text-center w-[110px]">최근 5경기</Th>
             <SortTh
               label="포인트"
               k="points"
