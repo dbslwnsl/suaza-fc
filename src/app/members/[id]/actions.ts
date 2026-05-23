@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import {
   MEMBER_TITLES,
   POSITIONS,
@@ -234,8 +233,9 @@ export async function uploadAvatar(profileId: string, formData: FormData) {
 
 /**
  * 회원 Soft Delete.
- * - profiles.deleted_at 세팅 (과거 경기 기록은 그대로 보존)
- * - auth.users 도 함께 제거하여 동일 이메일 재가입 허용
+ * - profiles.deleted_at 세팅 → 목록에선 숨겨지지만 row 자체는 남아 경기 기록(FK) 보존
+ * - auth.users 는 건드리지 않음 (profile FK 가 cascade 라 삭제 시 기록까지 날아감)
+ *   → 동일 이메일 재가입이 필요하면 Supabase 대시보드에서 수동 처리
  * - 매니저 권한자만 호출 가능, 본인 자신은 삭제 불가
  */
 export async function softDeleteMember(profileId: string) {
@@ -270,17 +270,6 @@ export async function softDeleteMember(profileId: string) {
   if (updateError) {
     redirect(
       `/members/${profileId}?error=${encodeURIComponent(updateError.message)}`,
-    );
-  }
-
-  // auth.users 제거 → 동일 이메일 재가입 가능. service_role 필요.
-  const admin = createAdminClient();
-  const { error: authError } = await admin.auth.admin.deleteUser(profileId);
-  if (authError) {
-    // profile 은 이미 soft-delete 됐으니 목록엔 안 보이지만, 인증 row 가 남아있는 상태.
-    // 에러는 전달하되 멤버 목록으로는 보내자.
-    redirect(
-      `/members?error=${encodeURIComponent(`회원 비활성화는 완료됐지만 인증 제거 실패: ${authError.message}`)}`,
     );
   }
 
