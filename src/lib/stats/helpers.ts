@@ -33,6 +33,8 @@ export type RichPlayerSeasonStat = PlayerSeasonStat & {
   attackPoints: number; // goals + assists
   cleanSheets: number;
   refereeCount: number;
+  mom: number; // custom_stats.mom 합 (MOM 횟수)
+  wins: number; // 승리한 경기 수 (자체전 제외)
   points: number; // custom_stats.points 합
   attendanceRate: number; // 0~1
   recent5: MatchResult[]; // 가장 최근 5경기 (출전한 것만)
@@ -72,9 +74,16 @@ export function buildRichSeasonStats(
 
   return base.map((s) => {
     const playerParts = partsByPlayer.get(s.player_id) ?? [];
-    const recent5: MatchResult[] = playerParts
+    const playedMatches = playerParts
       .map((p) => matchById.get(p.match_id))
-      .filter((m): m is MatchSummary => !!m)
+      .filter((m): m is MatchSummary => !!m);
+    // 승리 횟수: 자체전 제외, 본인이 출전한 경기 중 W
+    const wins = playedMatches.filter(
+      (m) =>
+        m.opponent !== "자체전" &&
+        resultFromScores(m.our_score, m.opponent_score) === "W",
+    ).length;
+    const recent5: MatchResult[] = playedMatches
       .sort(
         (a, b) =>
           new Date(b.match_date).getTime() - new Date(a.match_date).getTime(),
@@ -89,6 +98,8 @@ export function buildRichSeasonStats(
       attackPoints: s.goals + s.assists,
       cleanSheets: s.custom.clean_sheets ?? 0,
       refereeCount: s.custom.referee_count ?? 0,
+      mom: s.custom.mom ?? 0,
+      wins,
       points: s.custom.points ?? 0,
       attendanceRate: totalMatches > 0 ? s.appearances / totalMatches : 0,
       recent5,

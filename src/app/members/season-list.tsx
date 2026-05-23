@@ -23,19 +23,23 @@ export type RosterBase = {
 type SortKey =
   | "points"
   | "appearances"
+  | "wins"
   | "goals"
   | "assists"
   | "attackPoints"
   | "cleanSheets"
+  | "mom"
   | "refereeCount";
 
 const SORT_OPTIONS: { key: SortKey; label: string; desktopOnly?: boolean }[] = [
   { key: "points", label: "포인트" },
   { key: "appearances", label: "출전" },
+  { key: "wins", label: "승리" },
   { key: "goals", label: "골" },
   { key: "assists", label: "어시" },
   { key: "attackPoints", label: "공격P" },
   { key: "cleanSheets", label: "CS" },
+  { key: "mom", label: "MOM" },
   { key: "refereeCount", label: "심판", desktopOnly: true },
 ];
 
@@ -409,9 +413,11 @@ function MyCard({ me }: { me: RowWithRank }) {
       </div>
       <div className="desktop:hidden text-sm text-suaza-ink-muted flex flex-wrap gap-x-2 gap-y-1">
         <StatInline label="출" value={me.appearances} />
+        <StatInline label="승" value={me.wins} />
         <StatInline label="골" value={me.goals} />
         <StatInline label="어시" value={me.assists} />
         <StatInline label="CS" value={me.cleanSheets} />
+        <StatInline label="MOM" value={me.mom} />
         <StatInline label="심" value={me.refereeCount} />
       </div>
 
@@ -437,10 +443,12 @@ function MyCard({ me }: { me: RowWithRank }) {
       </div>
       <div className="hidden desktop:flex items-baseline gap-5 flex-wrap">
         <StatBlock label="출전" value={me.appearances} />
+        <StatBlock label="승리" value={me.wins} />
         <StatBlock label="골" value={me.goals} />
         <StatBlock label="어시" value={me.assists} />
         <StatBlock label="공격P" value={me.attackPoints} />
         <StatBlock label="CS" value={me.cleanSheets} />
+        <StatBlock label="MOM" value={me.mom} />
         <StatBlock label="심판" value={me.refereeCount} />
         <StatBlock
           label="출전율"
@@ -506,9 +514,11 @@ function MobileRow({ row, isMe }: { row: RowWithRank; isMe: boolean }) {
         </div>
         <div className="text-xs text-suaza-ink-muted flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
           <span>출 {row.appearances}</span>
+          <span>승 {row.wins}</span>
           <span>골 {row.goals}</span>
           <span>어시 {row.assists}</span>
           <span>CS {row.cleanSheets}</span>
+          <span>MOM {row.mom}</span>
           <span>심 {row.refereeCount}</span>
         </div>
       </div>
@@ -549,6 +559,7 @@ function DesktopTable({
             <Th className="w-12 text-center">#</Th>
             <Th className="text-left">선수</Th>
             <SortTh label="출전" k="appearances" sortKey={sortKey} onSort={onSort} />
+            <SortTh label="승리" k="wins" sortKey={sortKey} onSort={onSort} />
             <SortTh label="골" k="goals" sortKey={sortKey} onSort={onSort} />
             <SortTh label="어시" k="assists" sortKey={sortKey} onSort={onSort} />
             <SortTh
@@ -558,14 +569,15 @@ function DesktopTable({
               onSort={onSort}
             />
             <SortTh label="CS" k="cleanSheets" sortKey={sortKey} onSort={onSort} />
+            <SortTh label="MOM" k="mom" sortKey={sortKey} onSort={onSort} />
             <SortTh
               label="심판"
               k="refereeCount"
               sortKey={sortKey}
               onSort={onSort}
             />
-            <Th className="text-center min-w-[120px]">출전율</Th>
-            <Th className="text-center w-[140px]">최근 5</Th>
+            <Th className="text-center min-w-[96px]">출전율</Th>
+            <Th className="text-center w-[110px]">최근 5</Th>
             <SortTh
               label="포인트"
               k="points"
@@ -598,6 +610,7 @@ function DesktopTable({
                   {displayMemberName(row.name)}
                 </Td>
                 <Td className="text-center tabular-nums">{row.appearances}</Td>
+                <Td className="text-center tabular-nums">{row.wins}</Td>
                 <Td className="text-center tabular-nums font-bold">{row.goals}</Td>
                 <Td className="text-center tabular-nums">{row.assists}</Td>
                 <Td className="text-center tabular-nums font-bold">
@@ -606,6 +619,7 @@ function DesktopTable({
                 <Td className="text-center tabular-nums text-suaza-ink-muted">
                   {row.cleanSheets}
                 </Td>
+                <Td className="text-center tabular-nums">{row.mom}</Td>
                 <Td className="text-center tabular-nums text-suaza-ink-muted">
                   {row.refereeCount}
                 </Td>
@@ -732,9 +746,9 @@ function Recent5({
     ...results.slice(0, 5),
     ...Array(Math.max(0, 5 - results.length)).fill(null),
   ];
-  const size = compact ? "w-5 h-5 text-[9px]" : "w-5 h-5 text-[10px]";
+  const size = compact ? "w-4 h-4 text-[8px]" : "w-4 h-4 text-[9px]";
   return (
-    <div className="inline-flex items-center gap-1">
+    <div className="inline-flex items-center gap-0.5">
       {padded.map((r, i) => (
         <span
           key={i}
