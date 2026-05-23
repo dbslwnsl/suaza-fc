@@ -72,7 +72,6 @@ export default function SeasonList({
       setSortDir("desc");
     }
   };
-  const [query, setQuery] = useState("");
   // 0 = 시즌 전체, 1~12 = 해당 월
   const [month, setMonth] = useState(0);
 
@@ -130,51 +129,42 @@ export default function SeasonList({
   );
   const rankedAll = ranked;
 
-  // 검색 필터
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return ranked;
-    return ranked.filter((s) => s.name.toLowerCase().includes(q));
-  }, [ranked, query]);
+  const filtered = ranked;
 
   const me = myId ? rankedAll.find((s) => s.player_id === myId) ?? null : null;
 
   return (
     <section className="flex flex-col gap-5">
-      {/* 시즌 칩 + 정렬 칩 + 검색 */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <SeasonSelector year={year} years={years} />
-            <MonthDropdown month={month} onChange={setMonth} year={year} />
-          </div>
-          <span className="shrink-0 text-xs text-suaza-ink-muted bg-gray-100 px-3 py-1 rounded-full">
-            총 {totalMembers}명
-            <span className="hidden desktop:inline"> · 활동 {activeCount}명</span>
-          </span>
+      {/* 시즌 칩 + 인원 */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <SeasonSelector year={year} years={years} />
+          <MonthDropdown month={month} onChange={setMonth} year={year} />
         </div>
-
-        <div className="flex items-center gap-2 desktop:gap-3">
-          <div className="flex-1 min-w-0 flex gap-1.5 desktop:gap-2 overflow-x-auto desktop:overflow-visible desktop:flex-wrap -mx-1 px-1 pb-1 desktop:p-0 desktop:m-0">
-            {SORT_OPTIONS.map((opt) => (
-              <SortChip
-                key={opt.key}
-                active={sortKey === opt.key}
-                label={opt.label}
-                dir={sortKey === opt.key ? sortDir : null}
-                desktopOnly={opt.desktopOnly}
-                onClick={() => onSelectSort(opt.key)}
-              />
-            ))}
-          </div>
-          <div className="hidden desktop:block shrink-0">
-            <SearchInput value={query} onChange={setQuery} />
-          </div>
-        </div>
+        <span className="shrink-0 text-xs text-suaza-ink-muted bg-gray-100 px-3 py-1 rounded-full">
+          총 {totalMembers}명
+          <span className="hidden desktop:inline"> · 활동 {activeCount}명</span>
+        </span>
       </div>
 
       {/* 나의 기록 카드 */}
       {me && <MyCard me={me} />}
+
+      {/* 정렬 칩 */}
+      <div className="flex items-center gap-2 desktop:gap-3">
+        <div className="flex-1 min-w-0 flex gap-1.5 desktop:gap-2 overflow-x-auto desktop:overflow-visible desktop:flex-wrap -mx-1 px-1 pb-1 desktop:p-0 desktop:m-0">
+          {SORT_OPTIONS.map((opt) => (
+            <SortChip
+              key={opt.key}
+              active={sortKey === opt.key}
+              label={opt.label}
+              dir={sortKey === opt.key ? sortDir : null}
+              desktopOnly={opt.desktopOnly}
+              onClick={() => onSelectSort(opt.key)}
+            />
+          ))}
+        </div>
+      </div>
 
       {/* 전체 명단 헤더 */}
       <div className="flex items-baseline justify-between">
@@ -186,9 +176,7 @@ export default function SeasonList({
 
       {filtered.length === 0 ? (
         <p className="text-center text-sm text-suaza-ink-muted py-10">
-          {ranked.length === 0
-            ? "이번 시즌 출전 기록이 없습니다"
-            : "검색 결과가 없습니다"}
+          이번 시즌 출전 기록이 없습니다
         </p>
       ) : (
         <>
@@ -197,7 +185,8 @@ export default function SeasonList({
             <DesktopTable
               rows={filtered}
               sortKey={sortKey}
-              onSort={setSortKey}
+              sortDir={sortDir}
+              onSort={onSelectSort}
               myId={myId}
             />
           </div>
@@ -351,35 +340,6 @@ function SortChip({
   );
 }
 
-function SearchInput({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="relative w-full desktop:w-[260px]">
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="이름 검색..."
-        className="w-full h-9 pl-8 pr-3 rounded-full border border-suaza-border text-sm bg-white focus:outline-none focus:border-suaza-button"
-      />
-      <svg
-        className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-suaza-ink-muted"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-      >
-        <circle cx="11" cy="11" r="7" />
-        <path d="m20 20-3.5-3.5" />
-      </svg>
-    </div>
-  );
-}
-
 // ───────────────────────────────────────────────────────────
 // 나의 기록 카드
 // ───────────────────────────────────────────────────────────
@@ -427,7 +387,7 @@ function MyCard({ me }: { me: RowWithRank }) {
           <span className="inline-flex items-center gap-1 text-sm font-bold text-suaza-accent">
             <span>★</span> 나의 기록
           </span>
-          <span className="text-xs text-suaza-ink-muted font-medium">
+          <span className="text-xs text-suaza-ink-muted font-medium shrink-0 inline-block min-w-[56px] tabular-nums">
             전체 {me.rank}위
           </span>
           <span className="text-2xl font-bold text-suaza-ink ml-2">
@@ -543,10 +503,12 @@ function MobileRow({ row, isMe }: { row: RowWithRank; isMe: boolean }) {
 function DesktopTable({
   rows,
   sortKey,
+  sortDir,
   onSort,
   myId,
 }: {
   rows: RowWithRank[];
+  sortDir: "desc" | "asc";
   sortKey: SortKey;
   onSort: (k: SortKey) => void;
   myId: string | null;
@@ -558,22 +520,24 @@ function DesktopTable({
           <tr>
             <Th className="w-12 text-center">#</Th>
             <Th className="text-left">선수</Th>
-            <SortTh label="출전" k="appearances" sortKey={sortKey} onSort={onSort} />
-            <SortTh label="승리" k="wins" sortKey={sortKey} onSort={onSort} />
-            <SortTh label="골" k="goals" sortKey={sortKey} onSort={onSort} />
-            <SortTh label="어시" k="assists" sortKey={sortKey} onSort={onSort} />
+            <SortTh label="출전" k="appearances" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            <SortTh label="승리" k="wins" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            <SortTh label="골" k="goals" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            <SortTh label="어시" k="assists" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
             <SortTh
               label="공격P"
               k="attackPoints"
               sortKey={sortKey}
+              sortDir={sortDir}
               onSort={onSort}
             />
-            <SortTh label="CS" k="cleanSheets" sortKey={sortKey} onSort={onSort} />
-            <SortTh label="MOM" k="mom" sortKey={sortKey} onSort={onSort} />
+            <SortTh label="CS" k="cleanSheets" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            <SortTh label="MOM" k="mom" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
             <SortTh
               label="심판"
               k="refereeCount"
               sortKey={sortKey}
+              sortDir={sortDir}
               onSort={onSort}
             />
             <Th className="text-center min-w-[96px]">출전율</Th>
@@ -582,6 +546,7 @@ function DesktopTable({
               label="포인트"
               k="points"
               sortKey={sortKey}
+              sortDir={sortDir}
               onSort={onSort}
               className="text-right pr-4"
             />
@@ -668,12 +633,14 @@ function SortTh({
   label,
   k,
   sortKey,
+  sortDir,
   onSort,
   className = "",
 }: {
   label: string;
   k: SortKey;
   sortKey: SortKey;
+  sortDir: "desc" | "asc";
   onSort: (k: SortKey) => void;
   className?: string;
 }) {
@@ -690,7 +657,9 @@ function SortTh({
         }`}
       >
         {label}
-        {active && <span className="text-[10px]">↓</span>}
+        {active && (
+          <span className="text-[10px]">{sortDir === "desc" ? "↓" : "↑"}</span>
+        )}
       </button>
     </th>
   );
