@@ -74,23 +74,38 @@ export function buildRichSeasonStats(
 
   return base.map((s) => {
     const playerParts = partsByPlayer.get(s.player_id) ?? [];
-    const playedMatches = playerParts
-      .map((p) => matchById.get(p.match_id))
-      .filter((m): m is MatchSummary => !!m);
-    // 승리 횟수: 자체전 제외, 본인이 출전한 경기 중 W
-    const wins = playedMatches.filter(
-      (m) =>
+    const playedPairs = playerParts
+      .map((p) => {
+        const m = matchById.get(p.match_id);
+        return m ? { p, m } : null;
+      })
+      .filter((x): x is { p: ParticipationRow; m: MatchSummary } => !!x);
+    const playedMatches = playedPairs.map((x) => x.m);
+    // 승리: custom_stats.win_points > 0 우선, 없으면 일반 경기 점수 기반
+    let wins = 0;
+    for (const { p, m } of playedPairs) {
+      const winPts = p.custom_stats?.win_points ?? 0;
+      if (winPts > 0) {
+        wins += 1;
+      } else if (
         m.opponent !== "자체전" &&
-        resultFromScores(m.our_score, m.opponent_score) === "W",
-    ).length;
-    const recent5: MatchResult[] = playedMatches
+        resultFromScores(m.our_score, m.opponent_score) === "W"
+      ) {
+        wins += 1;
+      }
+    }
+    const recent5: MatchResult[] = playedPairs
+      .slice()
       .sort(
         (a, b) =>
-          new Date(b.match_date).getTime() - new Date(a.match_date).getTime(),
+          new Date(b.m.match_date).getTime() -
+          new Date(a.m.match_date).getTime(),
       )
       .slice(0, 5)
-      .map((m) => {
-        if (m.opponent === "자체전") return "D"; // 자체전은 무승부 표기
+      .map(({ p, m }) => {
+        const winPts = p.custom_stats?.win_points ?? 0;
+        if (winPts > 0) return "W";
+        if (m.opponent === "자체전") return "L";
         return resultFromScores(m.our_score, m.opponent_score) ?? "D";
       });
     return {
