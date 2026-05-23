@@ -29,7 +29,10 @@ type SortKey =
   | "attackPoints"
   | "cleanSheets"
   | "mom"
-  | "refereeCount";
+  | "refereeCount"
+  | "attendanceRate"
+  | "recent5Wins"
+  | "name";
 
 const SORT_OPTIONS: { key: SortKey; label: string; desktopOnly?: boolean }[] = [
   { key: "points", label: "포인트" },
@@ -41,7 +44,15 @@ const SORT_OPTIONS: { key: SortKey; label: string; desktopOnly?: boolean }[] = [
   { key: "cleanSheets", label: "CS" },
   { key: "mom", label: "MOM" },
   { key: "refereeCount", label: "심판", desktopOnly: true },
+  { key: "attendanceRate", label: "출전율", desktopOnly: true },
+  { key: "recent5Wins", label: "최근 5경기", desktopOnly: true },
+  { key: "name", label: "선수", desktopOnly: true },
 ];
+
+// "선수"(이름) 컬럼은 클릭 시 asc(가나다 정순) 가 자연스러움
+const DEFAULT_DIR: Partial<Record<SortKey, "desc" | "asc">> = {
+  name: "asc",
+};
 
 export default function SeasonList({
   myId,
@@ -69,7 +80,7 @@ export default function SeasonList({
       setSortDir((d) => (d === "desc" ? "asc" : "desc"));
     } else {
       setSortKey(key);
-      setSortDir("desc");
+      setSortDir(DEFAULT_DIR[key] ?? "desc");
     }
   };
   // 0 = 시즌 전체, 1~12 = 해당 월
@@ -114,10 +125,23 @@ export default function SeasonList({
 
   const sortedAll = useMemo(() => {
     const sign = sortDir === "desc" ? 1 : -1;
+    const getVal = (
+      row: RichPlayerSeasonStat,
+    ): number | string => {
+      if (sortKey === "name") return row.name;
+      if (sortKey === "recent5Wins")
+        return row.recent5.filter((r) => r === "W").length;
+      return row[sortKey];
+    };
     return [...stats].sort((a, b) => {
-      const av = a[sortKey];
-      const bv = b[sortKey];
-      if (av !== bv) return ((bv as number) - (av as number)) * sign;
+      const av = getVal(a);
+      const bv = getVal(b);
+      if (typeof av === "string" || typeof bv === "string") {
+        const cmp = String(av).localeCompare(String(bv), "ko");
+        if (cmp !== 0) return cmp * sign;
+        return 0;
+      }
+      if (av !== bv) return (bv - av) * sign;
       return a.name.localeCompare(b.name, "ko");
     });
   }, [stats, sortKey, sortDir]);
@@ -150,16 +174,15 @@ export default function SeasonList({
       {/* 나의 기록 카드 */}
       {me && <MyCard me={me} />}
 
-      {/* 정렬 칩 */}
-      <div className="flex items-center gap-2 desktop:gap-3">
-        <div className="flex-1 min-w-0 flex gap-1.5 desktop:gap-2 overflow-x-auto desktop:overflow-visible desktop:flex-wrap -mx-1 px-1 pb-1 desktop:p-0 desktop:m-0">
-          {SORT_OPTIONS.map((opt) => (
+      {/* 정렬 칩 (모바일 전용 — 데스크탑은 표 헤더 클릭으로 정렬) */}
+      <div className="flex items-center gap-2 desktop:hidden">
+        <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
+          {SORT_OPTIONS.filter((opt) => !opt.desktopOnly).map((opt) => (
             <SortChip
               key={opt.key}
               active={sortKey === opt.key}
               label={opt.label}
               dir={sortKey === opt.key ? sortDir : null}
-              desktopOnly={opt.desktopOnly}
               onClick={() => onSelectSort(opt.key)}
             />
           ))}
@@ -170,7 +193,7 @@ export default function SeasonList({
       <div className="flex items-baseline justify-between">
         <h3 className="text-sm font-bold text-suaza-ink">전체 명단</h3>
         <span className="text-xs text-suaza-ink-muted">
-          {ranked.length}명 · {SORT_OPTIONS.find((o) => o.key === sortKey)?.label} 내림차순
+          {ranked.length}명 · {SORT_OPTIONS.find((o) => o.key === sortKey)?.label} {sortDir === "desc" ? "내림차순" : "오름차순"}
         </span>
       </div>
 
@@ -311,22 +334,18 @@ function SortChip({
   active,
   label,
   dir,
-  desktopOnly,
   onClick,
 }: {
   active: boolean;
   label: string;
   dir: "desc" | "asc" | null;
-  desktopOnly?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs desktop:text-sm font-bold transition ${
-        desktopOnly ? "hidden desktop:inline-flex" : ""
-      } ${
+      className={`shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold transition ${
         active
           ? "bg-suaza-ink text-white border border-suaza-ink"
           : "bg-white text-suaza-ink border border-suaza-border hover:bg-gray-50"
@@ -519,7 +538,14 @@ function DesktopTable({
         <thead className="bg-gray-50 text-suaza-ink-muted">
           <tr>
             <Th className="w-12 text-center">#</Th>
-            <Th className="text-left">선수</Th>
+            <SortTh
+              label="선수"
+              k="name"
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={onSort}
+              align="left"
+            />
             <SortTh label="출전" k="appearances" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
             <SortTh label="승리" k="wins" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
             <SortTh label="골" k="goals" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
@@ -540,8 +566,22 @@ function DesktopTable({
               sortDir={sortDir}
               onSort={onSort}
             />
-            <Th className="text-center min-w-[96px]">출전율</Th>
-            <Th className="text-center w-[110px]">최근 5경기</Th>
+            <SortTh
+              label="출전율"
+              k="attendanceRate"
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={onSort}
+              className="min-w-[96px]"
+            />
+            <SortTh
+              label="최근 5경기"
+              k="recent5Wins"
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={onSort}
+              className="w-[110px]"
+            />
             <SortTh
               label="포인트"
               k="points"
@@ -636,6 +676,7 @@ function SortTh({
   sortDir,
   onSort,
   className = "",
+  align = "center",
 }: {
   label: string;
   k: SortKey;
@@ -643,23 +684,38 @@ function SortTh({
   sortDir: "desc" | "asc";
   onSort: (k: SortKey) => void;
   className?: string;
+  align?: "left" | "center" | "right";
 }) {
   const active = sortKey === k;
+  const alignTh =
+    align === "left" ? "text-left" : align === "right" ? "text-right" : "text-center";
   return (
     <th
-      className={`py-2.5 px-2 text-xs font-medium border-b border-suaza-border text-center ${className}`}
+      className={`py-3 px-2 text-xs font-medium border-b border-suaza-border align-top ${alignTh} ${className}`}
     >
       <button
         type="button"
         onClick={() => onSort(k)}
-        className={`inline-flex items-center gap-0.5 hover:text-suaza-ink transition ${
+        className={`inline-flex flex-col items-center gap-1 hover:text-suaza-ink transition ${
           active ? "text-suaza-ink font-bold" : "text-suaza-ink-muted"
         }`}
       >
-        {label}
-        {active && (
-          <span className="text-[10px]">{sortDir === "desc" ? "↓" : "↑"}</span>
-        )}
+        <span>{label}</span>
+        <span className="h-3 flex items-center justify-center">
+          <svg
+            viewBox="0 0 12 8"
+            className={`w-2.5 h-2 transition-transform ${
+              active && sortDir === "asc" ? "rotate-180" : ""
+            } ${active ? "" : "text-suaza-ink-faint"}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M2 2L6 6L10 2" />
+          </svg>
+        </span>
       </button>
     </th>
   );
