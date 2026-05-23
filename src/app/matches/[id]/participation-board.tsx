@@ -34,6 +34,8 @@ type Stats = {
   assists: number;
   clean_sheets: number;
   referee_count: number;
+  mom: number;
+  win_points: number;
   attendance: number;
 };
 
@@ -90,6 +92,22 @@ const STAT_META: {
     weight: 1,
   },
   {
+    key: "mom",
+    label: "MOM",
+    icon: "🏆",
+    color: "#EAB308",
+    bg: "rgba(234,179,8,0.10)",
+    weight: 0,
+  },
+  {
+    key: "win_points",
+    label: "승점",
+    icon: "🏅",
+    color: "#EC4899",
+    bg: "rgba(236,72,153,0.10)",
+    weight: 0,
+  },
+  {
     key: "attendance",
     label: "출석",
     icon: "✓",
@@ -106,6 +124,8 @@ function readStats(p: ParticipationData): Stats {
     assists: p.assists ?? 0,
     clean_sheets: p.custom_stats?.clean_sheets ?? 0,
     referee_count: p.custom_stats?.referee_count ?? 0,
+    mom: p.custom_stats?.mom ?? 0,
+    win_points: p.custom_stats?.win_points ?? 0,
     // 출석은 active participation 이면 기본 1점
     attendance: p.custom_stats?.attendance ?? 1,
   };

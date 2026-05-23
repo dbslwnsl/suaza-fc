@@ -297,7 +297,7 @@ export async function updateParticipant(
 export async function incrementStat(
   participationId: string,
   matchId: string,
-  key: "goals" | "assists" | "clean_sheets" | "referee_count",
+  key: "goals" | "assists" | "clean_sheets" | "referee_count" | "mom" | "win_points",
   delta: number,
 ) {
   const { supabase } = await requireStaff();

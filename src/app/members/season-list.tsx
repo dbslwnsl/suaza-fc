@@ -59,6 +59,15 @@ export default function SeasonList({
   totalMembers: number;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("points");
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
+  const onSelectSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  };
   const [query, setQuery] = useState("");
   // 0 = 시즌 전체, 1~12 = 해당 월
   const [month, setMonth] = useState(0);
@@ -101,13 +110,14 @@ export default function SeasonList({
   const activeCount = stats.filter((s) => s.appearances > 0).length;
 
   const sortedAll = useMemo(() => {
+    const sign = sortDir === "desc" ? 1 : -1;
     return [...stats].sort((a, b) => {
       const av = a[sortKey];
       const bv = b[sortKey];
-      if (av !== bv) return (bv as number) - (av as number);
+      if (av !== bv) return ((bv as number) - (av as number)) * sign;
       return a.name.localeCompare(b.name, "ko");
     });
-  }, [stats, sortKey]);
+  }, [stats, sortKey, sortDir]);
 
   // 순위는 정렬 결과의 인덱스 + 1 (기록 없어도 모든 회원이 포함됨)
   const ranked = useMemo(
@@ -141,17 +151,15 @@ export default function SeasonList({
         </div>
 
         <div className="flex items-center gap-2 desktop:gap-3">
-          <span className="hidden desktop:inline text-sm text-suaza-ink-muted shrink-0">
-            정렬
-          </span>
           <div className="flex-1 min-w-0 flex gap-1.5 desktop:gap-2 overflow-x-auto desktop:overflow-visible desktop:flex-wrap -mx-1 px-1 pb-1 desktop:p-0 desktop:m-0">
             {SORT_OPTIONS.map((opt) => (
               <SortChip
                 key={opt.key}
                 active={sortKey === opt.key}
                 label={opt.label}
+                dir={sortKey === opt.key ? sortDir : null}
                 desktopOnly={opt.desktopOnly}
-                onClick={() => setSortKey(opt.key)}
+                onClick={() => onSelectSort(opt.key)}
               />
             ))}
           </div>
@@ -309,11 +317,13 @@ function MonthDropdown({
 function SortChip({
   active,
   label,
+  dir,
   desktopOnly,
   onClick,
 }: {
   active: boolean;
   label: string;
+  dir: "desc" | "asc" | null;
   desktopOnly?: boolean;
   onClick: () => void;
 }) {
@@ -330,7 +340,9 @@ function SortChip({
       }`}
     >
       {label}
-      {active && <span className="text-[10px]">↓</span>}
+      {active && dir && (
+        <span className="text-[10px]">{dir === "desc" ? "↓" : "↑"}</span>
+      )}
     </button>
   );
 }
