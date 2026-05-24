@@ -29,6 +29,8 @@ export default function TeamBuilder({
   nonVoterCount,
   teamAColor,
   teamBColor,
+  teamAName,
+  teamBName,
   readonly,
 }: {
   matchId: string;
@@ -38,6 +40,8 @@ export default function TeamBuilder({
   nonVoterCount: number;
   teamAColor: string | null;
   teamBColor: string | null;
+  teamAName: string;
+  teamBName: string;
   readonly: boolean;
 }) {
   const [, startTransition] = useTransition();
@@ -116,7 +120,7 @@ export default function TeamBuilder({
 
       {/* A팀 */}
       <TeamGroup
-        label="A팀"
+        label={teamAName}
         color="#EF3E3E"
         members={teamA}
         chipClass="bg-red-50 text-suaza-accent border-red-200"
@@ -131,7 +135,7 @@ export default function TeamBuilder({
       />
       {/* B팀 */}
       <TeamGroup
-        label="B팀"
+        label={teamBName}
         color="#3B82F6"
         members={teamB}
         chipClass="bg-blue-50 text-blue-600 border-blue-200"

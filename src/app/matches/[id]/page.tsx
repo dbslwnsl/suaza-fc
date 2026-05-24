@@ -15,12 +15,15 @@ import ParticipationBoard, {
   type ParticipationData,
 } from "./participation-board";
 import {
+  DEFAULT_TEAM_COLOR,
+  DEFAULT_VS_COLOR,
   MATCH_STATUS_BADGE,
   MATCH_STATUS_DOT_COLOR,
   MATCH_STATUS_LABEL,
   RESULT_BADGE,
   RESULT_LABEL,
   getResult,
+  getTeamName,
   isMatchStarted,
   type Match,
 } from "@/lib/matches/helpers";
@@ -341,6 +344,8 @@ export default async function MatchDetailPage({
                     nonVoterCount={nonVoters.length}
                     teamAColor={m.team_a_color}
                     teamBColor={m.team_b_color}
+                    teamAName={getTeamName(m, "A")}
+                    teamBName={getTeamName(m, "B")}
                     readonly={!isStaff}
                   />
                 </div>
@@ -430,7 +435,12 @@ function VSCard({
       <div className="grid grid-cols-3 items-center gap-3">
         {isIntra ? (
           <>
-            <TeamSide kind="letter" letter="A" color="#EF3E3E" />
+            <TeamSide
+              kind="letter"
+              letter="A"
+              color={m.team_a_color ?? DEFAULT_TEAM_COLOR.A}
+              subtitle={getTeamName(m, "A")}
+            />
             {isStaff && isStarted ? (
               <ScoreControl
                 matchId={m.id}
@@ -443,7 +453,12 @@ function VSCard({
                 opponentScore={m.opponent_score}
               />
             )}
-            <TeamSide kind="letter" letter="B" color="#338CF2" />
+            <TeamSide
+              kind="letter"
+              letter="B"
+              color={m.team_b_color ?? DEFAULT_TEAM_COLOR.B}
+              subtitle={getTeamName(m, "B")}
+            />
           </>
         ) : (
           <>
@@ -460,7 +475,11 @@ function VSCard({
                 opponentScore={m.opponent_score}
               />
             )}
-            <TeamSide kind="opponent" name={m.opponent} />
+            <TeamSide
+              kind="opponent"
+              name={m.opponent}
+              color={m.team_b_color ?? DEFAULT_VS_COLOR.B}
+            />
           </>
         )}
       </div>
@@ -553,11 +572,13 @@ function TeamSide({
   name,
   letter,
   color,
+  subtitle,
 }: {
   kind: "us" | "opponent" | "letter";
   name?: string;
   letter?: "A" | "B";
   color?: string;
+  subtitle?: string;
 }) {
   if (kind === "us") {
     return (
@@ -589,8 +610,8 @@ function TeamSide({
             {letter}
           </span>
         </div>
-        <span className="text-sm desktop:text-lg font-bold text-suaza-ink">
-          {letter}팀
+        <span className="text-sm desktop:text-lg font-bold text-suaza-ink text-center break-keep">
+          {subtitle ?? `${letter}팀`}
         </span>
       </div>
     );
@@ -599,7 +620,10 @@ function TeamSide({
   const trimmed = (name ?? "").trim();
   return (
     <div className="flex flex-col items-center gap-2">
-      <div className="w-16 h-16 desktop:w-24 desktop:h-24 rounded-full bg-[#338CF2] flex items-center justify-center">
+      <div
+        className="w-16 h-16 desktop:w-24 desktop:h-24 rounded-full flex items-center justify-center"
+        style={{ backgroundColor: color ?? "#338CF2" }}
+      >
         <span className="text-2xl desktop:text-4xl font-bold text-white">
           {trimmed.charAt(0) || "?"}
         </span>
