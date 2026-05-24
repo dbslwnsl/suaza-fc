@@ -624,7 +624,7 @@ function DesktopTable({
   myId: string | null;
 }) {
   return (
-    <div className="rounded-xl border border-suaza-border overflow-hidden">
+    <div className="rounded-xl border border-suaza-border overflow-clip">
       <table className="w-full text-sm border-separate border-spacing-0">
         <thead className="bg-gray-50 text-suaza-ink-muted">
           <tr>
@@ -649,7 +649,7 @@ function DesktopTable({
               onSort={onSort}
             />
             <SortTh label="CS" k="cleanSheets" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-            <SortTh label="MOM" k="mom" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            <SortTh label="🏆" k="mom" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
             <SortTh
               label="심판"
               k="refereeCount"
@@ -759,7 +759,7 @@ function Th({
 }) {
   return (
     <th
-      className={`py-2.5 px-2 text-xs font-medium border-b border-suaza-border ${className}`}
+      className={`py-2.5 px-2 text-xs font-medium border-b border-suaza-border sticky top-0 z-20 bg-gray-50 ${className}`}
     >
       {children}
     </th>
@@ -788,7 +788,7 @@ function SortTh({
     align === "left" ? "text-left" : align === "right" ? "text-right" : "text-center";
   return (
     <th
-      className={`py-3 px-2 text-xs font-medium border-b border-suaza-border align-top ${alignTh} ${className}`}
+      className={`py-3 px-2 text-xs font-medium border-b border-suaza-border align-top sticky top-0 z-20 bg-gray-50 ${alignTh} ${className}`}
     >
       <button
         type="button"
