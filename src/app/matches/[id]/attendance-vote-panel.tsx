@@ -171,15 +171,17 @@ export function AttendanceCardVote({
   const { optimisticStatus, vote, groups, nonVoters: nv, counts } =
     useOptimisticAttendance(matchId, myStatus, me, byStatus, nonVoters);
 
-  const showBoard = isManager && !locked;
+  const showBoard = isManager;
 
   return (
     <>
       {/* My response */}
       {locked ? (
-        <div className="bg-gray-50 rounded-xl p-3 text-center text-xs text-suaza-ink-muted">
-          {lockedMessage}
-        </div>
+        isManager ? null : (
+          <div className="bg-gray-50 rounded-xl p-3 text-center text-xs text-suaza-ink-muted">
+            {lockedMessage}
+          </div>
+        )
       ) : (
         <div className="bg-red-50/50 rounded-xl p-3 flex flex-col gap-2">
           <div className="flex items-center gap-2">

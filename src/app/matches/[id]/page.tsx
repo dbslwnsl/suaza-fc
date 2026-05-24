@@ -310,13 +310,13 @@ export default async function MatchDetailPage({
                     myStatus={myStatus}
                     byStatus={byStatus}
                     nonVoters={nonVoters}
-                    isManager={me?.role === "manager"}
+                    isManager={isStaff}
                     myName={me?.name ?? null}
                     totalMembers={totalMembers}
                     deadlineStr={deadlineStr}
                     locked={
                       isStarted ||
-                      (deadlinePassed && me?.role !== "manager")
+                      (deadlinePassed && !isStaff)
                     }
                     lockedMessage={
                       isStarted
@@ -672,7 +672,7 @@ function AttendanceCard({
         locked={!!locked}
         lockedMessage={lockedMessage}
       >
-        {isManager && !locked && (
+        {isManager && (
           <AttendanceManagerBoard
             matchId={matchId}
             byStatus={byStatus}

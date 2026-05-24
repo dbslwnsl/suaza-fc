@@ -454,7 +454,7 @@ type AttendanceStatus = (typeof ATTENDANCE_VALUES)[number];
 
 /**
  * 본인 출석 투표가 허용되는지.
- * - 매니저/감독(role=manager): 항상 허용
+ * - 회장(manager)/감독(coach): 항상 허용
  * - 일반 회원: 경기 시작 전 + 투표 마감 전에만 허용
  */
 async function memberVoteAllowed(
@@ -470,7 +470,7 @@ async function memberVoteAllowed(
       .eq("id", matchId)
       .single(),
   ]);
-  if (me?.role === "manager") return true;
+  if (me?.role === "manager" || me?.role === "coach") return true;
   if (!match) return false;
   if (isMatchStarted(match)) return false;
   if (
@@ -482,25 +482,8 @@ async function memberVoteAllowed(
   return true;
 }
 
-async function requireManager() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const { data: me } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-  if (me?.role !== "manager") {
-    throw new Error("매니저만 다른 회원의 출석을 변경할 수 있습니다");
-  }
-  return { supabase };
-}
-
 /**
- * 매니저가 다른 회원의 출석 상태를 변경 (Drag&Drop 용).
+ * 회장/감독이 다른 회원의 출석 상태를 변경 (Drag&Drop 용).
  * status === null 이면 row 삭제 (= 미투표).
  */
 export async function setAttendanceFor(
@@ -508,7 +491,7 @@ export async function setAttendanceFor(
   playerId: string,
   status: AttendanceStatus | null,
 ) {
-  const { supabase } = await requireManager();
+  const { supabase } = await requireStaff();
 
   if (status === null) {
     const { error } = await supabase
