@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   aggregateSeason,
   buildRichSeasonStats,
@@ -402,6 +402,32 @@ function StatBlock({
 // 모바일 행
 // ───────────────────────────────────────────────────────────
 
+const MOBILE_COL_WIDTHS = [
+  "5.385%",  // #
+  "10%",     // 선수
+  "5.577%",  // 출전
+  "5.577%",  // 승리
+  "5.577%",  // 골
+  "5.577%",  // 어시
+  "5.577%",  // 공P
+  "5.577%",  // CS
+  "5.577%",  // 🏆
+  "5.577%",  // 심판
+  "12.308%", // 출전율
+  "19.231%", // 최근 5경기
+  "8.462%",  // 포인트
+];
+
+function MobileColGroup() {
+  return (
+    <colgroup>
+      {MOBILE_COL_WIDTHS.map((w, i) => (
+        <col key={i} style={{ width: w }} />
+      ))}
+    </colgroup>
+  );
+}
+
 function MobileTable({
   rows,
   sortKey,
@@ -415,112 +441,145 @@ function MobileTable({
   onSort: (k: SortKey) => void;
   myId: string | null;
 }) {
+  const headerScrollRef = useRef<HTMLDivElement>(null);
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
+  const syncingRef = useRef(false);
+
+  const handleHeaderScroll = () => {
+    if (syncingRef.current) return;
+    if (!headerScrollRef.current || !bodyScrollRef.current) return;
+    syncingRef.current = true;
+    bodyScrollRef.current.scrollLeft = headerScrollRef.current.scrollLeft;
+    requestAnimationFrame(() => {
+      syncingRef.current = false;
+    });
+  };
+
+  const handleBodyScroll = () => {
+    if (syncingRef.current) return;
+    if (!headerScrollRef.current || !bodyScrollRef.current) return;
+    syncingRef.current = true;
+    headerScrollRef.current.scrollLeft = bodyScrollRef.current.scrollLeft;
+    requestAnimationFrame(() => {
+      syncingRef.current = false;
+    });
+  };
+
   return (
-    <div className="rounded-xl border border-suaza-border overflow-x-auto">
-      <table className="w-full text-xs border-separate border-spacing-0 min-w-[520px]">
-        <thead className="bg-gray-50 text-suaza-ink-muted">
-          <tr>
-            <MTh className="w-7 text-center sticky left-0 bg-gray-50 z-20 pl-1 pr-0.5">
-              #
-            </MTh>
-            <MSortTh
-              label="선수"
-              k="name"
-              sortKey={sortKey}
-              sortDir={sortDir}
-              onSort={onSort}
-              align="left"
-              className="sticky left-7 bg-gray-50 z-20 !pl-0 pr-0 w-[52px]"
-            />
-            <MSortTh label="출전" k="appearances" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="!pl-0" />
-            <MSortTh label="승리" k="wins" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-            <MSortTh label="골" k="goals" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-            <MSortTh label="어시" k="assists" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-            <MSortTh label="공P" k="attackPoints" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-            <MSortTh label="CS" k="cleanSheets" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-            <MSortTh label="🏆" k="mom" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-            <MSortTh label="심판" k="refereeCount" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-            <MSortTh
-              label="출전율"
-              k="attendanceRate"
-              sortKey={sortKey}
-              sortDir={sortDir}
-              onSort={onSort}
-              className="!w-[64px] !max-w-[64px]"
-            />
-            <MSortTh
-              label="최근 5경기"
-              k="recent5Wins"
-              sortKey={sortKey}
-              sortDir={sortDir}
-              onSort={onSort}
-              className="w-[100px] !pr-0"
-            />
-            <MSortTh
-              label="포인트"
-              k="points"
-              sortKey={sortKey}
-              sortDir={sortDir}
-              onSort={onSort}
-              className="text-right pr-2 !pl-0 sticky right-0 bg-gray-50 z-20 w-[44px]"
-            />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const isMe = row.player_id === myId;
-            const rowBg = isMe ? "bg-red-50" : "bg-white";
-            const hl = (k: SortKey) =>
-              sortKey === k ? "!font-bold !text-[#338CF2]" : "";
-            return (
-              <tr key={row.player_id} className={rowBg}>
-                <MTd
-                  className={`text-center font-bold sticky left-0 z-10 pl-1 pr-0.5 ${rowBg} ${
-                    isMe ? "text-suaza-accent" : "text-suaza-ink"
-                  }`}
-                >
-                  {row.rank}
-                </MTd>
-                <MTd
-                  className={`font-bold sticky left-7 z-10 !pl-0 pr-0 ${rowBg} ${
-                    isMe ? "text-suaza-accent" : "text-suaza-ink"
-                  } ${hl("name")}`}
-                >
-                  {displayMemberName(row.name)}
-                </MTd>
-                <MTd className={`text-center tabular-nums !pl-0 ${hl("appearances")}`}>{row.appearances}</MTd>
-                <MTd className={`text-center tabular-nums ${hl("wins")}`}>{row.wins}</MTd>
-                <MTd className={`text-center tabular-nums ${hl("goals")}`}>{row.goals}</MTd>
-                <MTd className={`text-center tabular-nums ${hl("assists")}`}>{row.assists}</MTd>
-                <MTd className={`text-center tabular-nums ${hl("attackPoints")}`}>{row.attackPoints}</MTd>
-                <MTd className={`text-center tabular-nums text-suaza-ink-muted ${hl("cleanSheets")}`}>{row.cleanSheets}</MTd>
-                <MTd className={`text-center tabular-nums ${hl("mom")}`}>{row.mom}</MTd>
-                <MTd className={`text-center tabular-nums text-suaza-ink-muted ${hl("refereeCount")}`}>{row.refereeCount}</MTd>
-                <MTd>
-                  <RateCell
-                    rate={row.attendanceRate}
-                    accent={isMe}
-                    highlight={sortKey === "attendanceRate"}
-                  />
-                </MTd>
-                <MTd className="text-center !pr-0">
-                  <Recent5 results={row.recent5} compact />
-                </MTd>
-                <MTd
-                  className={`text-right pr-2 !pl-0 tabular-nums text-base sticky right-0 z-10 ${rowBg} ${
-                    isMe ? "text-suaza-accent" : "text-suaza-ink"
-                  } ${hl("points")}`}
-                >
-                  {row.points}
-                  <span className="text-[9px] text-suaza-ink-muted font-normal ml-0.5">
-                    P
-                  </span>
-                </MTd>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="rounded-xl border border-suaza-border overflow-clip">
+      <div
+        ref={headerScrollRef}
+        onScroll={handleHeaderScroll}
+        className="sticky top-0 z-30 bg-gray-50 overflow-x-auto no-scrollbar"
+      >
+        <table className="text-xs border-separate border-spacing-0 min-w-[520px] w-full table-fixed">
+          <MobileColGroup />
+          <thead className="text-suaza-ink-muted">
+            <tr>
+              <MTh className="text-center sticky left-0 bg-gray-50 z-20 pl-1 pr-0.5">
+                #
+              </MTh>
+              <MSortTh
+                label="선수"
+                k="name"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={onSort}
+                align="left"
+                className="sticky left-7 bg-gray-50 z-20 !pl-0 pr-0"
+              />
+              <MSortTh label="출전" k="appearances" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="!pl-0" />
+              <MSortTh label="승리" k="wins" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <MSortTh label="골" k="goals" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <MSortTh label="어시" k="assists" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <MSortTh label="공P" k="attackPoints" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <MSortTh label="CS" k="cleanSheets" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <MSortTh label="🏆" k="mom" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <MSortTh label="심판" k="refereeCount" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <MSortTh label="출전율" k="attendanceRate" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <MSortTh
+                label="최근 5경기"
+                k="recent5Wins"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={onSort}
+                className="!pr-0"
+              />
+              <MSortTh
+                label="포인트"
+                k="points"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={onSort}
+                className="text-right pr-2 !pl-0 sticky right-0 bg-gray-50 z-20"
+              />
+            </tr>
+          </thead>
+        </table>
+      </div>
+      <div
+        ref={bodyScrollRef}
+        onScroll={handleBodyScroll}
+        className="overflow-x-auto no-scrollbar"
+      >
+        <table className="text-xs border-separate border-spacing-0 min-w-[520px] w-full table-fixed">
+          <MobileColGroup />
+          <tbody>
+            {rows.map((row) => {
+              const isMe = row.player_id === myId;
+              const rowBg = isMe ? "bg-red-50" : "bg-white";
+              const hl = (k: SortKey) =>
+                sortKey === k ? "!font-bold !text-[#338CF2]" : "";
+              return (
+                <tr key={row.player_id} className={rowBg}>
+                  <MTd
+                    className={`text-center font-bold sticky left-0 z-10 pl-1 pr-0.5 ${rowBg} ${
+                      isMe ? "text-suaza-accent" : "text-suaza-ink"
+                    }`}
+                  >
+                    {row.rank}
+                  </MTd>
+                  <MTd
+                    className={`font-bold sticky left-7 z-10 !pl-0 pr-0 ${rowBg} ${
+                      isMe ? "text-suaza-accent" : "text-suaza-ink"
+                    } ${hl("name")}`}
+                  >
+                    {displayMemberName(row.name)}
+                  </MTd>
+                  <MTd className={`text-center tabular-nums !pl-0 ${hl("appearances")}`}>{row.appearances}</MTd>
+                  <MTd className={`text-center tabular-nums ${hl("wins")}`}>{row.wins}</MTd>
+                  <MTd className={`text-center tabular-nums ${hl("goals")}`}>{row.goals}</MTd>
+                  <MTd className={`text-center tabular-nums ${hl("assists")}`}>{row.assists}</MTd>
+                  <MTd className={`text-center tabular-nums ${hl("attackPoints")}`}>{row.attackPoints}</MTd>
+                  <MTd className={`text-center tabular-nums text-suaza-ink-muted ${hl("cleanSheets")}`}>{row.cleanSheets}</MTd>
+                  <MTd className={`text-center tabular-nums ${hl("mom")}`}>{row.mom}</MTd>
+                  <MTd className={`text-center tabular-nums text-suaza-ink-muted ${hl("refereeCount")}`}>{row.refereeCount}</MTd>
+                  <MTd>
+                    <RateCell
+                      rate={row.attendanceRate}
+                      accent={isMe}
+                      highlight={sortKey === "attendanceRate"}
+                    />
+                  </MTd>
+                  <MTd className="text-center !pr-0">
+                    <Recent5 results={row.recent5} compact />
+                  </MTd>
+                  <MTd
+                    className={`text-right pr-2 !pl-0 tabular-nums text-base sticky right-0 z-10 ${rowBg} ${
+                      isMe ? "text-suaza-accent" : "text-suaza-ink"
+                    } ${hl("points")}`}
+                  >
+                    {row.points}
+                    <span className="text-[9px] text-suaza-ink-muted font-normal ml-0.5">
+                      P
+                    </span>
+                  </MTd>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
