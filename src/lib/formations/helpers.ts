@@ -179,7 +179,7 @@ const CUSTOM_SLOT_LAYOUT: Record<
     { x: 0.5, y: 0.22, label: "ST" },
     { x: 0.88, y: 0.25, label: "LW" },
   ],
-  // 4-3-2-1 (크리스마스 트리): DF4 / MF3(LDM·LCM·RDM) / AM2(LAM·RAM) / ST1 (좌측 L)
+  // 4-3-2-1 (크리스마스 트리): DF4 / MF3(LDM·CM·RDM) / AM2(LAM·RAM) / ST1 (좌측 L)
   "4-3-2-1": [
     { x: 0.5, y: 0.95, label: "GK" },
     { x: 0.12, y: 0.8, label: "LB" },
@@ -187,7 +187,7 @@ const CUSTOM_SLOT_LAYOUT: Record<
     { x: 0.62, y: 0.8, label: "RCB" },
     { x: 0.88, y: 0.8, label: "RB" },
     { x: 0.25, y: 0.6, label: "LDM" },
-    { x: 0.5, y: 0.6, label: "LCM" },
+    { x: 0.5, y: 0.6, label: "CM" },
     { x: 0.75, y: 0.6, label: "RDM" },
     { x: 0.38, y: 0.4, label: "LAM" },
     { x: 0.62, y: 0.4, label: "RAM" },
@@ -207,7 +207,7 @@ const CUSTOM_SLOT_LAYOUT: Record<
     { x: 0.9, y: 0.5, label: "LM" },
     { x: 0.5, y: 0.2, label: "ST" },
   ],
-  // 3-5-2: DF3(LCB·CB·RCB) / MF5(윙백 LWB·RWB + CM·LCM·CM) / ST2 (좌측 L)
+  // 3-5-2: DF3(LCB·CB·RCB) / MF5(윙백 LWB·RWB + CM·CM + AM) / ST2 (좌측 L)
   "3-5-2": [
     { x: 0.5, y: 0.95, label: "GK" },
     { x: 0.22, y: 0.8, label: "LCB" },
@@ -215,7 +215,7 @@ const CUSTOM_SLOT_LAYOUT: Record<
     { x: 0.78, y: 0.8, label: "RCB" },
     { x: 0.1, y: 0.6, label: "LWB" },
     { x: 0.32, y: 0.52, label: "CM" },
-    { x: 0.5, y: 0.57, label: "LCM" },
+    { x: 0.5, y: 0.36, label: "AM" },
     { x: 0.68, y: 0.52, label: "CM" },
     { x: 0.9, y: 0.6, label: "RWB" },
     { x: 0.37, y: 0.2, label: "ST" },
@@ -340,6 +340,25 @@ const Y_FW_BOTTOM_TEAM_B = 0.55; // B팀 FW (중앙선 약간 아래)
 const Y_DEF_BOTTOM_TEAM_B = 0.8; // B팀 최후방 수비 (GK 바로 앞)
 const Y_GK_BOTTOM_TEAM_B = 0.9; // B팀 GK (하단 골 박스 안, 절대 위치)
 
+// 자체전에서 슬롯의 x 좌표를 기준으로 L/R 접두 라벨을 팀별로 맞춤.
+//   A팀(위, 아래로 공격): 화면 왼쪽 = 선수의 오른쪽 → x < 0.5 = R, x ≥ 0.5 = L
+//   B팀(아래, 위로 공격): 화면 왼쪽 = 선수의 왼쪽 → x < 0.5 = L, x ≥ 0.5 = R
+// 베이스 포메이션 정의가 R-시작·L-시작 등 컨벤션이 섞여 있어 단순 swap 으론 부족.
+// 좌표 기반으로 결정하면 모든 포메이션에서 일관됨.
+function correctLabelForTeam(
+  label: string | undefined,
+  x: number,
+  team: "A" | "B",
+): string | undefined {
+  if (!label) return label;
+  const first = label[0];
+  if (first !== "L" && first !== "R") return label;
+  const expected: "L" | "R" =
+    team === "A" ? (x < 0.5 ? "R" : "L") : x < 0.5 ? "L" : "R";
+  if (first === expected) return label;
+  return expected + label.slice(1);
+}
+
 export function buildSlotsForTeam(shape: string, team: Team): SlotDef[] {
   const base = buildSlots(shape);
   if (team === "single") return base;
@@ -353,8 +372,13 @@ export function buildSlotsForTeam(shape: string, team: Team): SlotDef[] {
   const minFieldY = fieldYs.length ? Math.min(...fieldYs) : Y_FW_BOTTOM;
   const span = maxFieldY - minFieldY || 1;
   return base.map((s) => {
+    const label = correctLabelForTeam(s.label, s.x, team);
     if (s.role === "GK") {
-      return { ...s, y: team === "A" ? Y_GK_TOP_TEAM_A : Y_GK_BOTTOM_TEAM_B };
+      return {
+        ...s,
+        y: team === "A" ? Y_GK_TOP_TEAM_A : Y_GK_BOTTOM_TEAM_B,
+        label,
+      };
     }
     // 비-GK: 0(최전방 FW) ~ 1(최후방 수비) 정규화. GK 자리는 침범하지 않음.
     const yNorm = (s.y - minFieldY) / span;
@@ -363,6 +387,6 @@ export function buildSlotsForTeam(shape: string, team: Team): SlotDef[] {
         ? Y_FW_TOP_TEAM_A + yNorm * (Y_DEF_TOP_TEAM_A - Y_FW_TOP_TEAM_A)
         : Y_FW_BOTTOM_TEAM_B +
           yNorm * (Y_DEF_BOTTOM_TEAM_B - Y_FW_BOTTOM_TEAM_B);
-    return { ...s, y: yTeam };
+    return { ...s, y: yTeam, label };
   });
 }
