@@ -85,6 +85,11 @@ function UpcomingMatchCard({
             {isIntra ? "A팀 vs B팀" : `vs ${match.opponent}`}
           </h3>
           <div className="flex items-center gap-2 shrink-0">
+            {dDay && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded bg-amber-100 text-amber-700">
+                {dDay}
+              </span>
+            )}
             <span
               className={`text-xs font-medium px-2 py-0.5 rounded ${
                 isIntra
@@ -94,11 +99,6 @@ function UpcomingMatchCard({
             >
               {isIntra ? "자체전" : "상대전"}
             </span>
-            {dDay && (
-              <span className="text-xs font-medium px-2 py-0.5 rounded bg-amber-100 text-amber-700">
-                {dDay}
-              </span>
-            )}
           </div>
         </div>
         <div className="bg-gray-50 rounded-lg p-3 flex flex-col gap-1.5">

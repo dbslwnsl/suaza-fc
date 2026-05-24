@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { type Match } from "@/lib/matches/helpers";
@@ -63,19 +62,21 @@ export default async function MatchesPage({
         {/* Header */}
         <header className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3">
-            <Link
-              href="/"
-              aria-label="홈으로"
-              className="relative w-9 h-9 desktop:w-12 desktop:h-12 rounded-full overflow-hidden block hover:opacity-80 transition shrink-0 desktop:mt-1"
+            <svg
+              className="w-9 h-9 desktop:w-12 desktop:h-12 shrink-0 desktop:mt-1 text-suaza-ink"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              viewBox="0 0 24 24"
+              aria-hidden
             >
-              <Image
-                src="/suaza-emblem.png"
-                alt="홈"
-                fill
-                sizes="48px"
-                className="object-cover"
-              />
-            </Link>
+              <rect x="3" y="4" width="18" height="18" rx="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
             <div className="flex flex-col gap-1">
               <h1 className="text-2xl desktop:text-[32px] font-bold text-suaza-ink leading-tight">
                 일정 & 결과

@@ -100,11 +100,15 @@ function PastMatchCard({ match }: { match: Match }) {
   const resultLabel =
     match.status === "canceled"
       ? "취소"
-      : result === "win"
-        ? "승"
-        : result === "lose"
-          ? "패"
-          : "무";
+      : result === "draw"
+        ? "무승부"
+        : isIntra
+          ? result === "win"
+            ? "A팀승"
+            : "B팀승"
+          : result === "win"
+            ? "수아자FC승"
+            : "수아자FC패";
   const resultClass =
     match.status === "canceled"
       ? "bg-gray-100 text-gray-500"
@@ -122,7 +126,7 @@ function PastMatchCard({ match }: { match: Match }) {
       <div className="flex items-center gap-5">
         <div className="flex flex-col items-center gap-1 w-16 shrink-0">
           <span
-            className={`text-xs font-bold px-2 py-0.5 rounded ${resultClass}`}
+            className={`text-xs font-bold px-2 py-0.5 rounded whitespace-nowrap ${resultClass}`}
           >
             {resultLabel}
           </span>
@@ -133,9 +137,12 @@ function PastMatchCard({ match }: { match: Match }) {
           )}
         </div>
         <div className="flex-1 flex flex-col gap-1.5 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-bold text-suaza-ink truncate min-w-0">
+              {isIntra ? "A팀 vs B팀" : `vs ${match.opponent}`}
+            </span>
             <span
-              className={`text-xs font-medium px-2 py-0.5 rounded ${
+              className={`text-xs font-medium px-2 py-0.5 rounded shrink-0 ${
                 isIntra
                   ? "bg-purple-100 text-purple-700"
                   : "bg-emerald-100 text-emerald-700"
@@ -143,13 +150,10 @@ function PastMatchCard({ match }: { match: Match }) {
             >
               {isIntra ? "자체전" : "상대전"}
             </span>
-            <span className="font-bold text-suaza-ink truncate">
-              {isIntra ? "A팀 vs B팀" : `vs ${match.opponent}`}
-            </span>
           </div>
-          <div className="text-xs text-suaza-ink-muted flex items-center gap-2 flex-wrap">
-            <span>📅 {dateStr} · {timeStr}</span>
-            {match.location && <span>· 📍 {match.location}</span>}
+          <div className="text-xs text-suaza-ink-muted flex flex-col gap-0.5">
+            <span>📅 {dateStr} {timeStr}</span>
+            {match.location && <span>📍 {match.location}</span>}
           </div>
         </div>
       </div>
