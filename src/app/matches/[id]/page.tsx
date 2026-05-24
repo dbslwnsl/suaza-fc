@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { deleteMatch, startMatch } from "@/lib/matches/actions";
+import { deleteMatch } from "@/lib/matches/actions";
 import AttendanceManagerBoard from "@/components/attendance-manager-board";
 import {
   AttendanceCardVote,
@@ -20,13 +20,11 @@ import {
   MATCH_STATUS_BADGE,
   MATCH_STATUS_DOT_COLOR,
   MATCH_STATUS_LABEL,
-  RESULT_BADGE,
-  RESULT_LABEL,
-  getResult,
   getTeamName,
   isMatchStarted,
   type Match,
 } from "@/lib/matches/helpers";
+import { fetchWeather, type WeatherInfo } from "@/lib/weather";
 
 type Participation = {
   id: string;
@@ -149,8 +147,6 @@ export default async function MatchDetailPage({
   const m = match as Match;
   const isStaff = me?.role === "manager" || me?.role === "coach";
   const editing = edit === "1" && isStaff;
-  const result =
-    m.status === "done" ? getResult(m.our_score, m.opponent_score) : null;
   const totalMembers = (allMembers ?? []).length;
 
   const participations = ((participationsRaw ?? []) as unknown as Participation[])
@@ -182,6 +178,12 @@ export default async function MatchDetailPage({
         : diffDays === 0
           ? "D-DAY"
           : null
+      : null;
+
+  // 예정 경기의 날씨 (있으면 표시)
+  const weather: WeatherInfo | null =
+    m.status === "scheduled"
+      ? await fetchWeather(m.location, m.match_date)
       : null;
 
   // 출석 마감 문구 — vote_deadline 이 있으면 그 시각, 없으면 경기 전날 23:59
@@ -265,33 +267,14 @@ export default async function MatchDetailPage({
   return (
     <main className="flex-1 bg-white desktop:bg-suaza-bg px-6 desktop:px-8 py-6 desktop:py-12">
       <div className="max-w-[600px] desktop:max-w-[1400px] mx-auto flex flex-col gap-4">
-        {/* Header: 경기 목록 + status + D-day */}
-        <header className="flex items-center justify-between gap-2">
+        {/* Header: 경기 목록 */}
+        <header className="flex items-center">
           <Link
             href="/matches"
             className="text-sm text-suaza-ink-muted hover:underline"
           >
             ‹ 경기 목록
           </Link>
-          <div className="flex items-center gap-1.5">
-            {result && (
-              <span
-                className={`text-xs px-2 py-0.5 rounded ${RESULT_BADGE[result]}`}
-              >
-                {RESULT_LABEL[result]} {m.our_score}-{m.opponent_score}
-              </span>
-            )}
-            <span
-              className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${MATCH_STATUS_BADGE[m.status]}`}
-            >
-              <span
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ backgroundColor: statusDotColor(m.status) }}
-              />
-              {MATCH_STATUS_LABEL[m.status]}
-              {dDay && <span className="font-bold ml-1">{dDay}</span>}
-            </span>
-          </div>
         </header>
 
         {message && (
@@ -305,7 +288,14 @@ export default async function MatchDetailPage({
           </p>
         )}
 
-        <VSCard m={m} isIntra={isIntra} isStaff={isStaff} isStarted={isStarted} />
+        <VSCard
+          m={m}
+          isIntra={isIntra}
+          isStaff={isStaff}
+          isStarted={isStarted}
+          dDay={dDay}
+          weather={weather}
+        />
 
             <div className="grid grid-cols-1 desktop:grid-cols-2 gap-4 desktop:items-stretch">
               {/* 출석투표: 좌측 상단 */}
@@ -401,16 +391,20 @@ function VSCard({
   isIntra,
   isStaff,
   isStarted,
+  dDay,
+  weather,
 }: {
   m: Match;
   isIntra: boolean;
   isStaff: boolean;
   isStarted: boolean;
+  dDay: string | null;
+  weather: WeatherInfo | null;
 }) {
   return (
     <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4">
-      {/* 경기 유형 + 상태 라벨 */}
-      <div className="flex items-center justify-center gap-2">
+      {/* 경기 유형 + 상태 + D-Day */}
+      <div className="flex items-center justify-center gap-2 flex-wrap">
         <span
           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
             isIntra
@@ -430,6 +424,11 @@ function VSCard({
           />
           {MATCH_STATUS_LABEL[m.status]}
         </span>
+        {dDay && (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
+            {dDay}
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-3 items-center gap-3">
@@ -462,7 +461,10 @@ function VSCard({
           </>
         ) : (
           <>
-            <TeamSide kind="us" />
+            <TeamSide
+              kind="us"
+              uniformColor={m.team_a_color ?? DEFAULT_VS_COLOR.A}
+            />
             {isStaff && isStarted ? (
               <ScoreControl
                 matchId={m.id}
@@ -479,6 +481,7 @@ function VSCard({
               kind="opponent"
               name={m.opponent}
               color={m.team_b_color ?? DEFAULT_VS_COLOR.B}
+              uniformColor={m.team_b_color ?? DEFAULT_VS_COLOR.B}
             />
           </>
         )}
@@ -505,27 +508,24 @@ function VSCard({
             <span className="inline-flex items-center gap-1 w-full desktop:w-auto justify-center">
               <span>📍</span>
               {m.location}
+              {weather && (
+                <span className="inline-flex items-center gap-1 ml-2 tabular-nums">
+                  <span className="text-base">{weather.emoji}</span>
+                  <span className="text-suaza-ink font-medium">
+                    {weather.label}
+                  </span>
+                  <span>· {weather.tempMax}°</span>
+                  <span className="ml-1 text-sky-700">
+                    강수 {weather.precipitationProbability}%
+                  </span>
+                </span>
+              )}
             </span>
           </>
         )}
       </div>
 
       <div className="flex items-center justify-center gap-2 flex-wrap">
-        {isStaff && m.status === "scheduled" && (
-          <form action={startMatch.bind(null, m.id)}>
-            <button
-              type="submit"
-              className="text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 transition px-4 py-1.5 rounded-lg inline-flex items-center gap-1"
-            >
-              ▶ 경기 시작
-              {isStarted && (
-                <span className="text-[10px] font-normal opacity-80">
-                  (시각 경과)
-                </span>
-              )}
-            </button>
-          </form>
-        )}
         {isStaff && (
           <Link
             href={`/matches/${m.id}?edit=1`}
@@ -573,12 +573,14 @@ function TeamSide({
   letter,
   color,
   subtitle,
+  uniformColor,
 }: {
   kind: "us" | "opponent" | "letter";
   name?: string;
   letter?: "A" | "B";
   color?: string;
   subtitle?: string;
+  uniformColor?: string;
 }) {
   if (kind === "us") {
     return (
@@ -595,6 +597,7 @@ function TeamSide({
         <span className="text-sm desktop:text-lg font-bold text-suaza-ink">
           SUAZA FC
         </span>
+        {uniformColor && <JerseyMini color={uniformColor} />}
       </div>
     );
   }
@@ -631,7 +634,27 @@ function TeamSide({
       <span className="text-sm desktop:text-lg font-bold text-suaza-ink text-center break-all">
         {trimmed || "(상대팀)"}
       </span>
+      {uniformColor && <JerseyMini color={uniformColor} />}
     </div>
+  );
+}
+
+// 작은 유니폼 아이콘 (팀 이름 아래 표시)
+function JerseyMini({ color }: { color: string }) {
+  const isLight =
+    color.toLowerCase() === "#ffffff" || color.toLowerCase() === "#f9fafb";
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="w-5 h-5 desktop:w-6 desktop:h-6"
+      fill={color}
+      stroke={isLight ? "#737a8c" : "rgba(0,0,0,0.25)"}
+      strokeWidth={isLight ? 0.6 : 0.4}
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M9 3 L6 4 L3 7 L4 10.5 L7 10 L7 21 L17 21 L17 10 L20 10.5 L21 7 L18 4 L15 3 L14 4.5 L12 5 L10 4.5 Z" />
+    </svg>
   );
 }
 
