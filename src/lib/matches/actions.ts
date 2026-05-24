@@ -22,6 +22,8 @@ type MatchInput = {
   notes: string | null;
   duration_hours: number;
   vote_deadline: string | null;
+  team_a_name: string | null;
+  team_b_name: string | null;
 };
 
 // datetime-local 입력("YYYY-MM-DDTHH:mm")을 항상 서울(KST, +09:00) 기준으로
@@ -61,6 +63,13 @@ function parseForm(formData: FormData): MatchInput {
   const deadlineLocal = String(formData.get("vote_deadline") ?? "");
   const vote_deadline = deadlineLocal ? kstLocalToISO(deadlineLocal) : null;
 
+  // 자체전 A/B 팀 이름 (자체전 아닐 때는 null 유지)
+  const isIntra = opponent === "자체전";
+  const teamARaw = String(formData.get("team_a_name") ?? "").trim();
+  const teamBRaw = String(formData.get("team_b_name") ?? "").trim();
+  const team_a_name = isIntra && teamARaw ? teamARaw : null;
+  const team_b_name = isIntra && teamBRaw ? teamBRaw : null;
+
   return {
     opponent,
     match_date,
@@ -71,6 +80,8 @@ function parseForm(formData: FormData): MatchInput {
     notes,
     duration_hours,
     vote_deadline,
+    team_a_name,
+    team_b_name,
   };
 }
 

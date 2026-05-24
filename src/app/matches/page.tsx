@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { type Match } from "@/lib/matches/helpers";
+import { getTeamName, type Match } from "@/lib/matches/helpers";
 import { fetchWeather } from "@/lib/weather";
 import PastMatchesSection from "./past-matches-section";
 import UpcomingMatchesSection from "./upcoming-matches-section";
@@ -209,11 +209,11 @@ function LiveMatchCard({ match }: { match: Match }) {
         <div className="text-3xl desktop:text-[40px] font-bold tracking-wide">
           {isIntra ? (
             <>
-              A팀
+              {getTeamName(match, "A")}
               <span className="mx-3 tabular-nums">
                 {ourScore} : {oppScore}
               </span>
-              B팀
+              {getTeamName(match, "B")}
             </>
           ) : (
             <>

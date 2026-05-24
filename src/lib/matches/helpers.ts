@@ -22,6 +22,8 @@ export type Match = {
   duration_hours: number;
   team_a_color: string | null;
   team_b_color: string | null;
+  team_a_name: string | null;
+  team_b_name: string | null;
   vote_deadline: string | null;
 };
 
@@ -37,6 +39,24 @@ export const DEFAULT_TEAM_COLOR: Record<"A" | "B", string> = {
   A: "#F97316", // 주황
   B: "#1F2937", // 검정
 };
+
+// 팀 기본 이름 (DB 값이 없을 때)
+export const DEFAULT_TEAM_NAME: Record<"A" | "B", string> = {
+  A: "A팀",
+  B: "B팀",
+};
+
+// 매치의 A/B 팀 표시명 (저장된 이름 → "팀" 접미사 자동 부착)
+// 비어 있으면 "A팀"/"B팀" 기본값, 이미 "팀" 으로 끝나면 그대로 사용.
+export function getTeamName(
+  m: { team_a_name?: string | null; team_b_name?: string | null },
+  team: "A" | "B",
+): string {
+  const v = (team === "A" ? m.team_a_name : m.team_b_name) ?? "";
+  const t = v.trim();
+  if (!t) return DEFAULT_TEAM_NAME[team];
+  return t.endsWith("팀") ? t : `${t}팀`;
+}
 
 export const DEFAULT_MATCH_DURATION_HOURS = 2;
 export const MATCH_DURATION_OPTIONS = [1, 2, 3, 4] as const;

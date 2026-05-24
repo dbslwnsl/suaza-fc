@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { createMatch, updateMatch } from "@/lib/matches/actions";
 import {
   DEFAULT_MATCH_DURATION_HOURS,
+  DEFAULT_TEAM_COLOR,
   MATCH_DURATION_OPTIONS,
   type MatchDurationHours,
 } from "@/lib/matches/helpers";
@@ -53,6 +54,8 @@ type Initial = {
   notes: string | null;
   durationHours?: number | null;
   voteDeadline?: string | null; // ISO from DB
+  teamAName?: string | null;
+  teamBName?: string | null;
 };
 
 // 투표 마감: 경기 시작 N시간 전, 또는 직접 설정
@@ -123,6 +126,8 @@ export default function NewMatchForm({
   const [opponent, setOpponent] = useState(
     initial && !initialIsIntra ? initial.opponent : "",
   );
+  const [teamAName, setTeamAName] = useState(initial?.teamAName ?? "");
+  const [teamBName, setTeamBName] = useState(initial?.teamBName ?? "");
   const [date, setDate] = useState(
     initial ? isoToLocalDate(initial.matchDate) : "",
   );
@@ -209,6 +214,8 @@ export default function NewMatchForm({
       <input type="hidden" name="notes" value={notes} />
       <input type="hidden" name="duration_hours" value={durationHours} />
       <input type="hidden" name="vote_deadline" value={voteDeadline} />
+      <input type="hidden" name="team_a_name" value={teamAName} />
+      <input type="hidden" name="team_b_name" value={teamBName} />
 
       {/* 경기 유형 */}
       <div className="flex flex-col gap-2">
@@ -253,13 +260,49 @@ export default function NewMatchForm({
             </>
           ) : (
             <>
-              <TeamSide kind="letter" letter="A" color="#EF3E3E" />
+              <TeamSide
+                kind="letter"
+                letter="A"
+                color={DEFAULT_TEAM_COLOR.A}
+                subtitle={previewTeamName(teamAName, "A팀")}
+              />
               <span className="text-suaza-ink-muted font-bold text-sm">vs</span>
-              <TeamSide kind="letter" letter="B" color="#338CF2" />
+              <TeamSide
+                kind="letter"
+                letter="B"
+                color={DEFAULT_TEAM_COLOR.B}
+                subtitle={previewTeamName(teamBName, "B팀")}
+              />
             </>
           )}
         </div>
       </section>
+
+      {/* 팀 이름 — 자체전일 때만 */}
+      {matchType === "intra" && (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="A팀 이름">
+            <input
+              type="text"
+              value={teamAName}
+              onChange={(e) => setTeamAName(e.target.value)}
+              placeholder="예: 감독"
+              maxLength={7}
+              className={inputCls}
+            />
+          </Field>
+          <Field label="B팀 이름">
+            <input
+              type="text"
+              value={teamBName}
+              onChange={(e) => setTeamBName(e.target.value)}
+              placeholder="예: 회장"
+              maxLength={7}
+              className={inputCls}
+            />
+          </Field>
+        </div>
+      )}
 
       {/* 상대팀 — 상대전일 때만 */}
       {matchType === "vs" && (
@@ -286,7 +329,7 @@ export default function NewMatchForm({
 
       {/* 날짜 + 킥오프 */}
       <div className="grid grid-cols-2 gap-3">
-        <Field label="경기 날짜" hint="YYYY-MM-DD">
+        <Field label="경기 날짜" hint="YYYY-MM-DD" required>
           <input
             type="date"
             value={date}
@@ -295,7 +338,7 @@ export default function NewMatchForm({
             className={inputCls}
           />
         </Field>
-        <Field label="킥오프 시간" hint="30분 단위">
+        <Field label="킥오프 시간" hint="30분 단위" required>
           <select
             value={time}
             onChange={(e) => setTime(e.target.value)}
@@ -333,12 +376,13 @@ export default function NewMatchForm({
       </div>
 
       {/* 장소 */}
-      <Field label="장소">
+      <Field label="장소" required>
         <input
           type="text"
           value={location}
           onChange={(e) => setLocation(e.target.value)}
           placeholder="예: 수원공고"
+          required
           className={inputCls}
         />
         {recentLocations.length > 0 && (
@@ -492,6 +536,13 @@ export default function NewMatchForm({
 const inputCls =
   "w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button";
 
+// 자체전 팀명 미리보기: 입력값에 "팀" 접미사 자동 부착, 비어있으면 기본값
+function previewTeamName(input: string, fallback: string): string {
+  const t = input.trim();
+  if (!t) return fallback;
+  return t.endsWith("팀") ? t : `${t}팀`;
+}
+
 function computeFinishTime(time: string, hours: number): string {
   if (!time) return "";
   const [hStr, mStr] = time.split(":");
@@ -615,7 +666,7 @@ function MatchTypeCard({
 type TeamSideProps =
   | { kind: "us"; name: string }
   | { kind: "opponent"; name: string; onEmptyClick?: () => void }
-  | { kind: "letter"; letter: "A" | "B"; color: string };
+  | { kind: "letter"; letter: "A" | "B"; color: string; subtitle?: string };
 
 function TeamSide(props: TeamSideProps) {
   if (props.kind === "us") {
@@ -648,8 +699,8 @@ function TeamSide(props: TeamSideProps) {
             {props.letter}
           </span>
         </div>
-        <span className="text-sm sm:text-base font-bold text-suaza-ink">
-          {props.letter}팀
+        <span className="text-sm sm:text-base font-bold text-suaza-ink text-center break-keep">
+          {props.subtitle ?? `${props.letter}팀`}
         </span>
       </div>
     );
@@ -690,17 +741,22 @@ function Field({
   label,
   hint,
   tag,
+  required,
   children,
 }: {
   label: string;
   hint?: string;
   tag?: string;
+  required?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline gap-2">
         <span className="text-suaza-ink text-base font-medium">{label}</span>
+        {required && (
+          <span className="text-xs text-suaza-accent font-medium">필수</span>
+        )}
         {tag && <span className="text-xs text-suaza-ink-faint">{tag}</span>}
       </div>
       {hint && <span className="text-xs text-suaza-ink-faint -mt-0.5">{hint}</span>}

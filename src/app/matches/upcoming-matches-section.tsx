@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import type { Match } from "@/lib/matches/helpers";
+import { getTeamName, type Match } from "@/lib/matches/helpers";
 import type { WeatherInfo } from "@/lib/weather";
 
 const MOBILE_LIMIT = 2;
@@ -82,7 +82,9 @@ function UpcomingMatchCard({
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-base font-bold text-suaza-ink truncate min-w-0">
-            {isIntra ? "A팀 vs B팀" : `vs ${match.opponent}`}
+            {isIntra
+              ? `${getTeamName(match, "A")} vs ${getTeamName(match, "B")}`
+              : `vs ${match.opponent}`}
           </h3>
           <div className="flex items-center gap-2 shrink-0">
             {dDay && (

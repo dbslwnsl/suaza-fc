@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { getResult, type Match } from "@/lib/matches/helpers";
+import { getResult, getTeamName, type Match } from "@/lib/matches/helpers";
 
 type Filter = "all" | "external" | "intra";
 
@@ -103,9 +103,7 @@ function PastMatchCard({ match }: { match: Match }) {
       : result === "draw"
         ? "무승부"
         : isIntra
-          ? result === "win"
-            ? "A팀승"
-            : "B팀승"
+          ? `${getTeamName(match, result === "win" ? "A" : "B")}승`
           : result === "win"
             ? "수아자FC승"
             : "수아자FC패";
@@ -139,7 +137,9 @@ function PastMatchCard({ match }: { match: Match }) {
         <div className="flex-1 flex flex-col gap-1.5 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <span className="font-bold text-suaza-ink truncate min-w-0">
-              {isIntra ? "A팀 vs B팀" : `vs ${match.opponent}`}
+              {isIntra
+                ? `${getTeamName(match, "A")} vs ${getTeamName(match, "B")}`
+                : `vs ${match.opponent}`}
             </span>
             <span
               className={`text-xs font-medium px-2 py-0.5 rounded shrink-0 ${

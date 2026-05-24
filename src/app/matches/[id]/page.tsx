@@ -246,6 +246,8 @@ export default async function MatchDetailPage({
               notes: m.notes,
               durationHours: m.duration_hours,
               voteDeadline: m.vote_deadline,
+              teamAName: m.team_a_name,
+              teamBName: m.team_b_name,
             }}
             recentOpponents={[]}
             recentLocations={[]}
