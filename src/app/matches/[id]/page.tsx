@@ -603,13 +603,18 @@ function TeamSide({
   }
 
   if (kind === "letter") {
+    const letterTextCls = isLightHex(color ?? "")
+      ? "text-suaza-ink"
+      : "text-white";
     return (
       <div className="flex flex-col items-center gap-2">
         <div
           className="w-16 h-16 desktop:w-24 desktop:h-24 rounded-full flex items-center justify-center"
           style={{ backgroundColor: color }}
         >
-          <span className="text-2xl desktop:text-4xl font-bold text-white">
+          <span
+            className={`text-2xl desktop:text-4xl font-bold ${letterTextCls}`}
+          >
             {letter}
           </span>
         </div>
@@ -621,13 +626,15 @@ function TeamSide({
   }
 
   const trimmed = (name ?? "").trim();
+  const oppBg = color ?? "#338CF2";
+  const oppTextCls = isLightHex(oppBg) ? "text-suaza-ink" : "text-white";
   return (
     <div className="flex flex-col items-center gap-2">
       <div
         className="w-16 h-16 desktop:w-24 desktop:h-24 rounded-full flex items-center justify-center"
-        style={{ backgroundColor: color ?? "#338CF2" }}
+        style={{ backgroundColor: oppBg }}
       >
-        <span className="text-2xl desktop:text-4xl font-bold text-white">
+        <span className={`text-2xl desktop:text-4xl font-bold ${oppTextCls}`}>
           {trimmed.charAt(0) || "?"}
         </span>
       </div>
@@ -641,8 +648,7 @@ function TeamSide({
 
 // 작은 유니폼 아이콘 (팀 이름 아래 표시)
 function JerseyMini({ color }: { color: string }) {
-  const isLight =
-    color.toLowerCase() === "#ffffff" || color.toLowerCase() === "#f9fafb";
+  const isLight = isLightHex(color);
   return (
     <svg
       viewBox="0 0 24 24"
@@ -656,6 +662,17 @@ function JerseyMini({ color }: { color: string }) {
       <path d="M9 3 L6 4 L3 7 L4 10.5 L7 10 L7 21 L17 21 L17 10 L20 10.5 L21 7 L18 4 L15 3 L14 4.5 L12 5 L10 4.5 Z" />
     </svg>
   );
+}
+
+// hex 색상의 밝기 판단 (Rec. 601 luma > 200 이면 밝은 색)
+function isLightHex(hex: string): boolean {
+  const m = hex.match(/^#([0-9A-Fa-f]{6})$/);
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 0xff;
+  const g = (n >> 8) & 0xff;
+  const b = n & 0xff;
+  return 0.299 * r + 0.587 * g + 0.114 * b > 200;
 }
 
 // ───────────────────────────────────────────────────────────
