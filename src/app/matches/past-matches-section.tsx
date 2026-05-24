@@ -10,14 +10,8 @@ const INITIAL_LIMIT = 4;
 
 export default function PastMatchesSection({
   matches,
-  recentWins,
-  recentLosses,
-  recentDraws,
 }: {
   matches: Match[];
-  recentWins: number;
-  recentLosses: number;
-  recentDraws: number;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [expanded, setExpanded] = useState(false);
@@ -28,18 +22,11 @@ export default function PastMatchesSection({
     return m.opponent !== "자체전";
   });
   const visible = expanded ? filtered : filtered.slice(0, INITIAL_LIMIT);
-  const recentCount = Math.min(4, matches.length);
-  const wlText = makeWlText(recentWins, recentLosses, recentDraws);
 
   return (
     <section className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-baseline gap-2">
-          <h2 className="text-lg font-bold text-suaza-ink">지난 경기</h2>
-          <span className="text-sm text-suaza-ink-muted">
-            · 최근 {recentCount}경기{wlText && ` (${wlText})`}
-          </span>
-        </div>
+        <h2 className="text-lg font-bold text-suaza-ink">지난 경기</h2>
         <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
           <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>
             전체
@@ -77,14 +64,6 @@ export default function PastMatchesSection({
       )}
     </section>
   );
-}
-
-function makeWlText(w: number, l: number, d: number) {
-  const parts: string[] = [];
-  if (w) parts.push(`${w}승`);
-  if (d) parts.push(`${d}무`);
-  if (l) parts.push(`${l}패`);
-  return parts.join(" ");
 }
 
 function FilterButton({
@@ -187,7 +166,12 @@ function formatLongDate(iso: string): string {
     weekday: "short",
     timeZone: "Asia/Seoul",
   });
-  return fmt.format(d);
+  const parts = fmt.formatToParts(d);
+  const year = parts.find((p) => p.type === "year")?.value ?? "";
+  const month = parts.find((p) => p.type === "month")?.value ?? "";
+  const day = parts.find((p) => p.type === "day")?.value ?? "";
+  const weekday = parts.find((p) => p.type === "weekday")?.value ?? "";
+  return `${year}년 ${month} ${day}일 (${weekday})`;
 }
 
 function formatTime(iso: string): string {
