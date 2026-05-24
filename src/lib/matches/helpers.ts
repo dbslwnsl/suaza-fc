@@ -34,10 +34,16 @@ export const UNIFORM_COLORS = [
   "#F9FAFB", // 흰색
 ] as const;
 
-// 팀 기본 유니폼 색 (DB 값이 없을 때)
+// 자체전 A/B 팀 기본 유니폼 색 (DB 값이 없을 때)
 export const DEFAULT_TEAM_COLOR: Record<"A" | "B", string> = {
   A: "#F97316", // 주황
   B: "#1F2937", // 검정
+};
+
+// 상대전 기본 유니폼 색 (우리팀 = 주황, 상대팀 = 파랑)
+export const DEFAULT_VS_COLOR: Record<"A" | "B", string> = {
+  A: "#F97316", // 우리팀 — 주황
+  B: "#3B82F6", // 상대팀 — 파랑
 };
 
 // 팀 기본 이름 (DB 값이 없을 때)

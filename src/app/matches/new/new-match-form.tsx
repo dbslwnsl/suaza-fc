@@ -9,6 +9,7 @@ import TimePicker from "./time-picker";
 import {
   DEFAULT_MATCH_DURATION_HOURS,
   DEFAULT_TEAM_COLOR,
+  DEFAULT_VS_COLOR,
   MATCH_DURATION_OPTIONS,
   type MatchDurationHours,
 } from "@/lib/matches/helpers";
@@ -132,11 +133,12 @@ export default function NewMatchForm({
   );
   const [teamAName, setTeamAName] = useState(initial?.teamAName ?? "");
   const [teamBName, setTeamBName] = useState(initial?.teamBName ?? "");
+  // 상대전 유니폼 색 picker 초기값 (자체전은 picker 표시 안 함)
   const [teamAColor, setTeamAColor] = useState<string>(
-    initial?.teamAColor || DEFAULT_TEAM_COLOR.A,
+    initial?.teamAColor || DEFAULT_VS_COLOR.A,
   );
   const [teamBColor, setTeamBColor] = useState<string>(
-    initial?.teamBColor || DEFAULT_TEAM_COLOR.B,
+    initial?.teamBColor || DEFAULT_VS_COLOR.B,
   );
   const [date, setDate] = useState(
     initial ? isoToLocalDate(initial.matchDate) : "",
@@ -226,8 +228,17 @@ export default function NewMatchForm({
       <input type="hidden" name="vote_deadline" value={voteDeadline} />
       <input type="hidden" name="team_a_name" value={teamAName} />
       <input type="hidden" name="team_b_name" value={teamBName} />
-      <input type="hidden" name="team_a_color" value={teamAColor} />
-      <input type="hidden" name="team_b_color" value={teamBColor} />
+      {/* 자체전은 색을 저장하지 않음 (DB null → 기본값 폴백) */}
+      <input
+        type="hidden"
+        name="team_a_color"
+        value={matchType === "vs" ? teamAColor : ""}
+      />
+      <input
+        type="hidden"
+        name="team_b_color"
+        value={matchType === "vs" ? teamBColor : ""}
+      />
 
       {/* 경기 유형 */}
       <div className="flex flex-col gap-2">
@@ -644,17 +655,25 @@ function isLightColor(hex: string): boolean {
   return 0.299 * r + 0.587 * g + 0.114 * b > 230;
 }
 
-// 12 대표 색상 (한글 라벨 포함)
+// 20 대표 색상 (한글 라벨 포함)
 const PRESET_COLORS: { hex: string; name: string }[] = [
   { hex: "#EF4444", name: "빨강" },
+  { hex: "#991B1B", name: "진홍" },
   { hex: "#EC4899", name: "분홍" },
   { hex: "#F97316", name: "주황" },
+  { hex: "#B45309", name: "황토" },
   { hex: "#EAB308", name: "노랑" },
+  { hex: "#84CC16", name: "라임" },
   { hex: "#22C55E", name: "초록" },
-  { hex: "#14B8A6", name: "민트" },
+  { hex: "#15803D", name: "짙초록" },
+  { hex: "#14B8A6", name: "청록" },
+  { hex: "#67E8F9", name: "민트" },
+  { hex: "#38BDF8", name: "하늘" },
   { hex: "#3B82F6", name: "파랑" },
+  { hex: "#1D4ED8", name: "코발트" },
   { hex: "#1E3A8A", name: "남색" },
-  { hex: "#A855F7", name: "보라" },
+  { hex: "#8B5CF6", name: "보라" },
+  { hex: "#6B21A8", name: "자주" },
   { hex: "#1F2937", name: "검정" },
   { hex: "#6B7280", name: "회색" },
   { hex: "#FFFFFF", name: "흰색" },
@@ -684,10 +703,15 @@ function JerseyPicker({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="block w-10 h-10 sm:w-12 sm:h-12 hover:scale-105 transition cursor-pointer"
+        className="flex flex-col items-center gap-0.5 hover:scale-105 transition cursor-pointer"
         aria-label={title}
       >
-        <Jersey color={color} />
+        <span className="text-[10px] text-suaza-ink-muted">
+          {findColorName(color)}
+        </span>
+        <span className="block w-10 h-10 sm:w-12 sm:h-12">
+          <Jersey color={color} />
+        </span>
       </button>
       {open && (
         <ColorPickerModal
@@ -816,28 +840,6 @@ function ColorPickerModal({
           })}
         </div>
 
-        {/* 직접 색상 선택 */}
-        <div className="px-5 pb-3">
-          <label className="flex items-center gap-2 border border-dashed border-suaza-border rounded-lg p-3 cursor-pointer hover:bg-gray-50 transition">
-            <span aria-hidden>🎨</span>
-            <span className="text-sm font-bold text-suaza-ink">
-              직접 색상 선택
-            </span>
-            <span className="text-xs text-suaza-ink-muted ml-auto">
-              HEX · RGB · 색상휠
-            </span>
-            <span
-              className="w-6 h-6 rounded-full border border-suaza-border shrink-0"
-              style={{ backgroundColor: preview }}
-            />
-            <input
-              type="color"
-              value={preview}
-              onChange={(e) => setPreview(e.target.value)}
-              className="sr-only"
-            />
-          </label>
-        </div>
 
         {/* 푸터: 취소 / 적용 */}
         <div className="flex gap-2 px-5 pb-5 pt-2">
