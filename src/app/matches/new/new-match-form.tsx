@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { createMatch, updateMatch } from "@/lib/matches/actions";
+import DatePicker from "./date-picker";
+import TimePicker from "./time-picker";
 import {
   DEFAULT_MATCH_DURATION_HOURS,
   DEFAULT_TEAM_COLOR,
@@ -330,20 +332,35 @@ export default function NewMatchForm({
       {/* 날짜 + 킥오프 */}
       <div className="grid grid-cols-2 gap-3">
         <Field label="경기 날짜" hint="YYYY-MM-DD" required>
+          {/* 모바일: 커스텀 달력 (화면 가득 차지 않음) */}
+          <div className="desktop:hidden">
+            <DatePicker value={date} onChange={setDate} required />
+          </div>
+          {/* 데스크탑: native input */}
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
             required
-            className={inputCls}
+            className={`${inputCls} hidden desktop:block`}
           />
         </Field>
         <Field label="킥오프 시간" hint="30분 단위" required>
+          {/* 모바일: 커스텀 시간 픽커 */}
+          <div className="desktop:hidden">
+            <TimePicker
+              value={time}
+              onChange={setTime}
+              options={TIME_OPTIONS}
+              required
+            />
+          </div>
+          {/* 데스크탑: native select */}
           <select
             value={time}
             onChange={(e) => setTime(e.target.value)}
             required
-            className={`${inputCls} bg-white`}
+            className={`${inputCls} bg-white hidden desktop:block`}
           >
             <option value="" disabled>
               시간 선택
@@ -420,17 +437,62 @@ export default function NewMatchForm({
             );
           })}
         </div>
-        {voteMode === "custom" && (
-          <input
-            type="datetime-local"
-            value={customDeadline}
-            onChange={(e) => {
-              setCustomDeadline(e.target.value);
-              setCustomTouched(true);
-            }}
-            className={inputCls}
-          />
-        )}
+        {(() => {
+          // 프리셋(1·3·6·24시간 전)이면 voteDeadline 이 계산값, custom 이면 customDeadline
+          const [dlDate, dlTime] = (voteDeadline || "").split("T");
+          // 피커 변경 시 자동으로 "직접 설정" 모드로 전환
+          const setDlDate = (v: string) => {
+            setVoteMode("custom");
+            setCustomDeadline(v ? `${v}T${dlTime || ""}` : "");
+            setCustomTouched(true);
+          };
+          const setDlTime = (v: string) => {
+            setVoteMode("custom");
+            setCustomDeadline(`${dlDate || ""}T${v}`);
+            setCustomTouched(true);
+          };
+          return (
+            <div className="grid grid-cols-2 gap-3">
+              {/* 마감 날짜 */}
+              <div className="desktop:hidden">
+                <DatePicker
+                  value={dlDate || ""}
+                  onChange={setDlDate}
+                  placeholder="마감 날짜"
+                />
+              </div>
+              <input
+                type="date"
+                value={dlDate || ""}
+                onChange={(e) => setDlDate(e.target.value)}
+                className={`${inputCls} hidden desktop:block`}
+              />
+              {/* 마감 시간 */}
+              <div className="desktop:hidden">
+                <TimePicker
+                  value={dlTime || ""}
+                  onChange={setDlTime}
+                  options={TIME_OPTIONS}
+                  placeholder="마감 시간"
+                />
+              </div>
+              <select
+                value={dlTime || ""}
+                onChange={(e) => setDlTime(e.target.value)}
+                className={`${inputCls} bg-white hidden desktop:block`}
+              >
+                <option value="" disabled>
+                  시간 선택
+                </option>
+                {TIME_OPTIONS.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+          );
+        })()}
         {voteDeadline ? (
           <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-blue-50 text-sm flex-wrap">
             <span aria-hidden>🔔</span>
