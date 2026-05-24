@@ -12,7 +12,7 @@ export const DEFAULT_CATEGORY: PostCategory = "free";
 
 export const CATEGORY_LABEL: Record<PostCategory, string> = {
   notice: "공지",
-  free: "자유게시판",
+  free: "자유",
   tactics: "훈련",
   qna: "질문",
   suggestion: "건의",

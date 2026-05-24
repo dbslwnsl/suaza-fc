@@ -61,9 +61,6 @@ export default function CommentSection({
         <span className="text-xs text-suaza-ink-muted">{totalCount}</span>
       </div>
 
-      {/* 최상위 댓글 작성 폼 */}
-      <CommentForm postId={postId} parentId={null} />
-
       {tree.length === 0 ? (
         <p className="text-sm text-suaza-ink-muted py-2 text-center">
           첫 댓글을 남겨보세요
@@ -82,6 +79,9 @@ export default function CommentSection({
           ))}
         </ul>
       )}
+
+      {/* 최상위 댓글 작성 폼 (리스트 아래) */}
+      <CommentForm postId={postId} parentId={null} />
     </section>
   );
 }

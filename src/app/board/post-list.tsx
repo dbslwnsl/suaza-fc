@@ -52,8 +52,28 @@ export default function PostList({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 카테고리 필터 칩 */}
-      <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
+      {/* 카테고리 필터 — 모바일: 드랍다운(인라인), 데스크탑: 칩 */}
+      <div className="sm:hidden relative inline-flex items-center self-start w-fit">
+        <select
+          value={filter}
+          onChange={(e) => setFilter(e.target.value as Filter)}
+          className="appearance-none bg-transparent border-none pl-0 pr-5 py-1 text-sm font-medium text-suaza-ink focus:outline-none cursor-pointer"
+        >
+          <option value="ALL">전체 ({posts.length})</option>
+          {POST_CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {CATEGORY_LABEL[c]} ({counts[c]})
+            </option>
+          ))}
+        </select>
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-0 text-[10px] text-suaza-ink-muted"
+        >
+          ▼
+        </span>
+      </div>
+      <div className="hidden sm:flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
         <CategoryChip
           label="전체"
           count={posts.length}
@@ -143,59 +163,69 @@ function PostCard({
 
   return (
     <div className="border border-suaza-border rounded-lg overflow-hidden">
-      <div className="flex items-center gap-3 p-4">
+      <div className="flex gap-3 p-4">
+        {/* 좌측: 아바타(상단) + 이름(하단, 날짜 라인과 정렬) */}
         <Link
           href={`/board/${post.id}`}
-          className="group flex items-center gap-3 flex-1 min-w-0"
+          className="flex flex-col items-center justify-between gap-1 shrink-0 w-12 group"
         >
           <AuthorAvatar
             name={post.author?.name ?? null}
             src={post.author?.avatar_url ?? null}
           />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              {/* 공지 카테고리는 아래 카테고리 뱃지가 "공지"를 표시하므로 중복 방지 */}
-              {post.is_notice && post.category !== "notice" && (
-                <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium shrink-0">
-                  공지
-                </span>
-              )}
-              <span
-                className={`text-[11px] px-2 py-0.5 rounded font-medium shrink-0 ${categoryBadgeClass(post.category, post.is_notice)}`}
-              >
-                {CATEGORY_LABEL[post.category]}
-              </span>
-              <span className="font-bold text-suaza-ink truncate group-hover:underline">
-                {post.title}
-              </span>
-              {commentCount > 0 && (
-                <span className="shrink-0 inline-flex items-center gap-0.5 text-xs text-suaza-ink-muted">
-                  <span aria-hidden>💬</span>
-                  <span className="font-medium">{commentCount}</span>
-                </span>
-              )}
-            </div>
-            <div className="text-sm text-suaza-ink-muted flex gap-2">
-              <span>{post.author?.name ?? "(알 수 없음)"}</span>
-              <span>·</span>
-              <span>{formatPostDate(post.created_at)}</span>
-            </div>
-          </div>
-        </Link>
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={open}
-          aria-label={open ? "글 접기" : "글 펼치기"}
-          className="shrink-0 w-9 h-9 inline-flex items-center justify-center rounded-full text-suaza-ink-muted hover:text-suaza-ink hover:bg-gray-100 transition"
-        >
-          <span
-            aria-hidden
-            className={`text-xs transition-transform ${open ? "rotate-180" : ""}`}
-          >
-            ▼
+          <span className="text-[11px] text-suaza-ink-muted truncate w-full text-center group-hover:text-suaza-ink">
+            {post.author?.name ?? "(알 수 없음)"}
           </span>
-        </button>
+        </Link>
+        {/* 우측: 태그 → 제목+💬+▼ → 날짜 */}
+        <div className="flex-1 min-w-0 flex flex-col gap-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* 공지 카테고리는 아래 카테고리 뱃지가 "공지"를 표시하므로 중복 방지 */}
+            {post.is_notice && post.category !== "notice" && (
+              <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium">
+                공지
+              </span>
+            )}
+            <span
+              className={`text-[11px] px-2 py-0.5 rounded font-medium ${categoryBadgeClass(post.category, post.is_notice)}`}
+            >
+              {CATEGORY_LABEL[post.category]}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/board/${post.id}`}
+              className="group flex-1 min-w-0"
+            >
+              <h3 className="font-bold text-suaza-ink truncate group-hover:underline">
+                {post.title}
+              </h3>
+            </Link>
+            {commentCount > 0 && (
+              <span className="shrink-0 inline-flex items-center gap-0.5 text-xs text-suaza-ink-muted">
+                <span aria-hidden>💬</span>
+                <span className="font-medium">{commentCount}</span>
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-expanded={open}
+              aria-label={open ? "글 접기" : "글 펼치기"}
+              className="shrink-0 w-7 h-7 inline-flex items-center justify-center rounded-full text-suaza-ink-muted hover:text-suaza-ink hover:bg-gray-100 transition"
+            >
+              <span
+                aria-hidden
+                className={`text-xs transition-transform ${open ? "rotate-180" : ""}`}
+              >
+                ▼
+              </span>
+            </button>
+          </div>
+          <div className="text-xs text-suaza-ink-muted">
+            {formatPostDate(post.created_at)}
+          </div>
+        </div>
       </div>
 
       {open && (

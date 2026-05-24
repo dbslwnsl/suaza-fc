@@ -164,35 +164,38 @@ export default async function PostDetailPage({
                   {p.title}
                 </h1>
               </div>
-              <div className="text-sm text-suaza-ink-muted flex gap-2">
-                <span>{p.author?.name ?? "(알 수 없음)"}</span>
-                <span>·</span>
-                <span>{formatPostDate(p.created_at)}</span>
+              <div className="text-sm text-suaza-ink-muted flex items-center justify-between gap-2">
+                <div className="flex gap-2 min-w-0">
+                  <span className="truncate">
+                    {p.author?.name ?? "(알 수 없음)"}
+                  </span>
+                  <span>·</span>
+                  <span className="shrink-0">{formatPostDate(p.created_at)}</span>
+                </div>
+                {canEdit && (
+                  <div className="flex gap-1.5 shrink-0">
+                    <Link
+                      href={`/board/${p.id}?edit=1`}
+                      className="inline-flex items-center text-xs px-2.5 py-1 rounded-md border border-suaza-border text-suaza-ink hover:bg-gray-50 transition"
+                    >
+                      수정
+                    </Link>
+                    <form action={deletePost.bind(null, p.id)}>
+                      <button
+                        type="submit"
+                        className="inline-flex items-center text-xs px-2.5 py-1 rounded-md border border-red-300 text-red-600 hover:bg-red-50 transition"
+                      >
+                        삭제
+                      </button>
+                    </form>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="text-suaza-ink whitespace-pre-wrap leading-relaxed">
               {p.content}
             </div>
-
-            {canEdit && (
-              <div className="flex gap-2 pt-2 border-t border-suaza-border">
-                <Link
-                  href={`/board/${p.id}?edit=1`}
-                  className="flex-1 h-[44px] rounded-lg border border-suaza-border text-suaza-ink text-sm font-medium flex items-center justify-center hover:bg-gray-50"
-                >
-                  수정
-                </Link>
-                <form action={deletePost.bind(null, p.id)} className="flex-1">
-                  <button
-                    type="submit"
-                    className="w-full h-[44px] rounded-lg border border-red-300 text-red-600 text-sm font-medium hover:bg-red-50 transition"
-                  >
-                    삭제
-                  </button>
-                </form>
-              </div>
-            )}
 
             <CommentSection
               postId={p.id}
