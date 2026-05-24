@@ -58,6 +58,8 @@ type Initial = {
   voteDeadline?: string | null; // ISO from DB
   teamAName?: string | null;
   teamBName?: string | null;
+  teamAColor?: string | null;
+  teamBColor?: string | null;
 };
 
 // 투표 마감: 경기 시작 N시간 전, 또는 직접 설정
@@ -130,6 +132,12 @@ export default function NewMatchForm({
   );
   const [teamAName, setTeamAName] = useState(initial?.teamAName ?? "");
   const [teamBName, setTeamBName] = useState(initial?.teamBName ?? "");
+  const [teamAColor, setTeamAColor] = useState<string>(
+    initial?.teamAColor || DEFAULT_TEAM_COLOR.A,
+  );
+  const [teamBColor, setTeamBColor] = useState<string>(
+    initial?.teamBColor || DEFAULT_TEAM_COLOR.B,
+  );
   const [date, setDate] = useState(
     initial ? isoToLocalDate(initial.matchDate) : "",
   );
@@ -218,6 +226,8 @@ export default function NewMatchForm({
       <input type="hidden" name="vote_deadline" value={voteDeadline} />
       <input type="hidden" name="team_a_name" value={teamAName} />
       <input type="hidden" name="team_b_name" value={teamBName} />
+      <input type="hidden" name="team_a_color" value={teamAColor} />
+      <input type="hidden" name="team_b_color" value={teamBColor} />
 
       {/* 경기 유형 */}
       <div className="flex flex-col gap-2">
@@ -249,35 +259,43 @@ export default function NewMatchForm({
 
       {/* VS preview */}
       <section className="bg-gray-50 rounded-xl p-4 sm:p-5">
-        <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-center">
-          {matchType === "vs" ? (
-            <>
-              <TeamSide kind="us" name="SUAZA FC" />
-              <span className="text-suaza-ink-muted font-bold text-sm">vs</span>
-              <TeamSide
-                kind="opponent"
-                name={opponent}
-                onEmptyClick={() => opponentInputRef.current?.focus()}
-              />
-            </>
-          ) : (
-            <>
-              <TeamSide
-                kind="letter"
-                letter="A"
-                color={DEFAULT_TEAM_COLOR.A}
-                subtitle={previewTeamName(teamAName, "A팀")}
-              />
-              <span className="text-suaza-ink-muted font-bold text-sm">vs</span>
-              <TeamSide
-                kind="letter"
-                letter="B"
-                color={DEFAULT_TEAM_COLOR.B}
-                subtitle={previewTeamName(teamBName, "B팀")}
-              />
-            </>
-          )}
-        </div>
+        {matchType === "vs" ? (
+          <div className="grid grid-cols-[1fr_auto_auto_auto_1fr] gap-2 sm:gap-3 items-center">
+            <TeamSide kind="us" name="SUAZA FC" />
+            <JerseyPicker
+              color={teamAColor}
+              onChange={setTeamAColor}
+              title="우리팀 상의 색상"
+            />
+            <span className="text-suaza-ink-muted font-bold text-sm">vs</span>
+            <JerseyPicker
+              color={teamBColor}
+              onChange={setTeamBColor}
+              title="상대팀 상의 색상"
+            />
+            <TeamSide
+              kind="opponent"
+              name={opponent}
+              onEmptyClick={() => opponentInputRef.current?.focus()}
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-center">
+            <TeamSide
+              kind="letter"
+              letter="A"
+              color={DEFAULT_TEAM_COLOR.A}
+              subtitle={previewTeamName(teamAName, "A팀")}
+            />
+            <span className="text-suaza-ink-muted font-bold text-sm">vs</span>
+            <TeamSide
+              kind="letter"
+              letter="B"
+              color={DEFAULT_TEAM_COLOR.B}
+              subtitle={previewTeamName(teamBName, "B팀")}
+            />
+          </div>
+        )}
       </section>
 
       {/* 팀 이름 — 자체전일 때만 */}
@@ -308,7 +326,7 @@ export default function NewMatchForm({
 
       {/* 상대팀 — 상대전일 때만 */}
       {matchType === "vs" && (
-        <Field label="상대팀">
+        <Field label="상대팀" required>
           <input
             ref={opponentInputRef}
             type="text"
@@ -597,6 +615,262 @@ export default function NewMatchForm({
 
 const inputCls =
   "w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button";
+
+// 상의 유니폼 SVG (단색)
+function Jersey({ color }: { color: string }) {
+  const isLight = isLightColor(color);
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="w-full h-full"
+      fill={color}
+      stroke={isLight ? "#737a8c" : "rgba(0,0,0,0.25)"}
+      strokeWidth={isLight ? 0.6 : 0.4}
+      strokeLinejoin="round"
+    >
+      <path d="M9 3 L6 4 L3 7 L4 10.5 L7 10 L7 21 L17 21 L17 10 L20 10.5 L21 7 L18 4 L15 3 L14 4.5 L12 5 L10 4.5 Z" />
+    </svg>
+  );
+}
+
+function isLightColor(hex: string): boolean {
+  const m = hex.match(/^#([0-9A-Fa-f]{6})$/);
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 0xff;
+  const g = (n >> 8) & 0xff;
+  const b = n & 0xff;
+  // 밝기 (Rec. 601 luma) > 230 → 밝은 색
+  return 0.299 * r + 0.587 * g + 0.114 * b > 230;
+}
+
+// 12 대표 색상 (한글 라벨 포함)
+const PRESET_COLORS: { hex: string; name: string }[] = [
+  { hex: "#EF4444", name: "빨강" },
+  { hex: "#EC4899", name: "분홍" },
+  { hex: "#F97316", name: "주황" },
+  { hex: "#EAB308", name: "노랑" },
+  { hex: "#22C55E", name: "초록" },
+  { hex: "#14B8A6", name: "민트" },
+  { hex: "#3B82F6", name: "파랑" },
+  { hex: "#1E3A8A", name: "남색" },
+  { hex: "#A855F7", name: "보라" },
+  { hex: "#1F2937", name: "검정" },
+  { hex: "#6B7280", name: "회색" },
+  { hex: "#FFFFFF", name: "흰색" },
+];
+
+function findColorName(hex: string): string {
+  const lower = hex.toLowerCase();
+  return (
+    PRESET_COLORS.find((c) => c.hex.toLowerCase() === lower)?.name ??
+    "사용자 정의"
+  );
+}
+
+// 유니폼 클릭 → 색상 모달
+function JerseyPicker({
+  color,
+  onChange,
+  title,
+}: {
+  color: string;
+  onChange: (c: string) => void;
+  title: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="block w-10 h-10 sm:w-12 sm:h-12 hover:scale-105 transition cursor-pointer"
+        aria-label={title}
+      >
+        <Jersey color={color} />
+      </button>
+      {open && (
+        <ColorPickerModal
+          initialColor={color}
+          title={title}
+          onClose={() => setOpen(false)}
+          onApply={(c) => {
+            onChange(c);
+            setOpen(false);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+// 색상 선택 모달 (대표 12색 + 직접 입력)
+function ColorPickerModal({
+  initialColor,
+  title,
+  onClose,
+  onApply,
+}: {
+  initialColor: string;
+  title: string;
+  onClose: () => void;
+  onApply: (c: string) => void;
+}) {
+  const [preview, setPreview] = useState(initialColor);
+
+  // ESC 키 닫기
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  // 모달 열려있는 동안 body 스크롤 잠금
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] bg-black/40 flex items-end sm:items-center justify-center"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[92vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div className="flex items-center gap-3 px-5 pt-5 pb-3">
+          <div className="w-12 h-12 shrink-0">
+            <Jersey color={preview} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-suaza-ink">{title}</h3>
+            <p className="text-xs text-suaza-ink-muted truncate">
+              현재 · {findColorName(preview)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-suaza-ink-muted flex items-center justify-center text-xl shrink-0"
+            aria-label="닫기"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* 12색 그리드 */}
+        <div className="grid grid-cols-5 gap-3 px-5 pb-3">
+          {PRESET_COLORS.map((c) => {
+            const selected = c.hex.toLowerCase() === preview.toLowerCase();
+            const lightBg = isLightColor(c.hex);
+            return (
+              <button
+                key={c.hex}
+                type="button"
+                onClick={() => setPreview(c.hex)}
+                className="flex flex-col items-center gap-1 group"
+              >
+                <div
+                  className={`relative w-12 h-12 rounded-full transition ${
+                    selected
+                      ? "ring-2 ring-suaza-ink ring-offset-2"
+                      : "group-hover:scale-110"
+                  } ${lightBg ? "border border-suaza-border" : ""}`}
+                  style={{ backgroundColor: c.hex }}
+                >
+                  {selected && (
+                    <svg
+                      className={`absolute inset-0 m-auto w-6 h-6 ${
+                        lightBg ? "text-suaza-ink" : "text-white"
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      viewBox="0 0 24 24"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </div>
+                <span
+                  className={`text-xs ${
+                    selected
+                      ? "font-bold text-suaza-ink"
+                      : "text-suaza-ink-muted"
+                  }`}
+                >
+                  {c.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 직접 색상 선택 */}
+        <div className="px-5 pb-3">
+          <label className="flex items-center gap-2 border border-dashed border-suaza-border rounded-lg p-3 cursor-pointer hover:bg-gray-50 transition">
+            <span aria-hidden>🎨</span>
+            <span className="text-sm font-bold text-suaza-ink">
+              직접 색상 선택
+            </span>
+            <span className="text-xs text-suaza-ink-muted ml-auto">
+              HEX · RGB · 색상휠
+            </span>
+            <span
+              className="w-6 h-6 rounded-full border border-suaza-border shrink-0"
+              style={{ backgroundColor: preview }}
+            />
+            <input
+              type="color"
+              value={preview}
+              onChange={(e) => setPreview(e.target.value)}
+              className="sr-only"
+            />
+          </label>
+        </div>
+
+        {/* 푸터: 취소 / 적용 */}
+        <div className="flex gap-2 px-5 pb-5 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-3 rounded-lg border border-suaza-border text-suaza-ink font-medium hover:bg-gray-50"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={() => onApply(preview)}
+            className="flex-1 py-3 rounded-lg bg-suaza-accent text-white font-bold hover:opacity-90 inline-flex items-center justify-center gap-1.5"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              viewBox="0 0 24 24"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            적용
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // 자체전 팀명 미리보기: 입력값에 "팀" 접미사 자동 부착, 비어있으면 기본값
 function previewTeamName(input: string, fallback: string): string {

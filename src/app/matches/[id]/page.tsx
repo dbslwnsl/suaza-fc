@@ -248,6 +248,8 @@ export default async function MatchDetailPage({
               voteDeadline: m.vote_deadline,
               teamAName: m.team_a_name,
               teamBName: m.team_b_name,
+              teamAColor: m.team_a_color,
+              teamBColor: m.team_b_color,
             }}
             recentOpponents={[]}
             recentLocations={[]}
