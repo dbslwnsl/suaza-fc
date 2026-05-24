@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CATEGORY_LABEL,
   POST_CATEGORIES,
@@ -52,26 +52,14 @@ export default function PostList({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 카테고리 필터 — 모바일: 드랍다운(인라인), 데스크탑: 칩 */}
-      <div className="sm:hidden relative inline-flex items-center self-start w-fit">
-        <select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value as Filter)}
-          className="appearance-none bg-transparent border-none pl-0 pr-5 py-1 text-sm font-medium text-suaza-ink focus:outline-none cursor-pointer"
-        >
-          <option value="ALL">전체 ({posts.length})</option>
-          {POST_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {CATEGORY_LABEL[c]} ({counts[c]})
-            </option>
-          ))}
-        </select>
-        <span
-          aria-hidden
-          className="pointer-events-none absolute right-0 text-[10px] text-suaza-ink-muted"
-        >
-          ▼
-        </span>
+      {/* 카테고리 필터 — 모바일: 커스텀 드랍다운, 데스크탑: 칩 */}
+      <div className="sm:hidden self-start">
+        <CategoryDropdown
+          filter={filter}
+          totalCount={posts.length}
+          counts={counts}
+          onChange={setFilter}
+        />
       </div>
       <div className="hidden sm:flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
         <CategoryChip
@@ -112,6 +100,105 @@ export default function PostList({
             );
           })}
         </ul>
+      )}
+    </div>
+  );
+}
+
+function CategoryDropdown({
+  filter,
+  totalCount,
+  counts,
+  onChange,
+}: {
+  filter: Filter;
+  totalCount: number;
+  counts: Record<PostCategory, number>;
+  onChange: (f: Filter) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onMouseDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const currentLabel =
+    filter === "ALL" ? "전체" : CATEGORY_LABEL[filter];
+  const currentCount = filter === "ALL" ? totalCount : counts[filter];
+
+  const items: { key: Filter; label: string; count: number }[] = [
+    { key: "ALL", label: "전체", count: totalCount },
+    ...POST_CATEGORIES.map((c) => ({
+      key: c as Filter,
+      label: CATEGORY_LABEL[c],
+      count: counts[c],
+    })),
+  ];
+
+  return (
+    <div ref={ref} className="relative inline-flex items-center">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-1 py-1 pr-0 text-sm font-medium text-suaza-ink hover:text-suaza-ink-muted transition"
+      >
+        <span>
+          {currentLabel} ({currentCount})
+        </span>
+        <span
+          aria-hidden
+          className={`text-[10px] text-suaza-ink-muted transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+        >
+          ▼
+        </span>
+      </button>
+      {open && (
+        <div className="absolute z-20 top-full left-0 mt-1 min-w-[140px] bg-white rounded-lg border border-suaza-border shadow-lg py-1">
+          {items.map((it) => {
+            const active = filter === it.key;
+            return (
+              <button
+                key={it.key}
+                type="button"
+                onClick={() => {
+                  onChange(it.key);
+                  setOpen(false);
+                }}
+                className={`flex items-center justify-between gap-3 w-full px-3 py-2 text-sm text-left transition ${
+                  active
+                    ? "bg-gray-100 font-bold text-suaza-ink"
+                    : "text-suaza-ink hover:bg-gray-50"
+                }`}
+              >
+                <span>{it.label}</span>
+                <span
+                  className={
+                    active ? "text-suaza-ink-muted" : "text-suaza-ink-faint"
+                  }
+                >
+                  {it.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       )}
     </div>
   );
