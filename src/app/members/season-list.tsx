@@ -211,7 +211,7 @@ function SeasonSelector({ year, years }: { year: number; years: number[] }) {
           <Link
             key={y}
             href={href}
-            className={`shrink-0 inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold transition ${
+            className={`shrink-0 inline-flex items-center px-2 desktop:px-3 py-0.5 desktop:py-1 rounded-lg text-xs desktop:text-sm font-bold transition ${
               active
                 ? "bg-suaza-ink text-white border border-suaza-ink"
                 : "bg-white text-suaza-ink border border-suaza-border hover:bg-gray-50"
@@ -243,7 +243,7 @@ function MonthDropdown({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold border transition ${
+        className={`inline-flex items-center gap-1.5 px-2 desktop:px-3 py-0.5 desktop:py-1 rounded-lg text-xs desktop:text-sm font-bold border transition ${
           active
             ? "bg-suaza-ink text-white border-suaza-ink"
             : "bg-white text-suaza-ink border-suaza-border hover:bg-gray-50"

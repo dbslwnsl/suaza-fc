@@ -54,6 +54,12 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "age", label: "나이순" },
 ];
 
+// 처음 클릭 시 기본 방향: 이름은 가나다 정순(asc), 나이는 많은순(desc)
+const DEFAULT_DIR: Record<SortKey, "asc" | "desc"> = {
+  name: "asc",
+  age: "desc",
+};
+
 export default function RosterList({
   members,
   myId,
@@ -63,6 +69,16 @@ export default function RosterList({
 }) {
   const [filter, setFilter] = useState<Filter>("ALL");
   const [sort, setSort] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const onSelectSort = (key: SortKey) => {
+    if (key === sort) {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    } else {
+      setSort(key);
+      setSortDir(DEFAULT_DIR[key]);
+    }
+  };
 
   const counts = useMemo(() => {
     const c: Record<Position, number> = { GK: 0, DF: 0, MF: 0, FW: 0 };
@@ -80,15 +96,22 @@ export default function RosterList({
 
     const byName = (a: RosterMember, b: RosterMember) =>
       a.name.localeCompare(b.name, "ko");
-    // 나이순: 생년월일이 빠른(나이 많은) 순. 미입력은 뒤로.
+    // 나이순(많은→적은): 생년월일이 빠른(나이 많은) 순. 미입력은 뒤로.
     const byAge = (a: RosterMember, b: RosterMember) => {
       if (!a.birthDate && !b.birthDate) return byName(a, b);
       if (!a.birthDate) return 1;
       if (!b.birthDate) return -1;
       return a.birthDate.localeCompare(b.birthDate) || byName(a, b);
     };
+    const baseComp = sort === "age" ? byAge : byName;
+    // sort 별 "기본 방향" 과 현재 방향이 같으면 그대로, 다르면 반전
+    const baseIsAsc = DEFAULT_DIR[sort] === "asc";
+    const reverse = sortDir === (baseIsAsc ? "desc" : "asc");
+    const comparator = reverse
+      ? (a: RosterMember, b: RosterMember) => -baseComp(a, b)
+      : baseComp;
 
-    const sorted = [...base].sort(sort === "age" ? byAge : byName);
+    const sorted = [...base].sort(comparator);
 
     // 로그인 본인은 항상 맨 위로 (하이라이트 유지)
     if (myId) {
@@ -96,7 +119,7 @@ export default function RosterList({
       if (idx > 0) sorted.unshift(sorted.splice(idx, 1)[0]);
     }
     return sorted;
-  }, [members, filter, sort, myId]);
+  }, [members, filter, sort, sortDir, myId]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -128,7 +151,8 @@ export default function RosterList({
             key={opt.key}
             label={opt.label}
             active={sort === opt.key}
-            onClick={() => setSort(opt.key)}
+            dir={sort === opt.key ? sortDir : null}
+            onClick={() => onSelectSort(opt.key)}
           />
         ))}
       </div>
@@ -153,10 +177,12 @@ export default function RosterList({
 function SortChip({
   label,
   active,
+  dir,
   onClick,
 }: {
   label: string;
   active: boolean;
+  dir: "asc" | "desc" | null;
   onClick: () => void;
 }) {
   return (
@@ -170,7 +196,9 @@ function SortChip({
       }`}
     >
       {label}
-      {active && <span className="text-[10px]">↓</span>}
+      {active && dir && (
+        <span className="text-[10px]">{dir === "desc" ? "↓" : "↑"}</span>
+      )}
     </button>
   );
 }
@@ -320,28 +348,6 @@ function MemberCard({
               ))}
             </div>
           )}
-
-          <div className="text-xs desktop:text-sm text-suaza-ink-muted flex items-center gap-1.5 flex-wrap">
-            <span>
-              출전 <b className="text-suaza-ink">{m.appearances}</b>
-            </span>
-            <Dot />
-            <span>
-              골 <b className="text-suaza-ink">{m.goals}</b>
-            </span>
-            <Dot />
-            <span>
-              도움 <b className="text-suaza-ink">{m.assists}</b>
-            </span>
-            <Dot />
-            <span>
-              클린시트 <b className="text-suaza-ink">{m.cleanSheets}</b>
-            </span>
-            <Dot />
-            <span>
-              포인트 <b className="text-suaza-ink">{m.points}</b>
-            </span>
-          </div>
         </div>
       </div>
 
@@ -375,9 +381,6 @@ function MemberCard({
   );
 }
 
-function Dot() {
-  return <span className="text-suaza-ink-faint">·</span>;
-}
 
 function PositionChip({ position }: { position: Position }) {
   const color = POSITION_COLOR[position];

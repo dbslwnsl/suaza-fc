@@ -210,7 +210,7 @@ function SeasonSelector({ year, years }: { year: number; years: number[] }) {
           <Link
             key={y}
             href={`/members?tab=matches&year=${y}`}
-            className={`shrink-0 inline-flex items-center px-3 py-1 rounded-lg text-sm font-bold transition ${
+            className={`shrink-0 inline-flex items-center px-2 desktop:px-3 py-0.5 desktop:py-1 rounded-lg text-xs desktop:text-sm font-bold transition ${
               active
                 ? "bg-suaza-ink text-white border border-suaza-ink"
                 : "bg-white text-suaza-ink border border-suaza-border hover:bg-gray-50"
