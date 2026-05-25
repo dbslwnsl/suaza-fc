@@ -6,7 +6,7 @@ import { setAttendanceFor } from "@/lib/matches/actions";
 export type Member = {
   id: string;
   name: string;
-  jersey_number: number | null;
+  jersey_number?: number | null;
 };
 
 type Status = "attending" | "absent" | "undecided" | null;

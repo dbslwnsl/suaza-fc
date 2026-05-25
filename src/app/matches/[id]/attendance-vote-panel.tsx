@@ -1,12 +1,8 @@
 "use client";
 
-import {
-  useMemo,
-  useOptimistic,
-  useTransition,
-  type ReactNode,
-} from "react";
+import { useMemo, useOptimistic, useTransition } from "react";
 import { voteAttendance } from "@/lib/matches/actions";
+import AttendanceManagerBoard from "@/components/attendance-manager-board";
 
 export type VotePlayer = {
   id: string;
@@ -154,7 +150,6 @@ export function AttendanceCardVote({
   isManager,
   locked,
   lockedMessage = "🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다",
-  children,
 }: {
   matchId: string;
   me: VotePlayer | null;
@@ -165,8 +160,6 @@ export function AttendanceCardVote({
   isManager: boolean;
   locked: boolean;
   lockedMessage?: string;
-  /** 매니저용 멤버 보드 (서버에서 전달) */
-  children?: ReactNode;
 }) {
   const { optimisticStatus, vote, groups, nonVoters: nv, counts } =
     useOptimisticAttendance(matchId, myStatus, me, byStatus, nonVoters);
@@ -212,7 +205,11 @@ export function AttendanceCardVote({
       {/* Member pills */}
       <h3 className="text-sm font-bold text-suaza-ink">멤버별 응답</h3>
       {showBoard ? (
-        children
+        <AttendanceManagerBoard
+          matchId={matchId}
+          byStatus={groups}
+          nonVoters={nv}
+        />
       ) : (
         <div className="flex flex-col gap-3">
           <MemberGroup
@@ -259,7 +256,6 @@ export function AttendanceCompactVote({
   isManager,
   locked = false,
   lockedMessage = "🔒 투표가 마감되었습니다",
-  children,
 }: {
   matchId: string;
   me: VotePlayer | null;
@@ -269,7 +265,6 @@ export function AttendanceCompactVote({
   isManager: boolean;
   locked?: boolean;
   lockedMessage?: string;
-  children?: ReactNode;
 }) {
   const { optimisticStatus, vote, groups, nonVoters: nv } =
     useOptimisticAttendance(matchId, myStatus, me, byStatus, nonVoters);
@@ -285,7 +280,11 @@ export function AttendanceCompactVote({
       )}
 
       {isManager ? (
-        children
+        <AttendanceManagerBoard
+          matchId={matchId}
+          byStatus={groups}
+          nonVoters={nv}
+        />
       ) : (
         <div className="flex flex-col gap-2 pt-1">
           <AttendanceRow

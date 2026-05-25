@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { deleteMatch } from "@/lib/matches/actions";
-import AttendanceManagerBoard from "@/components/attendance-manager-board";
 import {
   AttendanceCardVote,
   AttendanceCompactVote,
@@ -739,15 +738,7 @@ function AttendanceCard({
         isManager={!!isManager}
         locked={!!locked}
         lockedMessage={lockedMessage}
-      >
-        {isManager && (
-          <AttendanceManagerBoard
-            matchId={matchId}
-            byStatus={byStatus}
-            nonVoters={nonVoters}
-          />
-        )}
-      </AttendanceCardVote>
+      />
     </section>
   );
 }
@@ -859,15 +850,7 @@ export function AttendanceVote({
         isManager={!!isManager}
         locked={!!locked}
         lockedMessage={lockedMessage}
-      >
-        {isManager && (
-          <AttendanceManagerBoard
-            matchId={matchId}
-            byStatus={byStatus}
-            nonVoters={nonVoters}
-          />
-        )}
-      </AttendanceCompactVote>
+      />
     </section>
   );
 }
