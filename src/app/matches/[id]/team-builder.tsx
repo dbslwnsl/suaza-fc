@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useOptimistic, useState, useTransition } from "react";
 import {
   autoBalanceTeams,
   cycleMatchTeam,
@@ -50,6 +50,12 @@ export default function TeamBuilder({
   // 유니폼 색 (낙관적)
   const [colorA, setColorA] = useState(teamAColor ?? DEFAULT_TEAM_COLOR.A);
   const [colorB, setColorB] = useState(teamBColor ?? DEFAULT_TEAM_COLOR.B);
+  // 팀 편성도 낙관적 업데이트: 서버 응답/revalidate 를 기다리지 않고 즉시 반영.
+  // reducer 는 인자로 받은 다음 attendees 배열을 그대로 사용 (단순 교체).
+  const [optimisticAttendees, applyOptimistic] = useOptimistic<
+    TeamMember[],
+    TeamMember[]
+  >(attendees, (_current, next) => next);
 
   const changeColor = (team: "A" | "B", color: string) => {
     if (readonly) return;
@@ -59,39 +65,85 @@ export default function TeamBuilder({
   };
 
   const sorted = useMemo(
-    () => [...attendees].sort((a, b) => a.name.localeCompare(b.name, "ko")),
-    [attendees],
+    () =>
+      [...optimisticAttendees].sort((a, b) =>
+        a.name.localeCompare(b.name, "ko"),
+      ),
+    [optimisticAttendees],
   );
   const teamA = sorted.filter((m) => m.team === "A");
   const teamB = sorted.filter((m) => m.team === "B");
   const unassigned = sorted.filter((m) => m.team === null);
 
+  const setTeamLocally = (playerId: string, team: "A" | "B" | null) =>
+    optimisticAttendees.map((m) =>
+      m.id === playerId ? { ...m, team } : m,
+    );
+
   const cycle = (playerId: string) => {
     if (readonly) return;
-    startTransition(() => cycleMatchTeam(matchId, playerId));
+    const cur = optimisticAttendees.find((m) => m.id === playerId);
+    if (!cur) return;
+    const next: "A" | "B" | null =
+      cur.team === null ? "A" : cur.team === "A" ? "B" : null;
+    startTransition(() => {
+      applyOptimistic(setTeamLocally(playerId, next));
+      cycleMatchTeam(matchId, playerId);
+    });
   };
   const dropTo = (playerId: string, team: "A" | "B" | null) => {
     if (readonly) return;
-    startTransition(() => setMatchTeam(matchId, playerId, team));
+    startTransition(() => {
+      applyOptimistic(setTeamLocally(playerId, team));
+      setMatchTeam(matchId, playerId, team);
+    });
   };
   const auto = () => {
     if (readonly) return;
-    startTransition(() => autoBalanceTeams(matchId));
+    // 클라이언트에서도 동일한 셔플(랜덤) → 앞 절반 A, 뒤 절반 B. 결과는 서버 셔플과
+    // 다를 수 있지만 시각적으로 즉시 변하는 게 우선. revalidate 가 도착하면 자동
+    // 으로 서버 기준 결과로 정리된다.
+    const ids = optimisticAttendees.map((m) => m.id);
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+    const half = Math.ceil(ids.length / 2);
+    const aSet = new Set(ids.slice(0, half));
+    const next = optimisticAttendees.map((m) => ({
+      ...m,
+      team: (aSet.has(m.id) ? "A" : "B") as "A" | "B" | null,
+    }));
+    startTransition(() => {
+      applyOptimistic(next);
+      autoBalanceTeams(matchId);
+    });
   };
   const reset = () => {
     if (readonly) return;
-    startTransition(() => resetMatchTeams(matchId));
+    const next = optimisticAttendees.map((m) => ({
+      ...m,
+      team: null as "A" | "B" | null,
+    }));
+    startTransition(() => {
+      applyOptimistic(next);
+      resetMatchTeams(matchId);
+    });
   };
 
   const total = attendees.length;
-  const aPct = total > 0 ? (teamA.length / total) * 100 : 0;
-  const bPct = total > 0 ? (teamB.length / total) * 100 : 0;
+  // 게이지는 가운데를 기준으로 양쪽으로 뻗어가며 한 팀이 11명일 때 절반(=영역) 가득 참.
+  // 어느 한 팀이 11명을 넘으면 그 인원에 맞춰 1명당 너비가 줄어들도록 cap 을 늘린다.
+  const cap = Math.max(11, teamA.length, teamB.length);
+  // 좌/우 절반(50%) 영역 내부에서의 채움 비율 (0~100)
+  const aFill = cap > 0 ? (teamA.length / cap) * 100 : 0;
+  const bFill = cap > 0 ? (teamB.length / cap) * 100 : 0;
 
   return (
     <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4 desktop:h-full">
       {/* 편성 결과 */}
       <div className="flex items-center justify-between gap-2">
-        <h3 className="font-bold text-suaza-ink text-lg">A · B 팀 편성 결과</h3>
+        <h3 className="font-bold text-suaza-ink text-lg">A & B 팀 편성 결과</h3>
         {!readonly && (
           <div className="flex items-center gap-1.5 shrink-0">
             <button
@@ -112,10 +164,21 @@ export default function TeamBuilder({
         )}
       </div>
 
-      {/* 비율 바 */}
+      {/* 비율 바 — 가운데를 기준으로 A팀(좌)·B팀(우)이 유니폼 색으로 채워짐.
+          한 팀 기준 11명일 때 각 영역이 가득 차고, 초과 시 비율이 자동 축소된다. */}
       <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-200">
-        <div style={{ width: `${aPct}%` }} className="bg-suaza-accent" />
-        <div style={{ width: `${bPct}%` }} className="bg-blue-500" />
+        <div className="w-1/2 flex justify-end">
+          <div
+            style={{ width: `${aFill}%`, backgroundColor: colorA }}
+            className="h-full"
+          />
+        </div>
+        <div className="w-1/2 flex justify-start">
+          <div
+            style={{ width: `${bFill}%`, backgroundColor: colorB }}
+            className="h-full"
+          />
+        </div>
       </div>
 
       {/* A팀 */}
