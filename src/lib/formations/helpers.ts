@@ -361,7 +361,14 @@ function correctLabelForTeam(
 
 export function buildSlotsForTeam(shape: string, team: Team): SlotDef[] {
   const base = buildSlots(shape);
-  if (team === "single") return base;
+  if (team === "single") {
+    // 상대전(single)은 자체전 B팀과 동일한 방향(아래에서 위로 공격)이므로
+    // 라벨 좌/우도 B팀 규칙(x<0.5 → L, x≥0.5 → R)에 맞춰 통일.
+    return base.map((s) => ({
+      ...s,
+      label: correctLabelForTeam(s.label, s.x, "B"),
+    }));
+  }
   // GK 는 좌표 변환에서 제외하고 각 팀 골 박스에 고정 (절대 위치).
   // 그 외 필드 플레이어만 정규화하므로, GK y 를 골대 끝까지 내려도 무방.
   // 정규화 기준 span 은 비-GK 최하단(수비라인)을 GK 위치(1.0)로 본다.

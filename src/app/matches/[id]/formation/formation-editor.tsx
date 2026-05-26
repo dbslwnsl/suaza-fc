@@ -315,9 +315,14 @@ export default function FormationEditor({
   }, [matchId]);
 
   const current = quarters[activeIdx] ?? quarters[0];
-  const slotsA = useMemo(() => buildSlots(current.shape), [current.shape]);
+  // 상대전(single)·자체전 모두 buildSlotsForTeam 을 거쳐 라벨 좌/우가 보정되도록.
+  const slotsA = useMemo(
+    () =>
+      buildSlotsForTeam(current.shape, current.teamB ? "A" : "single"),
+    [current.shape, current.teamB],
+  );
   const slotsB = useMemo(
-    () => (current.teamB ? buildSlots(current.teamB.shape) : []),
+    () => (current.teamB ? buildSlotsForTeam(current.teamB.shape, "B") : []),
     [current.teamB],
   );
   const byId = useMemo(
