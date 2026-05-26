@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { WeatherCardClient } from "@/components/weather-client";
 import { logout } from "@/lib/auth/actions";
@@ -28,6 +29,11 @@ import {
   type PostCategory,
 } from "@/lib/board/helpers";
 import { AttendanceVote } from "./matches/[id]/page";
+import {
+  fetchWeatherDebug,
+  failureMessage,
+  type WeatherInfo,
+} from "@/lib/weather";
 
 type NoticeRow = {
   id: string;
@@ -64,6 +70,78 @@ function NoticeAvatar({
       )}
     </div>
   );
+}
+
+async function UpcomingWeather({
+  location,
+  matchDate,
+}: {
+  location: string | null;
+  matchDate: string;
+}) {
+  const weatherResult = await fetchWeatherDebug(location, matchDate);
+  if (weatherResult.ok) {
+    return <WeatherStrip weather={weatherResult.data} matchDate={matchDate} />;
+  }
+  return (
+    <div className="flex items-center gap-2 bg-gray-50 border border-suaza-border rounded-lg px-3 py-2 text-xs text-suaza-ink-muted">
+      <span>🌤️</span>
+      <span>날씨 정보 없음</span>
+      <span className="text-suaza-ink-faint truncate">
+        · {failureMessage(weatherResult.failure)}
+      </span>
+    </div>
+  );
+}
+
+function WeatherStrip({
+  weather,
+  matchDate,
+}: {
+  weather: WeatherInfo;
+  matchDate: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2">
+      <div className="flex items-center justify-between gap-2 text-[11px] text-sky-700 font-medium">
+        <span>{forecastLabel(matchDate)}</span>
+        <span className="text-suaza-ink-faint font-normal truncate max-w-[60%]">
+          {weather.matchedLocation}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <span className="text-xl">{weather.emoji}</span>
+        <span className="text-sm font-bold text-suaza-ink">{weather.label}</span>
+        <span className="text-xs text-suaza-ink-muted tabular-nums">
+          {weather.tempMin}° / {weather.tempMax}°
+        </span>
+        {weather.precipitationProbability > 0 && (
+          <span className="text-xs text-sky-700 tabular-nums">
+            💧 {weather.precipitationProbability}%
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function forecastLabel(matchDateIso: string): string {
+  const matchDate = new Date(matchDateIso);
+  if (Number.isNaN(matchDate.getTime())) return "경기일 예보";
+  // KST 기준 자정 비교 (Vercel UTC 서버에서도 동일 동작)
+  const fmt = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const today = new Date(fmt.format(new Date()) + "T00:00:00+09:00");
+  const target = new Date(fmt.format(matchDate) + "T00:00:00+09:00");
+  const diff = Math.round((target.getTime() - today.getTime()) / 86400000);
+  if (diff === 0) return "오늘 예보";
+  if (diff === 1) return "내일 예보";
+  if (diff > 1) return `D-${diff} 예보`;
+  return "경기일 예보";
 }
 
 function PositionBadge({ position }: { position: Position }) {
@@ -434,12 +512,13 @@ export default async function Home() {
                 {upcoming.location && ` · ${upcoming.location}`}
               </span>
             </Link>
-            {/* 날씨는 클라이언트에서 /api/weather 로 조회 — 서버 액션 revalidate 가
-                외부 API 호출에 영향을 주지 않도록 분리 */}
-            <WeatherCardClient
-              location={upcoming.location}
-              matchDate={upcoming.match_date}
-            />
+            {/* 날씨는 Suspense streaming — 외부 API 응답이 페이지 첫 paint 를 차단하지 않는다 */}
+            <Suspense fallback={null}>
+              <UpcomingWeather
+                location={upcoming.location}
+                matchDate={upcoming.match_date}
+              />
+            </Suspense>
             <AttendanceVote
               matchId={upcoming.id}
               meId={user!.id}

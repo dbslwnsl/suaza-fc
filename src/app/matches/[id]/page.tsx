@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { deleteMatch } from "@/lib/matches/actions";
@@ -24,7 +25,7 @@ import {
   isMatchStarted,
   type Match,
 } from "@/lib/matches/helpers";
-
+import { fetchWeatherDebug, failureMessage } from "@/lib/weather";
 type Participation = {
   id: string;
   match_id: string;
@@ -374,6 +375,40 @@ export default async function MatchDetailPage({
   );
 }
 
+// 날씨 한 줄 — Suspense 로 streaming. 외부 API 응답이 카드/페이지 첫 paint 를 차단하지 않는다.
+// 홈 화면과 동일하게 실패 시에도 사유와 함께 "날씨 정보 없음"을 노출한다.
+async function WeatherInline({
+  location,
+  matchDate,
+}: {
+  location: string;
+  matchDate: string;
+}) {
+  const result = await fetchWeatherDebug(location, matchDate);
+  if (result.ok) {
+    const weather = result.data;
+    return (
+      <span className="inline-flex items-center gap-1 ml-2 tabular-nums">
+        <span className="text-base">{weather.emoji}</span>
+        <span className="text-suaza-ink font-medium">{weather.label}</span>
+        <span>· {weather.tempMax}°</span>
+        <span className="ml-1 text-sky-700">
+          강수 {weather.precipitationProbability}%
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 ml-2 text-suaza-ink-faint">
+      <span>🌤️</span>
+      <span>날씨 정보 없음</span>
+      <span className="hidden desktop:inline truncate max-w-[260px]">
+        · {failureMessage(result.failure)}
+      </span>
+    </span>
+  );
+}
+
 // ───────────────────────────────────────────────────────────
 // VS Card
 // ───────────────────────────────────────────────────────────
@@ -499,10 +534,12 @@ function VSCard({
               <span>📍</span>
               {m.location}
               {m.status === "scheduled" && (
-                <WeatherInlineClient
-                  location={m.location}
-                  matchDate={m.match_date}
-                />
+                <Suspense fallback={null}>
+                  <WeatherInline
+                    location={m.location}
+                    matchDate={m.match_date}
+                  />
+                </Suspense>
               )}
             </span>
           </>
