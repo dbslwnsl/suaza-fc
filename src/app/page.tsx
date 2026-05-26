@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/lib/auth/actions";
 import {
@@ -31,7 +32,6 @@ import {
   fetchWeatherDebug,
   failureMessage,
   type WeatherInfo,
-  type WeatherResult,
 } from "@/lib/weather";
 
 type NoticeRow = {
@@ -67,6 +67,28 @@ function NoticeAvatar({
       ) : (
         <span className="text-sm font-bold text-suaza-ink">{initial}</span>
       )}
+    </div>
+  );
+}
+
+async function UpcomingWeather({
+  location,
+  matchDate,
+}: {
+  location: string | null;
+  matchDate: string;
+}) {
+  const weatherResult = await fetchWeatherDebug(location, matchDate);
+  if (weatherResult.ok) {
+    return <WeatherStrip weather={weatherResult.data} matchDate={matchDate} />;
+  }
+  return (
+    <div className="flex items-center gap-2 bg-gray-50 border border-suaza-border rounded-lg px-3 py-2 text-xs text-suaza-ink-muted">
+      <span>🌤️</span>
+      <span>날씨 정보 없음</span>
+      <span className="text-suaza-ink-faint truncate">
+        · {failureMessage(weatherResult.failure)}
+      </span>
     </div>
   );
 }
@@ -193,11 +215,6 @@ export default async function Home() {
   const upcoming = upcomingMatch as Match | null;
   const last = lastMatch as Match | null;
   const notice = latestNotice as unknown as NoticeRow | null;
-
-  // 다가오는 경기의 날씨 (있으면) — 실패해도 사유 표시
-  const weatherResult: WeatherResult | null = upcoming
-    ? await fetchWeatherDebug(upcoming.location, upcoming.match_date)
-    : null;
 
   // 다가오는 경기 출석 데이터
   type VotePlayer = { id: string; name: string; jersey_number: number | null };
@@ -494,21 +511,13 @@ export default async function Home() {
                 {upcoming.location && ` · ${upcoming.location}`}
               </span>
             </Link>
-            {weatherResult &&
-              (weatherResult.ok ? (
-                <WeatherStrip
-                  weather={weatherResult.data}
-                  matchDate={upcoming.match_date}
-                />
-              ) : (
-                <div className="flex items-center gap-2 bg-gray-50 border border-suaza-border rounded-lg px-3 py-2 text-xs text-suaza-ink-muted">
-                  <span>🌤️</span>
-                  <span>날씨 정보 없음</span>
-                  <span className="text-suaza-ink-faint truncate">
-                    · {failureMessage(weatherResult.failure)}
-                  </span>
-                </div>
-              ))}
+            {/* 날씨는 Suspense streaming — 외부 API 응답이 페이지 첫 paint 를 차단하지 않는다 */}
+            <Suspense fallback={null}>
+              <UpcomingWeather
+                location={upcoming.location}
+                matchDate={upcoming.match_date}
+              />
+            </Suspense>
             <AttendanceVote
               matchId={upcoming.id}
               meId={user!.id}

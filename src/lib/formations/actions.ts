@@ -64,7 +64,9 @@ export async function saveFormation(
 
   if (error) return { error: error.message };
 
-  revalidatePath(`/matches/${matchId}/formation`);
+  // 현재 페이지는 클라이언트 상태가 source of truth (자동저장).
+  // 자기 자신 경로를 revalidate 하면 RSC payload 가 재요청되며 화면이 깜박이므로
+  // 경기 상세 페이지만 무효화한다.
   revalidatePath(`/matches/${matchId}`);
   return { ok: true };
 }

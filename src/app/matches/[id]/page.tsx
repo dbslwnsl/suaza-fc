@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { deleteMatch } from "@/lib/matches/actions";
@@ -23,7 +24,7 @@ import {
   isMatchStarted,
   type Match,
 } from "@/lib/matches/helpers";
-import { fetchWeather, type WeatherInfo } from "@/lib/weather";
+import { fetchWeatherDebug, failureMessage } from "@/lib/weather";
 
 type Participation = {
   id: string;
@@ -179,12 +180,6 @@ export default async function MatchDetailPage({
           : null
       : null;
 
-  // 예정 경기의 날씨 (있으면 표시)
-  const weather: WeatherInfo | null =
-    m.status === "scheduled"
-      ? await fetchWeather(m.location, m.match_date)
-      : null;
-
   // 출석 마감 문구 — vote_deadline 이 있으면 그 시각, 없으면 경기 전날 23:59
   let deadlineStr: string;
   if (m.vote_deadline) {
@@ -293,7 +288,6 @@ export default async function MatchDetailPage({
           isStaff={isStaff}
           isStarted={isStarted}
           dDay={dDay}
-          weather={weather}
         />
 
             <div className="grid grid-cols-1 desktop:grid-cols-2 gap-4 desktop:items-stretch">
@@ -381,6 +375,40 @@ export default async function MatchDetailPage({
   );
 }
 
+// 날씨 한 줄 — Suspense 로 streaming. 외부 API 응답이 카드/페이지 첫 paint 를 차단하지 않는다.
+// 홈 화면과 동일하게 실패 시에도 사유와 함께 "날씨 정보 없음"을 노출한다.
+async function WeatherInline({
+  location,
+  matchDate,
+}: {
+  location: string;
+  matchDate: string;
+}) {
+  const result = await fetchWeatherDebug(location, matchDate);
+  if (result.ok) {
+    const weather = result.data;
+    return (
+      <span className="inline-flex items-center gap-1 ml-2 tabular-nums">
+        <span className="text-base">{weather.emoji}</span>
+        <span className="text-suaza-ink font-medium">{weather.label}</span>
+        <span>· {weather.tempMax}°</span>
+        <span className="ml-1 text-sky-700">
+          강수 {weather.precipitationProbability}%
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 ml-2 text-suaza-ink-faint">
+      <span>🌤️</span>
+      <span>날씨 정보 없음</span>
+      <span className="hidden desktop:inline truncate max-w-[260px]">
+        · {failureMessage(result.failure)}
+      </span>
+    </span>
+  );
+}
+
 // ───────────────────────────────────────────────────────────
 // VS Card
 // ───────────────────────────────────────────────────────────
@@ -391,14 +419,12 @@ function VSCard({
   isStaff,
   isStarted,
   dDay,
-  weather,
 }: {
   m: Match;
   isIntra: boolean;
   isStaff: boolean;
   isStarted: boolean;
   dDay: string | null;
-  weather: WeatherInfo | null;
 }) {
   return (
     <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4">
@@ -507,17 +533,13 @@ function VSCard({
             <span className="inline-flex items-center gap-1 w-full desktop:w-auto justify-center">
               <span>📍</span>
               {m.location}
-              {weather && (
-                <span className="inline-flex items-center gap-1 ml-2 tabular-nums">
-                  <span className="text-base">{weather.emoji}</span>
-                  <span className="text-suaza-ink font-medium">
-                    {weather.label}
-                  </span>
-                  <span>· {weather.tempMax}°</span>
-                  <span className="ml-1 text-sky-700">
-                    강수 {weather.precipitationProbability}%
-                  </span>
-                </span>
+              {m.status === "scheduled" && (
+                <Suspense fallback={null}>
+                  <WeatherInline
+                    location={m.location}
+                    matchDate={m.match_date}
+                  />
+                </Suspense>
               )}
             </span>
           </>
