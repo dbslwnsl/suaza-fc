@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { deleteMatch } from "@/lib/matches/actions";
+import { WeatherInlineClient } from "@/components/weather-client";
 import {
   AttendanceCardVote,
   AttendanceCompactVote,
@@ -23,7 +24,6 @@ import {
   isMatchStarted,
   type Match,
 } from "@/lib/matches/helpers";
-import { fetchWeather, type WeatherInfo } from "@/lib/weather";
 
 type Participation = {
   id: string;
@@ -179,12 +179,6 @@ export default async function MatchDetailPage({
           : null
       : null;
 
-  // 예정 경기의 날씨 (있으면 표시)
-  const weather: WeatherInfo | null =
-    m.status === "scheduled"
-      ? await fetchWeather(m.location, m.match_date)
-      : null;
-
   // 출석 마감 문구 — vote_deadline 이 있으면 그 시각, 없으면 경기 전날 23:59
   let deadlineStr: string;
   if (m.vote_deadline) {
@@ -293,7 +287,6 @@ export default async function MatchDetailPage({
           isStaff={isStaff}
           isStarted={isStarted}
           dDay={dDay}
-          weather={weather}
         />
 
             <div className="grid grid-cols-1 desktop:grid-cols-2 gap-4 desktop:items-stretch">
@@ -391,14 +384,12 @@ function VSCard({
   isStaff,
   isStarted,
   dDay,
-  weather,
 }: {
   m: Match;
   isIntra: boolean;
   isStaff: boolean;
   isStarted: boolean;
   dDay: string | null;
-  weather: WeatherInfo | null;
 }) {
   return (
     <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4">
@@ -507,17 +498,11 @@ function VSCard({
             <span className="inline-flex items-center gap-1 w-full desktop:w-auto justify-center">
               <span>📍</span>
               {m.location}
-              {weather && (
-                <span className="inline-flex items-center gap-1 ml-2 tabular-nums">
-                  <span className="text-base">{weather.emoji}</span>
-                  <span className="text-suaza-ink font-medium">
-                    {weather.label}
-                  </span>
-                  <span>· {weather.tempMax}°</span>
-                  <span className="ml-1 text-sky-700">
-                    강수 {weather.precipitationProbability}%
-                  </span>
-                </span>
+              {m.status === "scheduled" && (
+                <WeatherInlineClient
+                  location={m.location}
+                  matchDate={m.match_date}
+                />
               )}
             </span>
           </>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getTeamName, type Match } from "@/lib/matches/helpers";
 import { fetchWeather } from "@/lib/weather";
@@ -50,11 +51,6 @@ export default async function MatchesPage({
       (a, b) =>
         new Date(b.match_date).getTime() - new Date(a.match_date).getTime(),
     );
-
-  // 예정된 경기 각각의 날씨 (병렬 fetch — Open-Meteo 16일 예보 한도 / 캐시는 라이브러리 내부)
-  const upcomingWeathers = await Promise.all(
-    upcoming.map((m) => fetchWeather(m.location, m.match_date)),
-  );
 
   return (
     <main className="flex-1 bg-white desktop:bg-suaza-bg px-6 desktop:px-8 py-8 desktop:py-12">
@@ -123,12 +119,19 @@ export default async function MatchesPage({
           </section>
         )}
 
-        {/* 예정된 경기 */}
+        {/* 예정된 경기 — 날씨는 Suspense 로 streaming. 페이지 첫 paint 가 외부 API 응답에
+            의존하지 않도록 카드는 즉시 표시되고 날씨만 비동기로 채워진다. */}
         {upcoming.length > 0 && (
-          <UpcomingMatchesSection
-            matches={upcoming}
-            weathers={upcomingWeathers}
-          />
+          <Suspense
+            fallback={
+              <UpcomingMatchesSection
+                matches={upcoming}
+                weathers={upcoming.map(() => null)}
+              />
+            }
+          >
+            <UpcomingMatchesWithWeather matches={upcoming} />
+          </Suspense>
         )}
 
         {/* 지난 경기 */}
@@ -143,6 +146,13 @@ export default async function MatchesPage({
       </div>
     </main>
   );
+}
+
+async function UpcomingMatchesWithWeather({ matches }: { matches: Match[] }) {
+  const weathers = await Promise.all(
+    matches.map((m) => fetchWeather(m.location, m.match_date)),
+  );
+  return <UpcomingMatchesSection matches={matches} weathers={weathers} />;
 }
 
 function SectionHeader({
