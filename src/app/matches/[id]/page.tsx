@@ -6,6 +6,10 @@ import { createClient } from "@/lib/supabase/server";
 import { deleteMatch } from "@/lib/matches/actions";
 import { WeatherInlineClient } from "@/components/weather-client";
 import {
+  IntraTeamCircle,
+  IntraTeamColorsProvider,
+} from "@/components/intra-team-colors";
+import {
   AttendanceCardVote,
   AttendanceCompactVote,
 } from "./attendance-vote-panel";
@@ -282,6 +286,10 @@ export default async function MatchDetailPage({
           </p>
         )}
 
+        <IntraTeamColorsProvider
+          initialA={m.team_a_color ?? DEFAULT_TEAM_COLOR.A}
+          initialB={m.team_b_color ?? DEFAULT_TEAM_COLOR.B}
+        >
         <VSCard
           m={m}
           isIntra={isIntra}
@@ -370,6 +378,7 @@ export default async function MatchDetailPage({
                 </button>
               </form>
             )}
+        </IntraTeamColorsProvider>
       </div>
     </main>
   );
@@ -459,11 +468,10 @@ function VSCard({
       <div className="grid grid-cols-3 items-center gap-3">
         {isIntra ? (
           <>
-            <TeamSide
-              kind="letter"
+            <IntraTeamCircle
               letter="A"
-              color={m.team_a_color ?? DEFAULT_TEAM_COLOR.A}
               subtitle={getTeamName(m, "A")}
+              fallbackColor={m.team_a_color ?? DEFAULT_TEAM_COLOR.A}
             />
             {isStaff && isStarted ? (
               <ScoreControl
@@ -477,11 +485,10 @@ function VSCard({
                 opponentScore={m.opponent_score}
               />
             )}
-            <TeamSide
-              kind="letter"
+            <IntraTeamCircle
               letter="B"
-              color={m.team_b_color ?? DEFAULT_TEAM_COLOR.B}
               subtitle={getTeamName(m, "B")}
+              fallbackColor={m.team_b_color ?? DEFAULT_TEAM_COLOR.B}
             />
           </>
         ) : (

@@ -14,6 +14,7 @@ import {
   UNIFORM_COLORS,
 } from "@/lib/matches/helpers";
 import { displayMemberName } from "@/lib/members/name";
+import { useIntraTeamColors } from "@/components/intra-team-colors";
 
 export type TeamMember = {
   id: string;
@@ -47,9 +48,17 @@ export default function TeamBuilder({
   const [, startTransition] = useTransition();
   // 데스크탑 드래그앤드롭 상태
   const [dragging, setDragging] = useState(false);
-  // 유니폼 색 (낙관적)
-  const [colorA, setColorA] = useState(teamAColor ?? DEFAULT_TEAM_COLOR.A);
-  const [colorB, setColorB] = useState(teamBColor ?? DEFAULT_TEAM_COLOR.B);
+  // 유니폼 색 — Provider 가 있으면 context 를 통해 상단 VSCard 와 즉시 동기화.
+  // Provider 가 없는 환경(테스트 등)을 위해 로컬 fallback state 도 유지한다.
+  const intraColors = useIntraTeamColors();
+  const [localColorA, setLocalColorA] = useState(
+    teamAColor ?? DEFAULT_TEAM_COLOR.A,
+  );
+  const [localColorB, setLocalColorB] = useState(
+    teamBColor ?? DEFAULT_TEAM_COLOR.B,
+  );
+  const colorA = intraColors?.colorA ?? localColorA;
+  const colorB = intraColors?.colorB ?? localColorB;
   // 팀 편성도 낙관적 업데이트: 서버 응답/revalidate 를 기다리지 않고 즉시 반영.
   // reducer 는 인자로 받은 다음 attendees 배열을 그대로 사용 (단순 교체).
   const [optimisticAttendees, applyOptimistic] = useOptimistic<
@@ -59,8 +68,15 @@ export default function TeamBuilder({
 
   const changeColor = (team: "A" | "B", color: string) => {
     if (readonly) return;
-    if (team === "A") setColorA(color);
-    else setColorB(color);
+    // Provider 가 있으면 context 갱신 → VSCard 동그라미도 즉시 같이 변함.
+    if (intraColors) {
+      if (team === "A") intraColors.setColorA(color);
+      else intraColors.setColorB(color);
+    } else if (team === "A") {
+      setLocalColorA(color);
+    } else {
+      setLocalColorB(color);
+    }
     startTransition(() => setTeamColor(matchId, team, color));
   };
 
@@ -138,6 +154,14 @@ export default function TeamBuilder({
   // 좌/우 절반(50%) 영역 내부에서의 채움 비율 (0~100)
   const aFill = cap > 0 ? (teamA.length / cap) * 100 : 0;
   const bFill = cap > 0 ? (teamB.length / cap) * 100 : 0;
+  // 게이지 색이 흰색/밝은 색이면 배경(흰색 카드)에 묻히므로 inset 으로 어두운
+  // 테두리를 그려 분리해 준다.
+  const aGaugeShadow = isLightColor(colorA)
+    ? "inset 0 0 0 1px rgba(0,0,0,0.45)"
+    : undefined;
+  const bGaugeShadow = isLightColor(colorB)
+    ? "inset 0 0 0 1px rgba(0,0,0,0.45)"
+    : undefined;
 
   return (
     <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4 desktop:h-full">
@@ -165,17 +189,26 @@ export default function TeamBuilder({
       </div>
 
       {/* 비율 바 — 가운데를 기준으로 A팀(좌)·B팀(우)이 유니폼 색으로 채워짐.
-          한 팀 기준 11명일 때 각 영역이 가득 차고, 초과 시 비율이 자동 축소된다. */}
+          한 팀 기준 11명일 때 각 영역이 가득 차고, 초과 시 비율이 자동 축소된다.
+          유니폼이 흰색/밝은 색이면 inset 테두리로 외곽을 드러낸다. */}
       <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-200">
         <div className="w-1/2 flex justify-end">
           <div
-            style={{ width: `${aFill}%`, backgroundColor: colorA }}
+            style={{
+              width: `${aFill}%`,
+              backgroundColor: colorA,
+              boxShadow: aGaugeShadow,
+            }}
             className="h-full"
           />
         </div>
         <div className="w-1/2 flex justify-start">
           <div
-            style={{ width: `${bFill}%`, backgroundColor: colorB }}
+            style={{
+              width: `${bFill}%`,
+              backgroundColor: colorB,
+              boxShadow: bGaugeShadow,
+            }}
             className="h-full"
           />
         </div>
@@ -274,6 +307,17 @@ export default function TeamBuilder({
       )}
     </section>
   );
+}
+
+// hex 색상의 밝기 판단 (Rec. 601 luma > 200 이면 밝은 색)
+function isLightColor(hex: string): boolean {
+  const m = hex.match(/^#([0-9A-Fa-f]{6})$/);
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 0xff;
+  const g = (n >> 8) & 0xff;
+  const b = n & 0xff;
+  return 0.299 * r + 0.587 * g + 0.114 * b > 200;
 }
 
 function JerseyIcon({ color }: { color: string }) {
