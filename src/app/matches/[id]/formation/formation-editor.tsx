@@ -771,8 +771,9 @@ export default function FormationEditor({
 
       {/* 메인 영역 — 데스크탑: 자체전 3열(A명단|경기장|B명단), 상대전 2열(경기장|명단) */}
       <div className="desktop:flex desktop:gap-3 desktop:flex-1 desktop:min-h-0">
-        {/* 자체전 A팀 명단 (데스크탑 좌측) */}
-        {isIntra && showTeamA && (
+        {/* 자체전 A팀 명단 (데스크탑 좌측) — 양 팀을 모두 보는 매니저 전용.
+            일반회원(restrictedView)은 본인 팀이 A든 B든 우측 명단으로 통일. */}
+        {isIntra && showTeamA && !restrictedView && (
           <aside className="hidden desktop:flex desktop:w-[280px] flex-col bg-white rounded-2xl border border-suaza-border p-4 gap-3 min-h-0">
             <PlayerRosterDesktop
               members={teamAMembers}
@@ -865,34 +866,57 @@ export default function FormationEditor({
           })()}
         </div>
 
-        {/* 우측 명단 — 자체전이면 B팀, 상대전이면 전체 */}
-        {(!isIntra || showTeamB) && (
-          <aside className="hidden desktop:flex desktop:w-[280px] flex-col bg-white rounded-2xl border border-suaza-border p-4 gap-3 min-h-0">
-            <PlayerRosterDesktop
-              members={isIntra ? teamBMembers : attendingMembers}
-              teamLabel={isIntra ? "B팀" : undefined}
-              teamColor={isIntra ? "#EF4444" : undefined}
-              myUserId={myUserId}
-              myCondition={myCondition}
-              onCycleCondition={cycleMyCondition}
-              quarters={quarters}
-              validIds={validIds}
-              placedSet={placedSet}
-              teamOfPlayer={teamOfPlayer}
-              isIntra={isIntra}
-              readonly={readonly}
-              onTap={(id, placed) => {
-                if (readonly) return;
-                if (placed) unassignPlayer(id);
-                else placeByClick(id);
-              }}
-              onDragStart={(id) => setDraggingId(id)}
-              onDragEnd={() => setDraggingId(null)}
-              onReset={() => resetTeam(isIntra ? "B" : "A")}
-              onAutoPlace={() => autoPlaceTeam(isIntra ? "B" : "A")}
-            />
-          </aside>
-        )}
+        {/* 우측 명단 — 상대전: 전체 / 자체전 매니저: B팀 /
+            자체전 일반회원: 본인 팀(A 또는 B) */}
+        {(!isIntra || showTeamA || showTeamB) &&
+          (() => {
+            const restrictedAOnRight = restrictedView && myTeam === "A";
+            const rightTeam: "A" | "B" = restrictedAOnRight ? "A" : "B";
+            const rightMembers = !isIntra
+              ? attendingMembers
+              : restrictedAOnRight
+                ? teamAMembers
+                : teamBMembers;
+            const rightLabel = !isIntra
+              ? undefined
+              : restrictedAOnRight
+                ? "A팀"
+                : "B팀";
+            const rightColor = !isIntra
+              ? undefined
+              : restrictedAOnRight
+                ? "#3B82F6"
+                : "#EF4444";
+            return (
+              <aside className="hidden desktop:flex desktop:w-[280px] flex-col bg-white rounded-2xl border border-suaza-border p-4 gap-3 min-h-0">
+                <PlayerRosterDesktop
+                  members={rightMembers}
+                  teamLabel={rightLabel}
+                  teamColor={rightColor}
+                  myUserId={myUserId}
+                  myCondition={myCondition}
+                  onCycleCondition={cycleMyCondition}
+                  quarters={quarters}
+                  validIds={validIds}
+                  placedSet={placedSet}
+                  teamOfPlayer={teamOfPlayer}
+                  isIntra={isIntra}
+                  readonly={readonly}
+                  onTap={(id, placed) => {
+                    if (readonly) return;
+                    if (placed) unassignPlayer(id);
+                    else placeByClick(id);
+                  }}
+                  onDragStart={(id) => setDraggingId(id)}
+                  onDragEnd={() => setDraggingId(null)}
+                  onReset={() => resetTeam(isIntra ? rightTeam : "A")}
+                  onAutoPlace={() =>
+                    autoPlaceTeam(isIntra ? rightTeam : "A")
+                  }
+                />
+              </aside>
+            );
+          })()}
 
         {/* 자체전 + 일반 회원 + 팀 미배정: 안내 (운동장은 위에 그대로 표시) */}
         {noTeamView && (
@@ -1354,6 +1378,17 @@ function FormationChipRow({
   readonly: boolean;
   onChange: (shape: string) => void;
 }) {
+  // 감독/회장이 아닌 회원(readonly)에게는 현재 포메이션만 텍스트로 표기.
+  if (readonly) {
+    return (
+      <div className="flex items-center gap-2 px-1">
+        <span className="text-sm font-semibold text-suaza-ink">
+          포메이션 <span className="text-suaza-button">{currentShape}</span>
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-2 -mx-4 sm:mx-0 px-4 sm:px-0">
       {label && (
@@ -1375,13 +1410,12 @@ function FormationChipRow({
               <button
                 key={f.shape}
                 type="button"
-                disabled={readonly}
                 onClick={() => onChange(f.shape)}
                 className={`shrink-0 h-9 px-3 rounded-xl border text-xs font-semibold transition ${
                   active
                     ? "bg-suaza-button text-white border-suaza-button shadow-sm"
                     : "bg-white text-suaza-ink border-suaza-border hover:border-suaza-ink-muted"
-                } disabled:opacity-60 disabled:cursor-not-allowed`}
+                }`}
               >
                 {f.shape}
               </button>
