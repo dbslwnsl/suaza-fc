@@ -372,6 +372,15 @@ export default function FormationEditor({
     [attendingMembers, teamByPlayer],
   );
 
+  // 본인의 자체전 팀 ("A" | "B" | null)
+  const myTeam: "A" | "B" | null = teamByPlayer[myUserId] ?? null;
+  // 자체전 일반 회원: 본인 팀 정보만 노출. 회장/감독(=!readonly)은 양쪽 모두 표시.
+  const restrictedView = isIntra && readonly;
+  const showTeamA = !restrictedView || myTeam === "A";
+  const showTeamB = !restrictedView || myTeam === "B";
+  // 자체전 일반 회원이지만 아직 팀 미배정 → 명단은 숨기고 안내만, 운동장은 양 팀 그대로
+  const noTeamView = restrictedView && myTeam == null;
+
   function patchQuarter(i: number, fn: (q: QuarterState) => QuarterState) {
     setQuarters((prev) => prev.map((q, idx) => (idx === i ? fn(q) : q)));
   }
@@ -734,14 +743,16 @@ export default function FormationEditor({
       </div>
 
       {/* 포메이션 칩 */}
-      <FormationChipRow
-        label={isIntra ? "A팀" : null}
-        teamColor={isIntra ? "#3B82F6" : null}
-        currentShape={current.shape}
-        readonly={readonly}
-        onChange={(s) => changeShape("A", s)}
-      />
-      {isIntra && current.teamB && (
+      {showTeamA && (
+        <FormationChipRow
+          label={isIntra ? "A팀" : null}
+          teamColor={isIntra ? "#3B82F6" : null}
+          currentShape={current.shape}
+          readonly={readonly}
+          onChange={(s) => changeShape("A", s)}
+        />
+      )}
+      {isIntra && current.teamB && showTeamB && (
         <FormationChipRow
           label="B팀"
           teamColor="#EF4444"
@@ -761,7 +772,7 @@ export default function FormationEditor({
       {/* 메인 영역 — 데스크탑: 자체전 3열(A명단|경기장|B명단), 상대전 2열(경기장|명단) */}
       <div className="desktop:flex desktop:gap-3 desktop:flex-1 desktop:min-h-0">
         {/* 자체전 A팀 명단 (데스크탑 좌측) */}
-        {isIntra && (
+        {isIntra && showTeamA && (
           <aside className="hidden desktop:flex desktop:w-[280px] flex-col bg-white rounded-2xl border border-suaza-border p-4 gap-3 min-h-0">
             <PlayerRosterDesktop
               members={teamAMembers}
@@ -791,70 +802,112 @@ export default function FormationEditor({
 
         {/* 경기장 */}
         <div className="relative desktop:flex-1 desktop:flex desktop:items-center desktop:justify-center">
-          <Pitch
-            teams={
-              current.teamB
+          {(() => {
+            // 자체전 + 일반 회원: 본인 팀 슬롯만 표시 (운동장 전체 사용)
+            // 미배정 시(noTeamView)에는 양 팀 모두 표시 (운동장은 보이게)
+            const restrictPitchToMyTeam =
+              restrictedView && myTeam != null && !!current.teamB;
+            const teams = restrictPitchToMyTeam
+              ? [
+                  myTeam === "A"
+                    ? {
+                        team: "A" as const,
+                        slots: buildSlotsForTeam(current.shape, "single"),
+                        assignments: current.assignments,
+                      }
+                    : {
+                        team: "B" as const,
+                        slots: buildSlotsForTeam(
+                          current.teamB!.shape,
+                          "single",
+                        ),
+                        assignments: current.teamB!.assignments,
+                      },
+                ]
+              : current.teamB
                 ? [
                     {
-                      team: "A",
+                      team: "A" as const,
                       slots: buildSlotsForTeam(current.shape, "A"),
                       assignments: current.assignments,
                     },
                     {
-                      team: "B",
+                      team: "B" as const,
                       slots: buildSlotsForTeam(current.teamB.shape, "B"),
                       assignments: current.teamB.assignments,
                     },
                   ]
                 : [
                     {
-                      team: "A",
+                      team: "A" as const,
                       slots: slotsA,
                       assignments: current.assignments,
                     },
-                  ]
-            }
-            isIntra={!!current.teamB}
-            byId={byId}
-            readonly={readonly}
-            draggingId={draggingId}
-            onSlotClick={(team, i) =>
-              !readonly && setOpenSlot({ team, idx: i })
-            }
-            onSlotDrop={handleSlotDrop}
-            onDragStart={(id) => setDraggingId(id)}
-            onDragEnd={() => setDraggingId(null)}
-            onSwapSlots={swapSlots}
-            onUnassignSlot={(team, i) => assignSlot(team, i, null)}
-          />
+                  ];
+            const pitchIntra = teams.length === 2;
+            return (
+              <Pitch
+                teams={teams}
+                isIntra={pitchIntra}
+                byId={byId}
+                readonly={readonly}
+                draggingId={draggingId}
+                onSlotClick={(team, i) =>
+                  !readonly && setOpenSlot({ team, idx: i })
+                }
+                onSlotDrop={handleSlotDrop}
+                onDragStart={(id) => setDraggingId(id)}
+                onDragEnd={() => setDraggingId(null)}
+                onSwapSlots={swapSlots}
+                onUnassignSlot={(team, i) => assignSlot(team, i, null)}
+              />
+            );
+          })()}
         </div>
 
         {/* 우측 명단 — 자체전이면 B팀, 상대전이면 전체 */}
-        <aside className="hidden desktop:flex desktop:w-[280px] flex-col bg-white rounded-2xl border border-suaza-border p-4 gap-3 min-h-0">
-          <PlayerRosterDesktop
-            members={isIntra ? teamBMembers : attendingMembers}
-            teamLabel={isIntra ? "B팀" : undefined}
-            teamColor={isIntra ? "#EF4444" : undefined}
-            myUserId={myUserId}
-            myCondition={myCondition}
-            onCycleCondition={cycleMyCondition}
-            quarters={quarters}
-            validIds={validIds}
-            placedSet={placedSet}
-            teamOfPlayer={teamOfPlayer}
-            isIntra={isIntra}
-            readonly={readonly}
-            onTap={(id, placed) => {
-              if (readonly) return;
-              if (placed) unassignPlayer(id);
-              else placeByClick(id);
-            }}
-            onDragStart={(id) => setDraggingId(id)}
-            onDragEnd={() => setDraggingId(null)}
-            onReset={() => resetTeam(isIntra ? "B" : "A")}
-            onAutoPlace={() => autoPlaceTeam(isIntra ? "B" : "A")}
-          />
-        </aside>
+        {(!isIntra || showTeamB) && (
+          <aside className="hidden desktop:flex desktop:w-[280px] flex-col bg-white rounded-2xl border border-suaza-border p-4 gap-3 min-h-0">
+            <PlayerRosterDesktop
+              members={isIntra ? teamBMembers : attendingMembers}
+              teamLabel={isIntra ? "B팀" : undefined}
+              teamColor={isIntra ? "#EF4444" : undefined}
+              myUserId={myUserId}
+              myCondition={myCondition}
+              onCycleCondition={cycleMyCondition}
+              quarters={quarters}
+              validIds={validIds}
+              placedSet={placedSet}
+              teamOfPlayer={teamOfPlayer}
+              isIntra={isIntra}
+              readonly={readonly}
+              onTap={(id, placed) => {
+                if (readonly) return;
+                if (placed) unassignPlayer(id);
+                else placeByClick(id);
+              }}
+              onDragStart={(id) => setDraggingId(id)}
+              onDragEnd={() => setDraggingId(null)}
+              onReset={() => resetTeam(isIntra ? "B" : "A")}
+              onAutoPlace={() => autoPlaceTeam(isIntra ? "B" : "A")}
+            />
+          </aside>
+        )}
+
+        {/* 자체전 + 일반 회원 + 팀 미배정: 안내 (운동장은 위에 그대로 표시) */}
+        {noTeamView && (
+          <aside className="hidden desktop:flex desktop:w-[280px] flex-col items-center justify-center text-center bg-white rounded-2xl border border-suaza-border p-6 gap-2">
+            <span className="text-3xl">⏳</span>
+            <h3 className="text-sm font-bold text-suaza-ink">
+              팀 배정 대기 중
+            </h3>
+            <p className="text-xs text-suaza-ink-muted leading-relaxed">
+              회장 또는 감독이 자체전 팀을 배정하면
+              <br />
+              여기에 우리 팀 명단이 표시됩니다.
+            </p>
+          </aside>
+        )}
       </div>
 
       {/* 모바일 전용 선수 명단 (쿼터별 출전 현황) */}
@@ -870,6 +923,8 @@ export default function FormationEditor({
         teamByPlayer={teamByPlayer}
         isIntra={isIntra}
         readonly={readonly}
+        showOnlyTeam={restrictedView && myTeam ? myTeam : undefined}
+        unassignedNotice={noTeamView}
         onTap={(id: string, placed: boolean) => {
           if (readonly) return;
           if (placed) unassignPlayer(id);
@@ -1801,6 +1856,8 @@ function PlayerRosterMobile({
   myUserId,
   myCondition,
   onCycleCondition,
+  showOnlyTeam,
+  unassignedNotice,
 }: {
   members: EditorMember[];
   quarters: QuarterWithTeams[];
@@ -1818,6 +1875,10 @@ function PlayerRosterMobile({
   myUserId: string;
   myCondition: number;
   onCycleCondition: () => void;
+  /** 자체전 일반 회원이 본인 팀(A 또는 B)만 볼 때 지정 */
+  showOnlyTeam?: "A" | "B";
+  /** 자체전 일반 회원이 팀 미배정일 때 안내만 표시 */
+  unassignedNotice?: boolean;
 }) {
   const participations = useMemo(
     () => computeParticipations(members, quarters),
@@ -1835,6 +1896,20 @@ function PlayerRosterMobile({
       a.member.name.localeCompare(b.member.name, "ko"),
     );
   }, [participations]);
+
+  if (unassignedNotice) {
+    return (
+      <div className="desktop:hidden flex flex-col items-center justify-center text-center rounded-2xl border border-dashed border-suaza-border p-6 gap-2">
+        <span className="text-3xl">⏳</span>
+        <h3 className="text-sm font-bold text-suaza-ink">팀 배정 대기 중</h3>
+        <p className="text-xs text-suaza-ink-muted leading-relaxed">
+          회장 또는 감독이 자체전 팀을 배정하면
+          <br />
+          여기에 우리 팀 명단이 표시됩니다.
+        </p>
+      </div>
+    );
+  }
 
   if (members.length === 0) {
     return (
@@ -1879,43 +1954,51 @@ function PlayerRosterMobile({
         </p>
       </div>
       {isIntra ? (
-        <div className="grid grid-cols-2 gap-2">
+        <div
+          className={`grid gap-2 ${
+            showOnlyTeam ? "grid-cols-1" : "grid-cols-2"
+          }`}
+        >
           {/* A팀 컬럼 */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-1">
-              <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
-                <span className="w-2 h-2 rounded-full bg-blue-500" />A팀{" "}
-                <span className="text-xs text-suaza-ink-muted font-normal">
-                  {teamACards.length}
+          {showOnlyTeam !== "B" && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-1">
+                <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
+                  <span className="w-2 h-2 rounded-full bg-blue-500" />A팀{" "}
+                  <span className="text-xs text-suaza-ink-muted font-normal">
+                    {teamACards.length}
+                  </span>
                 </span>
-              </span>
-              {!readonly && (
-                <TeamMiniActions
-                  onReset={() => onResetTeam?.("A")}
-                  onAutoPlace={() => onAutoPlaceTeam?.("A")}
-                />
-              )}
+                {!readonly && (
+                  <TeamMiniActions
+                    onReset={() => onResetTeam?.("A")}
+                    onAutoPlace={() => onAutoPlaceTeam?.("A")}
+                  />
+                )}
+              </div>
+              {teamACards.map(renderCard)}
             </div>
-            {teamACards.map(renderCard)}
-          </div>
+          )}
           {/* B팀 컬럼 */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-1">
-              <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
-                <span className="w-2 h-2 rounded-full bg-red-500" />B팀{" "}
-                <span className="text-xs text-suaza-ink-muted font-normal">
-                  {teamBCards.length}
+          {showOnlyTeam !== "A" && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-1">
+                <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
+                  <span className="w-2 h-2 rounded-full bg-red-500" />B팀{" "}
+                  <span className="text-xs text-suaza-ink-muted font-normal">
+                    {teamBCards.length}
+                  </span>
                 </span>
-              </span>
-              {!readonly && (
-                <TeamMiniActions
-                  onReset={() => onResetTeam?.("B")}
-                  onAutoPlace={() => onAutoPlaceTeam?.("B")}
-                />
-              )}
+                {!readonly && (
+                  <TeamMiniActions
+                    onReset={() => onResetTeam?.("B")}
+                    onAutoPlace={() => onAutoPlaceTeam?.("B")}
+                  />
+                )}
+              </div>
+              {teamBCards.map(renderCard)}
             </div>
-            {teamBCards.map(renderCard)}
-          </div>
+          )}
         </div>
       ) : (
         <>
