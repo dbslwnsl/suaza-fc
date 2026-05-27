@@ -894,3 +894,70 @@ export async function resetMatchTeams(matchId: string) {
   revalidatePath(`/matches/${matchId}`);
   revalidatePath(`/matches/${matchId}/formation`);
 }
+
+// ============================================================
+// 경기 댓글 (match_comments)
+// ============================================================
+
+async function requireUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  return { supabase, userId: user.id };
+}
+
+/**
+ * 댓글 작성 — 낙관적 UI 용. redirect 없이 revalidate 만.
+ * 클라이언트가 즉시 화면을 갱신하고, 저장/revalidate 는 백그라운드로 처리.
+ */
+export async function createMatchComment(
+  matchId: string,
+  parentId: string | null,
+  content: string,
+) {
+  const { supabase, userId } = await requireUser();
+  const trimmed = content.trim();
+  if (!trimmed) return;
+
+  // 1단계만 허용: 답글의 답글이면 부모 댓글로 평탄화
+  let effectiveParent: string | null = parentId;
+  if (parentId) {
+    const { data: parent } = await supabase
+      .from("match_comments")
+      .select("parent_id")
+      .eq("id", parentId)
+      .single();
+    if (parent?.parent_id) effectiveParent = parent.parent_id;
+  }
+
+  await supabase.from("match_comments").insert({
+    match_id: matchId,
+    author_id: userId,
+    content: trimmed,
+    parent_id: effectiveParent,
+  });
+  revalidatePath(`/matches/${matchId}`);
+}
+
+export async function updateMatchComment(
+  commentId: string,
+  matchId: string,
+  content: string,
+) {
+  const { supabase } = await requireUser();
+  const trimmed = content.trim();
+  if (!trimmed) return;
+  await supabase
+    .from("match_comments")
+    .update({ content: trimmed, updated_at: new Date().toISOString() })
+    .eq("id", commentId);
+  revalidatePath(`/matches/${matchId}`);
+}
+
+export async function deleteMatchComment(commentId: string, matchId: string) {
+  const { supabase } = await requireUser();
+  await supabase.from("match_comments").delete().eq("id", commentId);
+  revalidatePath(`/matches/${matchId}`);
+}

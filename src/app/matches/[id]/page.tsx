@@ -20,6 +20,7 @@ import TeamBuilder from "./team-builder";
 import ParticipationBoard, {
   type ParticipationData,
 } from "./participation-board";
+import MatchCommentSection, { type MatchComment } from "./match-comments";
 import {
   DEFAULT_TEAM_COLOR,
   DEFAULT_VS_COLOR,
@@ -73,11 +74,12 @@ export default async function MatchDetailPage({
     { data: allMembers },
     { data: attendancesRaw },
     { data: myAttendance },
+    { data: commentsRaw },
   ] = await Promise.all([
     supabase.from("matches").select("*").eq("id", id).single(),
     supabase
       .from("profiles")
-      .select("role, name")
+      .select("role, name, avatar_url")
       .eq("id", user.id)
       .single(),
     supabase
@@ -104,7 +106,16 @@ export default async function MatchDetailPage({
       .eq("match_id", id)
       .eq("player_id", user.id)
       .maybeSingle(),
+    supabase
+      .from("match_comments")
+      .select(
+        "id, content, created_at, updated_at, author_id, parent_id, author:profiles(name, avatar_url)",
+      )
+      .eq("match_id", id)
+      .order("created_at", { ascending: true }),
   ]);
+
+  const comments = (commentsRaw ?? []) as unknown as MatchComment[];
 
   type VotePlayer = {
     id: string;
@@ -373,6 +384,21 @@ export default async function MatchDetailPage({
                   />
                 </div>
               )}
+
+              {/* 댓글: 데스크탑 — 출석/팀편성 아래 전체 폭. 모바일 — 가장 아래 */}
+              <div className="order-4 desktop:col-span-2">
+                <MatchCommentSection
+                  matchId={m.id}
+                  comments={comments}
+                  myUserId={user.id}
+                  myName={me?.name ?? null}
+                  myAvatarUrl={
+                    (me as { avatar_url?: string | null } | null)?.avatar_url ??
+                    null
+                  }
+                  isManager={me?.role === "manager"}
+                />
+              </div>
             </div>
 
             {isStaff && (
