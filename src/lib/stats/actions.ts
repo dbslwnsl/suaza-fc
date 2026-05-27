@@ -23,28 +23,38 @@ async function requireManager() {
   return { supabase };
 }
 
+/** 라벨에 영향받지 않는 안정적인 식별자 자동 생성. */
+function generateStatKey(): string {
+  const rnd = Math.random().toString(36).slice(2, 8);
+  return `stat_${Date.now().toString(36)}${rnd}`;
+}
+
 export async function addStatDefinition(formData: FormData) {
   const { supabase } = await requireManager();
-  const key = String(formData.get("key") ?? "").trim();
   const label = String(formData.get("label") ?? "").trim();
   const sortRaw = String(formData.get("sort_order") ?? "").trim();
 
-  if (!key || !label) {
+  if (!label) {
     redirect(
-      `/settings/stats?error=${encodeURIComponent("key 와 label 을 모두 입력해 주세요")}`,
-    );
-  }
-  if (!/^[a-z][a-z0-9_]*$/.test(key)) {
-    redirect(
-      `/settings/stats?error=${encodeURIComponent("key 는 영문 소문자/숫자/언더스코어만 가능합니다 (예: yellow_cards)")}`,
+      `/settings/stats?error=${encodeURIComponent("이름을 입력해 주세요")}`,
     );
   }
 
-  const { error } = await supabase.from("stat_definitions").insert({
+  // 중복 확률은 매우 낮지만 안전하게 한 번 더 시도.
+  let key = generateStatKey();
+  let { error } = await supabase.from("stat_definitions").insert({
     key,
     label,
     sort_order: sortRaw ? Number(sortRaw) : 0,
   });
+  if (error?.code === "23505") {
+    key = generateStatKey();
+    ({ error } = await supabase.from("stat_definitions").insert({
+      key,
+      label,
+      sort_order: sortRaw ? Number(sortRaw) : 0,
+    }));
+  }
 
   if (error) {
     redirect(`/settings/stats?error=${encodeURIComponent(error.message)}`);
@@ -53,8 +63,41 @@ export async function addStatDefinition(formData: FormData) {
   redirect("/settings/stats");
 }
 
+// 시스템 합계 항목 — 사용자가 삭제할 수 없음.
+const PROTECTED_STAT_KEYS = new Set(["points"]);
+
+/** 받은 키 순서대로 sort_order 를 0, 1, 2... 로 재부여. */
+export async function reorderStatDefinitions(orderedKeys: string[]) {
+  const { supabase } = await requireManager();
+  for (let i = 0; i < orderedKeys.length; i++) {
+    await supabase
+      .from("stat_definitions")
+      .update({ sort_order: i })
+      .eq("key", orderedKeys[i]);
+  }
+  revalidatePath("/settings/stats");
+}
+
 export async function removeStatDefinition(key: string) {
   const { supabase } = await requireManager();
+
+  if (PROTECTED_STAT_KEYS.has(key)) {
+    redirect(
+      `/settings/stats?error=${encodeURIComponent("포인트 항목은 삭제할 수 없습니다")}`,
+    );
+  }
+  // 라벨이 "포인트" 인 항목도 보호 (키가 다르게 저장돼 있더라도).
+  const { data: row } = await supabase
+    .from("stat_definitions")
+    .select("label")
+    .eq("key", key)
+    .maybeSingle();
+  if (row?.label === "포인트") {
+    redirect(
+      `/settings/stats?error=${encodeURIComponent("포인트 항목은 삭제할 수 없습니다")}`,
+    );
+  }
+
   const { error } = await supabase
     .from("stat_definitions")
     .delete()
