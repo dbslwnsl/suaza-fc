@@ -341,30 +341,32 @@ export default async function MatchDetailPage({
                   />
                 </div>
               )}
-              {/* 선수별 기록: 전체 폭 하단 */}
-              <div className="order-3 desktop:col-span-2">
-                <ParticipationBoard
-                  matchId={m.id}
-                  isStaff={isStaff}
-                  isManager={me?.role === "manager"}
-                  myUserId={user.id}
-                  isStarted={isStarted}
-                  isMyselfAttending={myStatus === "attending"}
-                  myProfile={
-                    ((allMembers ?? []) as unknown as ParticipationData["player"][]).find(
-                      (mm) => mm?.id === user.id,
-                    ) ?? null
-                  }
-                  participations={
-                    participations as unknown as ParticipationData[]
-                  }
-                  attendingMembers={
-                    byStatus.attending.filter(
-                      (a) => !participatedIds.has(a.id),
-                    ) as unknown as ParticipationData["player"][]
-                  }
-                />
-              </div>
+              {/* 선수별 기록: 전체 폭 하단 — 예정된 경기에선 숨김 */}
+              {m.status !== "scheduled" && (
+                <div className="order-3 desktop:col-span-2">
+                  <ParticipationBoard
+                    matchId={m.id}
+                    isStaff={isStaff}
+                    isManager={me?.role === "manager"}
+                    myUserId={user.id}
+                    isStarted={isStarted}
+                    isMyselfAttending={myStatus === "attending"}
+                    myProfile={
+                      ((allMembers ?? []) as unknown as ParticipationData["player"][]).find(
+                        (mm) => mm?.id === user.id,
+                      ) ?? null
+                    }
+                    participations={
+                      participations as unknown as ParticipationData[]
+                    }
+                    attendingMembers={
+                      byStatus.attending.filter(
+                        (a) => !participatedIds.has(a.id),
+                      ) as unknown as ParticipationData["player"][]
+                    }
+                  />
+                </div>
+              )}
             </div>
 
             {isStaff && (
