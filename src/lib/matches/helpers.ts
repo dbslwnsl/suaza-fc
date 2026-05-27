@@ -26,12 +26,25 @@ export type Match = {
   team_b_name: string | null;
   vote_deadline: string | null;
   total_quarters: number;
+  quarter_actions: (QuarterAction | null)[];
 };
 
 // 경기 총 쿼터 수 (1Q ~ NQ)
 export const DEFAULT_TOTAL_QUARTERS = 4;
 export const MIN_TOTAL_QUARTERS = 1;
-export const MAX_TOTAL_QUARTERS = 6;
+export const MAX_TOTAL_QUARTERS = 8;
+
+// 경기 시간(시간 단위) → 최대 쿼터 수.
+// 1시간=2쿼터 / 2시간=4쿼터 / 3시간=6쿼터 / 4시간=8쿼터
+export const MAX_QUARTERS_BY_DURATION: Record<number, number> = {
+  1: 2,
+  2: 4,
+  3: 6,
+  4: 8,
+};
+export function maxQuartersForDuration(durationHours: number): number {
+  return MAX_QUARTERS_BY_DURATION[durationHours] ?? DEFAULT_TOTAL_QUARTERS;
+}
 
 export function getTotalQuarters(m: {
   total_quarters?: number | null;
@@ -41,6 +54,33 @@ export function getTotalQuarters(m: {
   if (v < MIN_TOTAL_QUARTERS) return MIN_TOTAL_QUARTERS;
   if (v > MAX_TOTAL_QUARTERS) return MAX_TOTAL_QUARTERS;
   return v;
+}
+
+// 쿼터별 활동 라벨 (준비운동 · 훈련 · 자체전 · 상대전)
+export const QUARTER_ACTIONS = [
+  "warmup",
+  "training",
+  "intra",
+  "inter",
+] as const;
+export type QuarterAction = (typeof QUARTER_ACTIONS)[number];
+
+export const QUARTER_ACTION_LABEL: Record<QuarterAction, string> = {
+  warmup: "준비운동",
+  training: "훈련",
+  intra: "자체전",
+  inter: "상대전",
+};
+
+export const QUARTER_ACTION_COLOR: Record<QuarterAction, string> = {
+  warmup: "#F97316", // 주황
+  training: "#3B82F6", // 파랑
+  intra: "#22C55E", // 초록
+  inter: "#EF4444", // 빨강
+};
+
+export function isQuarterAction(v: string): v is QuarterAction {
+  return (QUARTER_ACTIONS as readonly string[]).includes(v);
 }
 
 // 자체전 유니폼 색상 팔레트 (선택지): 주황 · 검정 · 흰색
@@ -80,8 +120,8 @@ export function getTeamName(
   return t.endsWith("팀") ? t : `${t}팀`;
 }
 
-export const DEFAULT_MATCH_DURATION_HOURS = 2;
-export const MATCH_DURATION_OPTIONS = [1, 2, 3, 4] as const;
+export const DEFAULT_MATCH_DURATION_HOURS = 3;
+export const MATCH_DURATION_OPTIONS = [2, 3, 4] as const;
 export type MatchDurationHours = (typeof MATCH_DURATION_OPTIONS)[number];
 
 export function getMatchFinishTime(m: {

@@ -6,10 +6,16 @@ import { createClient } from "@/lib/supabase/server";
 import type { MatchStatus } from "./helpers";
 import {
   DEFAULT_MATCH_DURATION_HOURS,
+  DEFAULT_TOTAL_QUARTERS,
   MATCH_DURATION_OPTIONS,
   MATCH_STATUS,
+  MAX_TOTAL_QUARTERS,
+  MIN_TOTAL_QUARTERS,
   UNIFORM_COLORS,
   isMatchStarted,
+  isQuarterAction,
+  maxQuartersForDuration,
+  type QuarterAction,
 } from "./helpers";
 
 type MatchInput = {
@@ -26,6 +32,8 @@ type MatchInput = {
   team_b_name: string | null;
   team_a_color: string | null;
   team_b_color: string | null;
+  total_quarters: number;
+  quarter_actions: (QuarterAction | null)[];
 };
 
 // datetime-local 입력("YYYY-MM-DDTHH:mm")을 항상 서울(KST, +09:00) 기준으로
@@ -79,6 +87,23 @@ function parseForm(formData: FormData): MatchInput {
   const team_a_color = HEX6.test(teamAColorRaw) ? teamAColorRaw : null;
   const team_b_color = HEX6.test(teamBColorRaw) ? teamBColorRaw : null;
 
+  // 쿼터 수 — duration_hours 별 상한으로 클램프
+  const maxQ = maxQuartersForDuration(duration_hours);
+  const totalRaw = Number(formData.get("total_quarters"));
+  let total_quarters = Number.isFinite(totalRaw)
+    ? Math.round(totalRaw)
+    : DEFAULT_TOTAL_QUARTERS;
+  if (total_quarters < MIN_TOTAL_QUARTERS) total_quarters = MIN_TOTAL_QUARTERS;
+  if (total_quarters > MAX_TOTAL_QUARTERS) total_quarters = MAX_TOTAL_QUARTERS;
+  if (total_quarters > maxQ) total_quarters = maxQ;
+
+  // 쿼터별 활동 — quarter_action_0, quarter_action_1, ... 형태로 받음 (길이=total_quarters)
+  const quarter_actions: (QuarterAction | null)[] = [];
+  for (let i = 0; i < total_quarters; i++) {
+    const raw = String(formData.get(`quarter_action_${i}`) ?? "").trim();
+    quarter_actions.push(isQuarterAction(raw) ? (raw as QuarterAction) : null);
+  }
+
   return {
     opponent,
     match_date,
@@ -93,6 +118,8 @@ function parseForm(formData: FormData): MatchInput {
     team_b_name,
     team_a_color,
     team_b_color,
+    total_quarters,
+    quarter_actions,
   };
 }
 

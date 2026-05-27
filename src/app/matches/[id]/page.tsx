@@ -278,6 +278,8 @@ export default async function MatchDetailPage({
               teamBName: m.team_b_name,
               teamAColor: m.team_a_color,
               teamBColor: m.team_b_color,
+              totalQuarters: m.total_quarters,
+              quarterActions: m.quarter_actions,
             }}
             recentOpponents={[]}
             recentLocations={[]}

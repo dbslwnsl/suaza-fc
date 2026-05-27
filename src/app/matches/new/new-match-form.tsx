@@ -11,7 +11,12 @@ import {
   DEFAULT_TEAM_COLOR,
   DEFAULT_VS_COLOR,
   MATCH_DURATION_OPTIONS,
+  QUARTER_ACTIONS,
+  QUARTER_ACTION_COLOR,
+  QUARTER_ACTION_LABEL,
+  maxQuartersForDuration,
   type MatchDurationHours,
+  type QuarterAction,
 } from "@/lib/matches/helpers";
 
 type Status = "scheduled" | "in_progress" | "done" | "canceled";
@@ -61,6 +66,8 @@ type Initial = {
   teamBName?: string | null;
   teamAColor?: string | null;
   teamBColor?: string | null;
+  totalQuarters?: number | null;
+  quarterActions?: (QuarterAction | null)[] | null;
 };
 
 // 투표 마감: 경기 시작 N시간 전, 또는 직접 설정
@@ -157,6 +164,55 @@ export default function NewMatchForm({
           DEFAULT_MATCH_DURATION_HOURS) as MatchDurationHours)
       : (DEFAULT_MATCH_DURATION_HOURS as MatchDurationHours),
   );
+  // 쿼터 설정: duration_hours 별 최대 (1h=2, 2h=4, 3h=6, 4h=8). 사용자는 ≤ max 로 줄일 수 있음.
+  const initialMaxQ = maxQuartersForDuration(
+    initial?.durationHours ?? DEFAULT_MATCH_DURATION_HOURS,
+  );
+  const [totalQuarters, setTotalQuarters] = useState<number>(
+    initial?.totalQuarters && initial.totalQuarters > 0
+      ? Math.min(initial.totalQuarters, initialMaxQ)
+      : initialMaxQ,
+  );
+  // 길이는 항상 MAX_TOTAL_QUARTERS(8) 로 유지하되, 저장 시엔 앞쪽 totalQuarters 만 사용.
+  const [quarterActions, setQuarterActions] = useState<
+    (QuarterAction | null)[]
+  >(() => {
+    const src = initial?.quarterActions ?? [];
+    const out: (QuarterAction | null)[] = [];
+    for (let i = 0; i < 8; i++) out.push(src[i] ?? null);
+    return out;
+  });
+  const maxQuarters = maxQuartersForDuration(durationHours);
+  // duration 변경 시 해당 시간의 최대 쿼터로 자동 설정. (초기 마운트는 저장값 보존)
+  const quartersInitRef = useRef(false);
+  useEffect(() => {
+    if (!quartersInitRef.current) {
+      quartersInitRef.current = true;
+      return;
+    }
+    setTotalQuarters(maxQuarters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [durationHours]);
+  const setQuarterAction = (idx: number, action: QuarterAction | null) => {
+    setQuarterActions((prev) => {
+      const next = [...prev];
+      next[idx] = next[idx] === action ? null : action;
+      return next;
+    });
+  };
+  // 라벨 산출: warmup/training 쿼터는 각자 "준비"/"훈련" 으로 표시되고
+  // 게임 쿼터 번호(Q1, Q2, …)에서 제외된다.
+  const computeQuarterLabel = (idx: number): string => {
+    const a = quarterActions[idx];
+    if (a === "warmup") return "준비";
+    if (a === "training") return "훈련";
+    let nonGameBefore = 0;
+    for (let i = 0; i < idx; i++) {
+      const ai = quarterActions[i];
+      if (ai === "warmup" || ai === "training") nonGameBefore += 1;
+    }
+    return `Q${idx + 1 - nonGameBefore}`;
+  };
   // 투표 마감 모드 + 직접설정 값
   // 신규 등록 기본값: 직접 설정(경기일 2일 전 12:00)
   const [voteMode, setVoteMode] = useState<VoteMode>(() => {
@@ -225,6 +281,15 @@ export default function NewMatchForm({
       <input type="hidden" name="status" value={status} />
       <input type="hidden" name="notes" value={notes} />
       <input type="hidden" name="duration_hours" value={durationHours} />
+      <input type="hidden" name="total_quarters" value={totalQuarters} />
+      {Array.from({ length: totalQuarters }, (_, i) => (
+        <input
+          key={`qa-${i}`}
+          type="hidden"
+          name={`quarter_action_${i}`}
+          value={quarterActions[i] ?? ""}
+        />
+      ))}
       <input type="hidden" name="vote_deadline" value={voteDeadline} />
       <input type="hidden" name="team_a_name" value={teamAName} />
       <input type="hidden" name="team_b_name" value={teamBName} />
@@ -419,6 +484,131 @@ export default function NewMatchForm({
             종료 시간: {finishTimeLabel} (자동 계산)
           </span>
         )}
+      </div>
+
+      {/* 쿼터 설정 */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-suaza-ink text-base font-medium">쿼터 설정</span>
+          <span className="text-[11px] text-suaza-ink-muted bg-gray-100 px-2 py-0.5 rounded-md">
+            최대 {maxQuarters}쿼터 ({durationHours}시간 기준)
+          </span>
+        </div>
+
+        {/* 진행 쿼터 수 stepper */}
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-suaza-bg/60 px-3 py-2">
+          <span className="text-sm text-suaza-ink">진행 쿼터 수</span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                setTotalQuarters((cur) => Math.max(1, cur - 1))
+              }
+              disabled={totalQuarters <= 1}
+              className="w-8 h-8 rounded-md border border-suaza-border text-suaza-ink hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed font-bold"
+              aria-label="쿼터 수 감소"
+            >
+              −
+            </button>
+            <span className="w-6 text-center text-lg font-bold text-suaza-ink tabular-nums">
+              {totalQuarters}
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setTotalQuarters((cur) => Math.min(maxQuarters, cur + 1))
+              }
+              disabled={totalQuarters >= maxQuarters}
+              className="w-8 h-8 rounded-md border border-suaza-border text-suaza-ink hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed font-bold"
+              aria-label="쿼터 수 증가"
+            >
+              +
+            </button>
+            <span className="text-xs text-suaza-ink-muted">
+              / 최대 {maxQuarters}
+            </span>
+          </div>
+        </div>
+
+        {/* 쿼터 인디케이터 (1..maxQuarters) */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {Array.from({ length: maxQuarters }, (_, i) => {
+            const active = i + 1 <= totalQuarters;
+            return (
+              <span
+                key={i}
+                className={`w-7 h-7 rounded-full inline-flex items-center justify-center text-xs font-bold ${
+                  active
+                    ? "bg-suaza-button text-white"
+                    : "bg-gray-100 text-suaza-ink-faint"
+                }`}
+              >
+                {i + 1}
+              </span>
+            );
+          })}
+        </div>
+
+        {/* 쿼터별 활동 선택 — 1..maxQuarters 까지 행으로 표시.
+            활성 쿼터(≤ totalQuarters)만 클릭 가능. */}
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: maxQuarters }, (_, i) => {
+            const enabled = i + 1 <= totalQuarters;
+            const selected = quarterActions[i] ?? null;
+            return (
+              <div
+                key={`q-${i}`}
+                className="flex items-center gap-2 py-1"
+              >
+                <span
+                  className={`shrink-0 inline-flex items-center justify-center w-12 py-1 rounded-lg text-xs font-bold ${
+                    enabled
+                      ? "bg-suaza-button text-white"
+                      : "bg-gray-200 text-suaza-ink-faint"
+                  }`}
+                >
+                  {enabled ? computeQuarterLabel(i) : `Q${i + 1}`}
+                </span>
+                {enabled ? (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {QUARTER_ACTIONS.map((a) => {
+                      const active = selected === a;
+                      const color = QUARTER_ACTION_COLOR[a];
+                      return (
+                        <button
+                          key={a}
+                          type="button"
+                          onClick={() => setQuarterAction(i, a)}
+                          aria-pressed={active}
+                          className="text-xs font-medium px-3 py-1 rounded-lg border transition"
+                          style={
+                            active
+                              ? {
+                                  backgroundColor: color,
+                                  borderColor: color,
+                                  color: "white",
+                                }
+                              : {
+                                  backgroundColor: "white",
+                                  borderColor: "var(--suaza-border)",
+                                  color: "var(--suaza-ink-muted)",
+                                }
+                          }
+                        >
+                          {QUARTER_ACTION_LABEL[a]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <span className="text-xs text-suaza-ink-faint">
+                    쿼터 수를 늘리면 활성화됩니다
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* 장소 */}
@@ -903,7 +1093,10 @@ function DurationSegmented({
   const index = options.indexOf(value);
   const count = options.length;
   return (
-    <div className="relative bg-gray-100 rounded-xl p-1 grid grid-cols-4 gap-0">
+    <div
+      className="relative bg-gray-100 rounded-xl p-1 grid gap-0"
+      style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}
+    >
       <span
         aria-hidden
         className="absolute top-1 bottom-1 rounded-lg bg-suaza-accent shadow-sm transition-all duration-200 ease-out"
@@ -919,7 +1112,7 @@ function DurationSegmented({
             key={opt}
             type="button"
             onClick={() => onChange(opt)}
-            className={`relative z-10 h-11 rounded-lg text-sm font-bold transition-colors ${
+            className={`relative z-10 h-11 rounded-lg text-sm font-bold inline-flex items-center justify-center transition-colors ${
               on ? "text-white" : "text-suaza-ink-muted"
             }`}
           >
