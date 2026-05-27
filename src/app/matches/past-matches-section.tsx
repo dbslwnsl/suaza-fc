@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { getResult, getTeamName, type Match } from "@/lib/matches/helpers";
+import { getTeamName, type Match } from "@/lib/matches/helpers";
 
 type Filter = "all" | "external" | "intra";
 
@@ -92,9 +92,11 @@ function FilterButton({
 
 function PastMatchCard({ match }: { match: Match }) {
   const isIntra = match.opponent === "자체전";
-  const result = getResult(match.our_score, match.opponent_score);
   const ourScore = match.our_score ?? 0;
   const oppScore = match.opponent_score ?? 0;
+  // 표시되는 점수 기준으로 결과 산출 — 둘 다 미입력(=0/0)이어도 동률이면 무승부.
+  const result: "win" | "draw" | "lose" =
+    ourScore > oppScore ? "win" : ourScore < oppScore ? "lose" : "draw";
   const dateStr = formatLongDate(match.match_date);
   const timeStr = formatTime(match.match_date);
   const resultLabel =
