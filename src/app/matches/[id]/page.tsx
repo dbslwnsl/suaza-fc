@@ -346,9 +346,11 @@ export default async function MatchDetailPage({
               {isIntra && m.status === "done" && (
                 <div className="order-2 desktop:col-span-2">
                   <TeamRecapCard
+                    matchId={m.id}
                     attendees={teamMembers}
                     teamAName={getTeamName(m, "A")}
                     teamBName={getTeamName(m, "B")}
+                    editable={isStaff}
                   />
                 </div>
               )}
