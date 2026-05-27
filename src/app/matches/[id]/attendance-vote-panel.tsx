@@ -1,13 +1,20 @@
 "use client";
 
 import { useMemo, useOptimistic, useTransition } from "react";
-import { voteAttendance } from "@/lib/matches/actions";
+import {
+  setMyQuartersAttending,
+  voteAttendance,
+} from "@/lib/matches/actions";
 import AttendanceManagerBoard from "@/components/attendance-manager-board";
 
 export type VotePlayer = {
   id: string;
   name: string;
   jersey_number?: number | null;
+  // 참석자만 의미. NULL = 전체 쿼터 응답, 정수 N = N쿼터까지
+  quarters_attending?: number | null;
+  // 응답 시각 — 멤버별 참여 쿼터 목록의 "오래 참여한 순서" 정렬 기준
+  voted_at?: string | null;
 };
 
 type Groups = {
@@ -42,26 +49,46 @@ const OPTS: {
   },
 ];
 
+type OptimisticState = {
+  status: string | null;
+  quartersAttending: number | null;
+};
+
 /**
- * 본인 출석 상태를 낙관적으로 관리하고, 그 상태에 맞춰
- * 그룹/미투표 명단과 카운트를 즉시 재배치해 돌려준다.
+ * 본인 출석 상태 + 참석 쿼터를 낙관적으로 관리한다.
+ * status 가 attending 이 아니면 quartersAttending 은 항상 null.
  */
-function useOptimisticAttendance(
+function useOptimisticVote(
   matchId: string,
   myStatus: string | null,
+  myQuartersAttending: number | null,
   me: VotePlayer | null,
   byStatus: Groups,
   nonVoters: VotePlayer[],
 ) {
-  const [optimisticStatus, setOptimisticStatus] = useOptimistic(myStatus);
+  const [optimistic, setOptimistic] = useOptimistic<OptimisticState>({
+    status: myStatus,
+    quartersAttending: myStatus === "attending" ? myQuartersAttending : null,
+  });
   const [, startTransition] = useTransition();
 
   const vote = (value: Status) => {
     // 토글: 이미 선택된 항목을 다시 누르면 미투표(null)
-    const next = optimisticStatus === value ? null : value;
+    const next: Status | null = optimistic.status === value ? null : value;
     startTransition(async () => {
-      setOptimisticStatus(next);
+      setOptimistic({
+        status: next,
+        quartersAttending: next === "attending" ? null : null,
+      });
       await voteAttendance(matchId, value);
+    });
+  };
+
+  const setQuarters = (quarters: number | null) => {
+    if (optimistic.status !== "attending") return;
+    startTransition(async () => {
+      setOptimistic({ status: "attending", quartersAttending: quarters });
+      await setMyQuartersAttending(matchId, quarters);
     });
   };
 
@@ -79,14 +106,19 @@ function useOptimisticAttendance(
     let nv = strip(nonVoters);
 
     if (me) {
-      if (optimisticStatus === "attending") {
-        groups.attending = [...groups.attending, me].sort(byName);
-      } else if (optimisticStatus === "absent") {
-        groups.absent = [...groups.absent, me].sort(byName);
-      } else if (optimisticStatus === "undecided") {
-        groups.undecided = [...groups.undecided, me].sort(byName);
+      const meWith: VotePlayer = {
+        ...me,
+        quarters_attending: optimistic.quartersAttending,
+        voted_at: new Date().toISOString(),
+      };
+      if (optimistic.status === "attending") {
+        groups.attending = [...groups.attending, meWith].sort(byName);
+      } else if (optimistic.status === "absent") {
+        groups.absent = [...groups.absent, meWith].sort(byName);
+      } else if (optimistic.status === "undecided") {
+        groups.undecided = [...groups.undecided, meWith].sort(byName);
       } else {
-        nv = [me, ...nv];
+        nv = [meWith, ...nv];
       }
     }
 
@@ -100,9 +132,15 @@ function useOptimisticAttendance(
         nonVoters: nv.length,
       },
     };
-  }, [me, byStatus, nonVoters, optimisticStatus]);
+  }, [me, byStatus, nonVoters, optimistic]);
 
-  return { optimisticStatus, vote, ...computed };
+  return {
+    optimisticStatus: optimistic.status,
+    optimisticQuarters: optimistic.quartersAttending,
+    vote,
+    setQuarters,
+    ...computed,
+  };
 }
 
 function VoteButtons({
@@ -137,6 +175,90 @@ function VoteButtons({
 }
 
 // ───────────────────────────────────────────────────────────
+// 쿼터 선택기 (참석 응답 시에만 노출)
+// ───────────────────────────────────────────────────────────
+
+function QuarterPicker({
+  totalQuarters,
+  selected, // null = 전체, 또는 1..N
+  myName,
+  onChange,
+}: {
+  totalQuarters: number;
+  selected: number | null;
+  myName: string | null;
+  onChange: (quarters: number | null) => void;
+}) {
+  // 누적 선택: selected 가 null 이면 전체, n 이면 1..n 까지 체크 표시
+  const effective = selected ?? totalQuarters;
+  const isFull = selected === null;
+  return (
+    <div className="bg-white rounded-lg border border-suaza-border p-3 flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-sm font-medium text-suaza-ink">
+          <span>⚽</span>
+          <span>어느 쿼터까지 참석하세요?</span>
+          <span className="text-xs text-suaza-ink-faint">· 누적 선택</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium border transition ${
+            isFull
+              ? "bg-green-600 text-white border-green-600"
+              : "bg-white text-suaza-ink-muted border-suaza-border hover:bg-gray-50"
+          }`}
+        >
+          {isFull ? "✓ " : ""}전체
+        </button>
+      </div>
+      <div
+        className="grid gap-2"
+        style={{
+          gridTemplateColumns: `repeat(${totalQuarters}, minmax(0, 1fr))`,
+        }}
+      >
+        {Array.from({ length: totalQuarters }, (_, i) => {
+          const q = i + 1;
+          const active = q <= effective;
+          // 누적 선택: 단계별로 진한 녹색. 가장 진한 = 마지막 선택값
+          const intensity = active ? Math.min(1, q / effective) : 0;
+          const bg = active
+            ? `rgba(34, 197, 94, ${0.25 + intensity * 0.65})`
+            : "#F9FAFB";
+          const textCls = active ? "text-white" : "text-suaza-ink-muted";
+          return (
+            <button
+              key={q}
+              type="button"
+              onClick={() => onChange(q === totalQuarters ? null : q)}
+              className={`aspect-[5/3] rounded-lg border flex flex-col items-center justify-center gap-0.5 transition ${textCls} ${
+                active
+                  ? "border-transparent"
+                  : "border-suaza-border hover:bg-gray-100"
+              }`}
+              style={{ backgroundColor: bg }}
+            >
+              <span className="text-sm font-bold">{q}Q</span>
+              {active && <span className="text-[10px] leading-none">✓</span>}
+            </button>
+          );
+        })}
+      </div>
+      <p className="bg-green-50 text-green-700 rounded text-xs px-2 py-1.5 flex items-center gap-1">
+        <span>✓</span>
+        <span>
+          {myName ? `${myName} 님은 ` : ""}
+          {isFull
+            ? `전체 쿼터(1~${totalQuarters}Q) 참여로 응답했어요`
+            : `${selected}쿼터까지 참여로 응답했어요`}
+        </span>
+      </p>
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────
 // 경기 상세 카드용 패널 (버튼 + 카운트 + 명단)
 // ───────────────────────────────────────────────────────────
 
@@ -145,9 +267,11 @@ export function AttendanceCardVote({
   me,
   myName,
   myStatus,
+  myQuartersAttending,
   byStatus,
   nonVoters,
   isManager,
+  totalQuarters,
   locked,
   lockedMessage = "🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다",
 }: {
@@ -155,14 +279,30 @@ export function AttendanceCardVote({
   me: VotePlayer | null;
   myName: string | null;
   myStatus: string | null;
+  myQuartersAttending: number | null;
   byStatus: Groups;
   nonVoters: VotePlayer[];
   isManager: boolean;
+  totalQuarters: number;
   locked: boolean;
   lockedMessage?: string;
 }) {
-  const { optimisticStatus, vote, groups, nonVoters: nv, counts } =
-    useOptimisticAttendance(matchId, myStatus, me, byStatus, nonVoters);
+  const {
+    optimisticStatus,
+    optimisticQuarters,
+    vote,
+    setQuarters,
+    groups,
+    nonVoters: nv,
+    counts,
+  } = useOptimisticVote(
+    matchId,
+    myStatus,
+    myQuartersAttending,
+    me,
+    byStatus,
+    nonVoters,
+  );
 
   const showBoard = isManager;
 
@@ -191,6 +331,14 @@ export function AttendanceCardVote({
             </span>
           </div>
           <VoteButtons status={optimisticStatus} onVote={vote} />
+          {optimisticStatus === "attending" && (
+            <QuarterPicker
+              totalQuarters={totalQuarters}
+              selected={optimisticQuarters}
+              myName={myName}
+              onChange={setQuarters}
+            />
+          )}
         </div>
       )}
 
@@ -202,22 +350,24 @@ export function AttendanceCardVote({
         <StatCount label="미투표" value={counts.nonVoters} color="#D1D5DB" />
       </div>
 
-      {/* Member pills */}
-      <h3 className="text-sm font-bold text-suaza-ink">멤버별 응답</h3>
+      {/* 멤버별 참여 쿼터 — 참석자만 quarter desc 그룹화 */}
+      <AttendingByQuarterSection
+        attending={groups.attending}
+        totalQuarters={totalQuarters}
+      />
+
+      {/* 매니저는 드래그앤드롭 보드 / 그 외는 단순 명단 */}
       {showBoard ? (
-        <AttendanceManagerBoard
-          matchId={matchId}
-          byStatus={groups}
-          nonVoters={nv}
-        />
-      ) : (
-        <div className="flex flex-col gap-3">
-          <MemberGroup
-            label="참석"
-            count={counts.attending}
-            color="#22C55E"
-            members={groups.attending}
+        <>
+          <h3 className="text-sm font-bold text-suaza-ink pt-1">멤버별 응답</h3>
+          <AttendanceManagerBoard
+            matchId={matchId}
+            byStatus={groups}
+            nonVoters={nv}
           />
+        </>
+      ) : (
+        <div className="flex flex-col gap-3 pt-1">
           <MemberGroup
             label="불참"
             count={counts.absent}
@@ -251,23 +401,40 @@ export function AttendanceCompactVote({
   matchId,
   me,
   myStatus,
+  myQuartersAttending = null,
   byStatus,
   nonVoters,
   isManager,
+  totalQuarters = 4,
   locked = false,
   lockedMessage = "🔒 투표가 마감되었습니다",
 }: {
   matchId: string;
   me: VotePlayer | null;
   myStatus: string | null;
+  myQuartersAttending?: number | null;
   byStatus: Groups;
   nonVoters: VotePlayer[];
   isManager: boolean;
+  totalQuarters?: number;
   locked?: boolean;
   lockedMessage?: string;
 }) {
-  const { optimisticStatus, vote, groups, nonVoters: nv } =
-    useOptimisticAttendance(matchId, myStatus, me, byStatus, nonVoters);
+  const {
+    optimisticStatus,
+    optimisticQuarters,
+    vote,
+    setQuarters,
+    groups,
+    nonVoters: nv,
+  } = useOptimisticVote(
+    matchId,
+    myStatus,
+    myQuartersAttending,
+    me,
+    byStatus,
+    nonVoters,
+  );
 
   return (
     <>
@@ -276,7 +443,17 @@ export function AttendanceCompactVote({
           {lockedMessage}
         </div>
       ) : (
-        <VoteButtons status={optimisticStatus} onVote={vote} />
+        <>
+          <VoteButtons status={optimisticStatus} onVote={vote} />
+          {optimisticStatus === "attending" && (
+            <QuarterPicker
+              totalQuarters={totalQuarters}
+              selected={optimisticQuarters}
+              myName={null}
+              onChange={setQuarters}
+            />
+          )}
+        </>
       )}
 
       {isManager ? (
@@ -310,6 +487,105 @@ export function AttendanceCompactVote({
         </div>
       )}
     </>
+  );
+}
+
+// ───────────────────────────────────────────────────────────
+// 멤버별 참여 쿼터 (참석자만 그룹화)
+// ───────────────────────────────────────────────────────────
+
+function AttendingByQuarterSection({
+  attending,
+  totalQuarters,
+}: {
+  attending: VotePlayer[];
+  totalQuarters: number;
+}) {
+  // 그룹별 키: null(전체) → totalQuarters, 그 외 1..N
+  // 정렬: 쿼터 수 내림차순 (전체 → N-1쿼터까지 → ... → 1쿼터까지)
+  const groups = useMemo(() => {
+    const map = new Map<number, VotePlayer[]>();
+    for (const p of attending) {
+      const k = p.quarters_attending ?? totalQuarters;
+      const arr = map.get(k) ?? [];
+      arr.push(p);
+      map.set(k, arr);
+    }
+    // 각 그룹 내부 정렬: voted_at asc (오래 참여한 순서)
+    for (const arr of map.values()) {
+      arr.sort((a, b) => {
+        const ta = a.voted_at ? new Date(a.voted_at).getTime() : Infinity;
+        const tb = b.voted_at ? new Date(b.voted_at).getTime() : Infinity;
+        return ta - tb;
+      });
+    }
+    return Array.from(map.entries()).sort((a, b) => b[0] - a[0]);
+  }, [attending, totalQuarters]);
+
+  return (
+    <div className="bg-suaza-bg/30 rounded-xl p-3 desktop:p-4 flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-bold text-suaza-ink flex items-center gap-1.5">
+          <span>👥</span>
+          멤버별 참여 쿼터
+        </h3>
+        <span className="text-[11px] text-suaza-ink-faint">
+          오래 참여한 순서
+        </span>
+      </div>
+      {attending.length === 0 ? (
+        <p className="text-xs text-suaza-ink-faint py-2 text-center">
+          아직 참석 응답한 멤버가 없어요
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-2.5">
+          {groups.map(([quarters, members]) => (
+            <li key={quarters} className="flex items-start gap-3">
+              <div className="shrink-0 w-20 desktop:w-24 flex flex-col gap-1">
+                <span className="text-xs font-bold text-suaza-ink">
+                  {quarters === totalQuarters
+                    ? `전체 (${totalQuarters}Q)`
+                    : `${quarters}쿼터까지`}
+                </span>
+                <QuarterBar value={quarters} total={totalQuarters} />
+                <span className="text-[11px] text-suaza-ink-muted">
+                  {members.length}명
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1 flex-1 min-w-0 pt-0.5">
+                {members.map((m) => (
+                  <span
+                    key={m.id}
+                    className="text-xs px-2.5 py-0.5 rounded-full border bg-white text-suaza-ink"
+                    style={{ borderColor: "#22C55E" }}
+                  >
+                    {m.name}
+                  </span>
+                ))}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function QuarterBar({ value, total }: { value: number; total: number }) {
+  return (
+    <div
+      className="grid gap-0.5"
+      style={{ gridTemplateColumns: `repeat(${total}, minmax(0, 1fr))` }}
+    >
+      {Array.from({ length: total }, (_, i) => (
+        <span
+          key={i}
+          className={`h-1.5 rounded-sm ${
+            i < value ? "bg-green-500" : "bg-gray-200"
+          }`}
+        />
+      ))}
+    </div>
   );
 }
 

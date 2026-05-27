@@ -635,16 +635,70 @@ export async function voteAttendance(matchId: string, status: AttendanceStatus) 
       .eq("match_id", matchId)
       .eq("player_id", user.id);
   } else {
+    // 참석 선택 시 기본값 = 전체 쿼터(NULL). 트리거가 다른 status 에선 NULL 로 정리.
     await supabase.from("match_attendances").upsert(
       {
         match_id: matchId,
         player_id: user.id,
         status,
+        quarters_attending: null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "match_id,player_id" },
     );
   }
+
+  revalidatePath(`/matches/${matchId}`);
+  revalidatePath("/");
+}
+
+/**
+ * 본인 참석 쿼터 지정. NULL = 전체 쿼터, 1..6 = 'N쿼터까지'.
+ * 참석(attending) 상태일 때만 의미가 있음 — 그 외에는 무시.
+ */
+export async function setMyQuartersAttending(
+  matchId: string,
+  quartersAttending: number | null,
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (quartersAttending !== null) {
+    if (
+      !Number.isInteger(quartersAttending) ||
+      quartersAttending < 1 ||
+      quartersAttending > 6
+    ) {
+      return;
+    }
+  }
+
+  if (!(await memberVoteAllowed(supabase, matchId, user.id))) {
+    revalidatePath(`/matches/${matchId}`);
+    return;
+  }
+
+  // 참석자만 의미 있음
+  const { data: existing } = await supabase
+    .from("match_attendances")
+    .select("status")
+    .eq("match_id", matchId)
+    .eq("player_id", user.id)
+    .maybeSingle();
+
+  if (existing?.status !== "attending") return;
+
+  await supabase
+    .from("match_attendances")
+    .update({
+      quarters_attending: quartersAttending,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("match_id", matchId)
+    .eq("player_id", user.id);
 
   revalidatePath(`/matches/${matchId}`);
   revalidatePath("/");

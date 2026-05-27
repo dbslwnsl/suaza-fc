@@ -97,12 +97,12 @@ export default async function MatchDetailPage({
     supabase
       .from("match_attendances")
       .select(
-        "status, team, player:profiles(id, name, jersey_number, positions, title)",
+        "status, team, quarters_attending, updated_at, player:profiles(id, name, jersey_number, positions, title)",
       )
       .eq("match_id", id),
     supabase
       .from("match_attendances")
-      .select("status")
+      .select("status, quarters_attending")
       .eq("match_id", id)
       .eq("player_id", user.id)
       .maybeSingle(),
@@ -123,6 +123,8 @@ export default async function MatchDetailPage({
     jersey_number: number | null;
     positions?: string[] | null;
     title?: string | null;
+    quarters_attending?: number | null;
+    voted_at?: string | null;
   };
   const byStatus: {
     attending: VotePlayer[];
@@ -136,10 +138,17 @@ export default async function MatchDetailPage({
   for (const row of (attendancesRaw ?? []) as unknown as {
     status: keyof typeof byStatus;
     team: "A" | "B" | null;
+    quarters_attending: number | null;
+    updated_at: string | null;
     player: VotePlayer | null;
   }[]) {
     if (row.player && row.status in byStatus) {
-      byStatus[row.status].push(row.player);
+      const enriched: VotePlayer = {
+        ...row.player,
+        quarters_attending: row.quarters_attending,
+        voted_at: row.updated_at,
+      };
+      byStatus[row.status].push(enriched);
       votedIds.add(row.player.id);
       if (row.status === "attending") {
         teamMembers.push({
@@ -156,7 +165,11 @@ export default async function MatchDetailPage({
   for (const key of ["attending", "absent", "undecided"] as const) {
     byStatus[key].sort((a, b) => a.name.localeCompare(b.name, "ko"));
   }
-  const myStatus = (myAttendance as { status: string } | null)?.status ?? null;
+  const myAtt = myAttendance as
+    | { status: string; quarters_attending: number | null }
+    | null;
+  const myStatus = myAtt?.status ?? null;
+  const myQuartersAttending = myAtt?.quarters_attending ?? null;
 
   if (!match) notFound();
 
@@ -318,11 +331,13 @@ export default async function MatchDetailPage({
                     matchId={m.id}
                     meId={user.id}
                     myStatus={myStatus}
+                    myQuartersAttending={myQuartersAttending}
                     byStatus={byStatus}
                     nonVoters={nonVoters}
                     isManager={isStaff}
                     myName={me?.name ?? null}
                     totalMembers={totalMembers}
+                    totalQuarters={m.total_quarters ?? 4}
                     deadlineStr={deadlineStr}
                     locked={
                       isStarted ||
@@ -745,17 +760,21 @@ type AttendancePlayer = {
   id: string;
   name: string;
   jersey_number: number | null;
+  quarters_attending?: number | null;
+  voted_at?: string | null;
 };
 
 function AttendanceCard({
   matchId,
   meId,
   myStatus,
+  myQuartersAttending,
   byStatus,
   nonVoters,
   isManager,
   myName,
   totalMembers,
+  totalQuarters,
   deadlineStr,
   locked,
   lockedMessage,
@@ -763,6 +782,7 @@ function AttendanceCard({
   matchId: string;
   meId: string;
   myStatus: string | null;
+  myQuartersAttending: number | null;
   byStatus: {
     attending: AttendancePlayer[];
     absent: AttendancePlayer[];
@@ -772,6 +792,7 @@ function AttendanceCard({
   isManager?: boolean;
   myName: string | null;
   totalMembers: number;
+  totalQuarters: number;
   deadlineStr: string;
   locked?: boolean;
   lockedMessage?: string;
@@ -796,9 +817,11 @@ function AttendanceCard({
         me={{ id: meId, name: myName ?? "" }}
         myName={myName}
         myStatus={myStatus}
+        myQuartersAttending={myQuartersAttending}
         byStatus={byStatus}
         nonVoters={nonVoters}
         isManager={!!isManager}
+        totalQuarters={totalQuarters}
         locked={!!locked}
         lockedMessage={lockedMessage}
       />
@@ -880,9 +903,11 @@ export function AttendanceVote({
   meId,
   myName,
   myStatus,
+  myQuartersAttending = null,
   byStatus,
   nonVoters,
   isManager,
+  totalQuarters = 4,
   locked,
   lockedMessage,
 }: {
@@ -890,6 +915,7 @@ export function AttendanceVote({
   meId: string;
   myName: string | null;
   myStatus: string | null;
+  myQuartersAttending?: number | null;
   byStatus: {
     attending: VotePlayer[];
     absent: VotePlayer[];
@@ -897,6 +923,7 @@ export function AttendanceVote({
   };
   nonVoters: VotePlayer[];
   isManager?: boolean;
+  totalQuarters?: number;
   locked?: boolean;
   lockedMessage?: string;
 }) {
@@ -908,9 +935,11 @@ export function AttendanceVote({
         matchId={matchId}
         me={{ id: meId, name: myName ?? "" }}
         myStatus={myStatus}
+        myQuartersAttending={myQuartersAttending}
         byStatus={byStatus}
         nonVoters={nonVoters}
         isManager={!!isManager}
+        totalQuarters={totalQuarters}
         locked={!!locked}
         lockedMessage={lockedMessage}
       />

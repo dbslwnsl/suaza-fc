@@ -218,8 +218,15 @@ export default async function Home() {
   const notice = latestNotice as unknown as NoticeRow | null;
 
   // 다가오는 경기 출석 데이터
-  type VotePlayer = { id: string; name: string; jersey_number: number | null };
+  type VotePlayer = {
+    id: string;
+    name: string;
+    jersey_number: number | null;
+    quarters_attending?: number | null;
+    voted_at?: string | null;
+  };
   let myStatus: string | null = null;
+  let myQuartersAttending: number | null = null;
   const byStatus: {
     attending: VotePlayer[];
     absent: VotePlayer[];
@@ -232,11 +239,13 @@ export default async function Home() {
       await Promise.all([
         supabase
           .from("match_attendances")
-          .select("status, player:profiles(id, name, jersey_number)")
+          .select(
+            "status, quarters_attending, updated_at, player:profiles(id, name, jersey_number)",
+          )
           .eq("match_id", upcoming.id),
         supabase
           .from("match_attendances")
-          .select("status")
+          .select("status, quarters_attending")
           .eq("match_id", upcoming.id)
           .eq("player_id", user!.id)
           .maybeSingle(),
@@ -250,10 +259,16 @@ export default async function Home() {
     const votedIds = new Set<string>();
     for (const row of (attRaw ?? []) as unknown as {
       status: keyof typeof byStatus;
+      quarters_attending: number | null;
+      updated_at: string | null;
       player: VotePlayer | null;
     }[]) {
       if (row.player && row.status in byStatus) {
-        byStatus[row.status].push(row.player);
+        byStatus[row.status].push({
+          ...row.player,
+          quarters_attending: row.quarters_attending,
+          voted_at: row.updated_at,
+        });
         votedIds.add(row.player.id);
       }
     }
@@ -263,7 +278,11 @@ export default async function Home() {
     for (const key of ["attending", "absent", "undecided"] as const) {
       byStatus[key].sort((a, b) => a.name.localeCompare(b.name, "ko"));
     }
-    myStatus = (mine as { status: string } | null)?.status ?? null;
+    const m = mine as
+      | { status: string; quarters_attending: number | null }
+      | null;
+    myStatus = m?.status ?? null;
+    myQuartersAttending = m?.quarters_attending ?? null;
   }
 
   const lastResult = last
@@ -524,9 +543,11 @@ export default async function Home() {
               meId={user!.id}
               myName={profile?.name ?? null}
               myStatus={myStatus}
+              myQuartersAttending={myQuartersAttending}
               byStatus={byStatus}
               nonVoters={nonVoters}
               isManager={profile?.role === "manager"}
+              totalQuarters={upcoming.total_quarters ?? 4}
               locked={
                 isMatchStarted(upcoming) ||
                 (!!upcoming.vote_deadline &&

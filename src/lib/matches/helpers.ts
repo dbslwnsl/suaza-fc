@@ -25,7 +25,23 @@ export type Match = {
   team_a_name: string | null;
   team_b_name: string | null;
   vote_deadline: string | null;
+  total_quarters: number;
 };
+
+// 경기 총 쿼터 수 (1Q ~ NQ)
+export const DEFAULT_TOTAL_QUARTERS = 4;
+export const MIN_TOTAL_QUARTERS = 1;
+export const MAX_TOTAL_QUARTERS = 6;
+
+export function getTotalQuarters(m: {
+  total_quarters?: number | null;
+}): number {
+  const v = m.total_quarters;
+  if (typeof v !== "number") return DEFAULT_TOTAL_QUARTERS;
+  if (v < MIN_TOTAL_QUARTERS) return MIN_TOTAL_QUARTERS;
+  if (v > MAX_TOTAL_QUARTERS) return MAX_TOTAL_QUARTERS;
+  return v;
+}
 
 // 자체전 유니폼 색상 팔레트 (선택지): 주황 · 검정 · 흰색
 export const UNIFORM_COLORS = [
