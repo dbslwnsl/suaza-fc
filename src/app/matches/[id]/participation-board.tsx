@@ -145,20 +145,14 @@ export default function ParticipationBoard({
   attendingMembers,
   isStaff,
   isManager,
-  myUserId,
   isStarted,
-  isMyselfAttending,
-  myProfile,
 }: {
   matchId: string;
   participations: ParticipationData[];
   attendingMembers: Player[];
   isStaff: boolean;
   isManager: boolean;
-  myUserId: string;
   isStarted: boolean;
-  isMyselfAttending: boolean;
-  myProfile: Player | null;
 }) {
   const canEdit = isStaff && isStarted;
   const [edited, setEdited] = useState<Map<string, Stats>>(() => {
@@ -166,7 +160,6 @@ export default function ParticipationBoard({
     for (const p of participations) m.set(p.id, readStats(p));
     return m;
   });
-  const myParticipation = participations.find((p) => p.player_id === myUserId);
   const [, startTransition] = useTransition();
 
   const recordedCount = participations.length;
@@ -182,10 +175,8 @@ export default function ParticipationBoard({
     return sum;
   }, [edited, participations]);
 
-  // 다른 선수 리스트는 본인 포함 전체 (다른 사람이 봐야 하므로)
+  // 기록 중인 선수 리스트 (본인 포함 전체)
   const others = participations;
-  // 내 기록 카드 노출 조건: 참여중 OR 참석 투표
-  const showMyCard = !!myParticipation || isMyselfAttending;
 
   // 서버 데이터 바뀌면 (action 후 revalidate) edited 를 서버 기준으로 재동기화.
   useEffect(() => {
@@ -298,30 +289,6 @@ export default function ParticipationBoard({
         </div>
       )}
 
-      {/* 내 기록 */}
-      {showMyCard && (
-        <>
-          <div className="flex items-baseline gap-2">
-            <span className="font-bold text-suaza-ink text-sm">내 기록</span>
-          </div>
-          {myParticipation ? (
-            <SelectedPlayerCard
-              p={myParticipation}
-              stats={
-                edited.get(myParticipation.id) ?? readStats(myParticipation)
-              }
-              isStaff={isStaff}
-              canEditStats={canEdit}
-              matchId={matchId}
-              onChange={(key, delta) =>
-                updateStat(myParticipation.id, key, delta)
-              }
-            />
-          ) : myProfile ? (
-            <MyEmptyCard player={myProfile} />
-          ) : null}
-        </>
-      )}
 
       {/* Other players */}
       {others.length > 0 && (
@@ -362,204 +329,6 @@ export default function ParticipationBoard({
         <span className="text-suaza-ink-faint"> · {recordedCount}명 기록</span>
       </div>
     </section>
-  );
-}
-
-// ───────────────────────────────────────────────────────────
-// Selected player big card
-// ───────────────────────────────────────────────────────────
-
-function SelectedPlayerCard({
-  p,
-  stats,
-  isStaff,
-  canEditStats,
-  matchId,
-  onChange,
-}: {
-  p: ParticipationData;
-  stats: Stats;
-  isStaff: boolean;
-  canEditStats: boolean;
-  matchId: string;
-  onChange: (key: StatKey, delta: number) => void;
-}) {
-  const points = calcPoints(stats);
-  const attendanceMeta = STAT_META.find((s) => s.key === "attendance");
-  return (
-    <div className="border-2 border-suaza-accent bg-red-50/40 rounded-2xl p-4 desktop:p-5 flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <PlayerInfo player={p.player} large />
-        <div className="flex items-center gap-1.5">
-          {attendanceMeta && stats.attendance > 0 && (
-            <span
-              className="desktop:hidden inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold"
-              style={{
-                color: attendanceMeta.color,
-                backgroundColor: attendanceMeta.bg,
-              }}
-              title={`${attendanceMeta.label} +${stats.attendance * attendanceMeta.weight}pt`}
-              aria-label={`${attendanceMeta.label} ${stats.attendance}`}
-            >
-              {attendanceMeta.icon}
-            </span>
-          )}
-          <PointStar points={points} />
-          {isStaff && (
-            <form action={unrecordParticipant.bind(null, p.id, matchId)}>
-              <button
-                type="submit"
-                aria-label="내 기록 제외"
-                className="w-6 h-6 inline-flex items-center justify-center rounded text-suaza-ink-faint hover:text-red-600 hover:bg-red-50 transition text-sm leading-none"
-              >
-                ✕
-              </button>
-            </form>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 desktop:grid-cols-5 gap-2">
-        {STAT_META.map((s) =>
-          s.locked ? (
-            <div key={s.key} className="hidden desktop:block">
-              <StatBox
-                meta={s}
-                value={stats[s.key]}
-                disabled={!canEditStats}
-                onDec={() => onChange(s.key, -1)}
-                onInc={() => onChange(s.key, +1)}
-              />
-            </div>
-          ) : (
-            <StatBox
-              key={s.key}
-              meta={s}
-              value={stats[s.key]}
-              disabled={!canEditStats}
-              onDec={() => onChange(s.key, -1)}
-              onInc={() => onChange(s.key, +1)}
-            />
-          ),
-        )}
-      </div>
-
-    </div>
-  );
-}
-
-function MyEmptyCard({ player }: { player: Player }) {
-  return (
-    <div className="border-2 border-suaza-accent bg-red-50/40 rounded-2xl p-4 desktop:p-5 flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <PlayerInfo player={player} large />
-        <PointStar points={0} />
-      </div>
-      <p className="text-xs text-suaza-ink-muted text-center py-2 bg-white/60 rounded-lg">
-        ✅ 참석 투표 완료 · 매니저가 출전 등록을 하면 기록이 시작돼요
-      </p>
-    </div>
-  );
-}
-
-function StatBox({
-  meta,
-  value,
-  disabled,
-  onDec,
-  onInc,
-}: {
-  meta: (typeof STAT_META)[number];
-  value: number;
-  disabled?: boolean;
-  onDec: () => void;
-  onInc: () => void;
-}) {
-  const contribution = value * meta.weight;
-  const locked = meta.locked === true;
-  return (
-    <div
-      className="border-2 rounded-xl p-3 flex flex-col gap-2 bg-white"
-      style={{ borderColor: value > 0 ? meta.color : "var(--suaza-border)" }}
-    >
-      <div className="flex items-center justify-between gap-1">
-        <span
-          className="inline-flex items-center gap-1 font-bold text-sm"
-          style={{ color: value > 0 ? meta.color : undefined }}
-        >
-          <span>{meta.icon}</span>
-          {meta.label}
-        </span>
-        <span
-          className="text-xs font-bold"
-          style={{ color: value > 0 ? meta.color : "var(--suaza-ink-faint)" }}
-        >
-          +{contribution}pt
-        </span>
-      </div>
-      {locked ? (
-        <div className="flex items-center justify-center py-1">
-          <span
-            className="text-lg font-bold"
-            style={{ color: value > 0 ? meta.color : "var(--suaza-ink)" }}
-          >
-            {value}
-          </span>
-        </div>
-      ) : (
-        <div className="flex items-center gap-1">
-          <StatButton
-            onClick={onDec}
-            disabled={disabled || value === 0}
-            label="−"
-          />
-          <span className="flex-1 text-center text-lg font-bold text-suaza-ink">
-            {value}
-          </span>
-          <StatButton
-            onClick={onInc}
-            disabled={disabled}
-            label="+"
-            active={value > 0}
-            color={meta.color}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StatButton({
-  onClick,
-  disabled,
-  label,
-  active,
-  color,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  label: string;
-  active?: boolean;
-  color?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      style={
-        active && color
-          ? { backgroundColor: color, color: "white" }
-          : undefined
-      }
-      className={`w-7 h-7 rounded-md border flex items-center justify-center text-sm font-bold transition ${
-        active
-          ? "border-transparent"
-          : "border-suaza-border text-suaza-ink-muted hover:bg-gray-50"
-      } disabled:opacity-40 disabled:cursor-not-allowed`}
-    >
-      {label}
-    </button>
   );
 }
 

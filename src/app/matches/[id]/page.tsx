@@ -359,14 +359,7 @@ export default async function MatchDetailPage({
                     matchId={m.id}
                     isStaff={isStaff}
                     isManager={me?.role === "manager"}
-                    myUserId={user.id}
                     isStarted={isStarted}
-                    isMyselfAttending={myStatus === "attending"}
-                    myProfile={
-                      ((allMembers ?? []) as unknown as ParticipationData["player"][]).find(
-                        (mm) => mm?.id === user.id,
-                      ) ?? null
-                    }
                     participations={
                       participations as unknown as ParticipationData[]
                     }
