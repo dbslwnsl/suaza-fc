@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import BackButton from "@/components/back-button";
 import NewMatchForm from "./new-match-form";
 
 export default async function NewMatchPage({
@@ -44,6 +45,11 @@ export default async function NewMatchPage({
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[600px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
         <header className="flex flex-col gap-2">
+          <BackButton
+            label="← 경기 목록"
+            fallbackHref="/matches"
+            className="text-sm text-suaza-ink-muted hover:underline self-start"
+          />
           <div className="flex items-center gap-3">
             <Link
               href="/matches"

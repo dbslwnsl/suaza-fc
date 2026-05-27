@@ -296,7 +296,7 @@ export default async function MatchDetailPage({
             href="/matches"
             className="text-sm text-suaza-ink-muted hover:underline"
           >
-            ‹ 경기 목록
+            ← 경기 목록
           </Link>
         </header>
 
