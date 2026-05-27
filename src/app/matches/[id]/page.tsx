@@ -15,6 +15,7 @@ import {
 } from "./attendance-vote-panel";
 import NewMatchForm from "@/app/matches/new/new-match-form";
 import ScoreControl from "./score-control";
+import TeamRecapCard from "./team-recap-card";
 import TeamBuilder from "./team-builder";
 import ParticipationBoard, {
   type ParticipationData,
@@ -299,8 +300,8 @@ export default async function MatchDetailPage({
         />
 
             <div className="grid grid-cols-1 desktop:grid-cols-2 gap-4 desktop:items-stretch">
-              {/* 출석투표: 좌측 상단 */}
-              {m.status !== "canceled" && (
+              {/* 출석투표: 좌측 상단 — 지난(완료)·취소 경기엔 숨김 */}
+              {m.status !== "canceled" && m.status !== "done" && (
                 <div className="order-1 desktop:h-full">
                   <AttendanceCard
                     matchId={m.id}
@@ -324,8 +325,9 @@ export default async function MatchDetailPage({
                   />
                 </div>
               )}
-              {/* 자체전 선발: 출석 우측 상단 (높이 맞춤) */}
-              {isIntra && m.status !== "canceled" && (
+              {/* 자체전 선발: 출석 우측 상단 (높이 맞춤) — 취소 경기엔 숨김.
+                  지난(done) 경기는 편집 가능한 TeamBuilder 대신 결과만 표기. */}
+              {isIntra && m.status !== "canceled" && m.status !== "done" && (
                 <div className="order-2 desktop:h-full">
                   <TeamBuilder
                     matchId={m.id}
@@ -338,6 +340,15 @@ export default async function MatchDetailPage({
                     teamAName={getTeamName(m, "A")}
                     teamBName={getTeamName(m, "B")}
                     readonly={!isStaff}
+                  />
+                </div>
+              )}
+              {isIntra && m.status === "done" && (
+                <div className="order-2 desktop:col-span-2">
+                  <TeamRecapCard
+                    attendees={teamMembers}
+                    teamAName={getTeamName(m, "A")}
+                    teamBName={getTeamName(m, "B")}
                   />
                 </div>
               )}
