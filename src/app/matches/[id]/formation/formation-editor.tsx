@@ -5,9 +5,7 @@ import Image from "next/image";
 import { saveFormation } from "@/lib/formations/actions";
 import { setMyCondition } from "@/lib/matches/actions";
 import {
-  DEFAULT_QUARTER_IDS,
   FORMATIONS,
-  MAX_QUARTERS,
   buildSlots,
   buildSlotsForTeam,
   type SaveFormationPayload,
@@ -23,7 +21,17 @@ import {
   type MemberTitle,
   type PreferredFoot,
 } from "@/lib/members/positions";
-import type { EditorMember } from "./page";
+import type { EditorMember, GameQuarter } from "./page";
+
+// 선수가 특정 전체-쿼터(globalIndex, 1-based)에 참여하는지.
+// attending_quarters 가 null 이면 전체 참여로 간주.
+function isAvailableForQuarter(
+  attendingQuarters: number[] | null | undefined,
+  globalIndex: number,
+): boolean {
+  if (attendingQuarters == null) return true;
+  return attendingQuarters.includes(globalIndex);
+}
 
 type Filter = "ALL" | Position;
 
@@ -152,15 +160,22 @@ function FootBadge({ foot }: { foot: PreferredFoot | null }) {
 function PlayerName({
   name,
   className,
+  // false 면 칸이 좁아도 성을 떼지 않고 항상 풀네임 표시 (데스크탑 명단용)
+  allowDropSurname = true,
 }: {
   name: string;
   className?: string;
+  allowDropSurname?: boolean;
 }) {
   const wrapRef = useRef<HTMLSpanElement>(null);
   const fullRef = useRef<HTMLSpanElement>(null);
   const [dropSurname, setDropSurname] = useState(false);
 
   useEffect(() => {
+    if (!allowDropSurname) {
+      setDropSurname(false);
+      return;
+    }
     const wrap = wrapRef.current;
     const full = fullRef.current;
     if (!wrap || !full) return;
@@ -173,7 +188,7 @@ function PlayerName({
     const ro = new ResizeObserver(measure);
     ro.observe(wrap);
     return () => ro.disconnect();
-  }, [name]);
+  }, [name, allowDropSurname]);
 
   return (
     <span
@@ -198,6 +213,8 @@ export default function FormationEditor({
   members,
   attendingIds,
   teamByPlayer = {},
+  attendingQuartersByPlayer = {},
+  gameQuarters,
   initialQuarters,
   isIntra,
   readonly,
@@ -207,18 +224,37 @@ export default function FormationEditor({
   members: EditorMember[];
   attendingIds: string[];
   teamByPlayer?: Record<string, "A" | "B" | null>;
+  attendingQuartersByPlayer?: Record<string, number[] | null>;
+  gameQuarters: GameQuarter[];
   initialQuarters: SavedQuarter[];
   isIntra: boolean;
   readonly: boolean;
 }) {
+  // 출석 쿼터 변경으로 자동 제거된 배치 경고 (쿼터 라벨 목록)
+  const [autoRemoved, setAutoRemoved] = useState<string[]>([]);
+
   const [quarters, setQuarters] = useState<QuarterState[]>(() => {
     // 방어: 슬롯에 남아있는 비활성/미출석 회원 ID 를 비운다.
     // 유효 = 활성 회원(members) ∩ 출석 회원(attendingIds)
+    // 추가로, 각 쿼터에서 그 쿼터에 참여하지 않는 선수도 제거(자동 제거 + 경고).
     const memberSet = new Set(members.map((m) => m.id));
     const attendSet = new Set(attendingIds);
-    const keep = (id: string | null | undefined): string | null =>
-      id && memberSet.has(id) && attendSet.has(id) ? id : null;
-    return initialQuarters.map((q) => {
+    const removedLabels = new Set<string>();
+    const keepFor =
+      (globalIndex: number, label: string) =>
+      (id: string | null | undefined): string | null => {
+        if (!id) return null;
+        if (!memberSet.has(id) || !attendSet.has(id)) return null;
+        if (!isAvailableForQuarter(attendingQuartersByPlayer[id], globalIndex)) {
+          removedLabels.add(label);
+          return null;
+        }
+        return id;
+      };
+    const next = initialQuarters.map((q, idx) => {
+      const gi = gameQuarters[idx]?.globalIndex ?? idx + 1;
+      const label = gameQuarters[idx]?.label ?? q.id;
+      const keep = keepFor(gi, label);
       const aSlots = buildSlots(q.shape);
       const state: QuarterState = {
         id: q.id,
@@ -235,6 +271,15 @@ export default function FormationEditor({
       }
       return state;
     });
+    if (removedLabels.size > 0) {
+      // 초기 렌더 직후 경고 노출 (state 초기화 중엔 set 불가하므로 microtask 로)
+      queueMicrotask(() =>
+        setAutoRemoved(
+          [...removedLabels].sort((a, b) => a.localeCompare(b, "ko")),
+        ),
+      );
+    }
+    return next;
   });
   const [activeIdx, setActiveIdx] = useState(0);
   const [openSlot, setOpenSlot] = useState<{
@@ -334,6 +379,24 @@ export default function FormationEditor({
     const attendSet = new Set(attendingIds);
     return new Set([...byId.keys()].filter((id) => attendSet.has(id)));
   }, [byId, attendingIds]);
+  // 현재 쿼터의 전체-쿼터 인덱스(1-based) — 출석 attending_quarters 와 매핑
+  const currentGlobalIndex = gameQuarters[activeIdx]?.globalIndex ?? activeIdx + 1;
+  // 현재 쿼터에 참여 가능한 선수 집합 (유효 회원 중 그 쿼터 참여자)
+  const availableSet = useMemo(() => {
+    const s = new Set<string>();
+    for (const id of validIds) {
+      if (
+        isAvailableForQuarter(
+          attendingQuartersByPlayer[id],
+          currentGlobalIndex,
+        )
+      ) {
+        s.add(id);
+      }
+    }
+    return s;
+  }, [validIds, attendingQuartersByPlayer, currentGlobalIndex]);
+  const isAvailable = (id: string) => availableSet.has(id);
   // placedSet: 현재 쿼터의 양 팀 모두를 포함 (유효 회원만)
   const placedSet = useMemo(() => {
     const s = new Set<string>();
@@ -417,6 +480,11 @@ export default function FormationEditor({
     slotIndex: number,
     playerId: string | null,
   ) {
+    // 현재 쿼터에 참여하지 않는 선수는 배치 불가
+    if (playerId && !isAvailable(playerId)) {
+      setOpenSlot(null);
+      return;
+    }
     patchQuarter(activeIdx, (q) => {
       const aAssigns = [...q.assignments];
       const bAssigns = q.teamB ? [...q.teamB.assignments] : null;
@@ -534,6 +602,8 @@ export default function FormationEditor({
   }
 
   function placeByClick(playerId: string) {
+    // 현재 쿼터에 참여하지 않는 선수는 배치 불가
+    if (!isAvailable(playerId)) return;
     // 자체전이면 편성팀(teamByPlayer)으로 고정, 상대전이면 A팀
     const t: "A" | "B" = isIntra
       ? teamByPlayer[playerId] ?? teamOfPlayer.get(playerId) ?? "A"
@@ -584,10 +654,12 @@ export default function FormationEditor({
         team === "A" ? q.teamB?.assignments ?? [] : q.assignments;
       for (const p of otherAssigns) if (p) placed.add(p);
 
-      // 후보 명단 (배치 횟수 오름차순, 동률은 랜덤)
-      const base = intra
-        ? attendingMembers.filter((m) => teamByPlayer[m.id] === team)
-        : attendingMembers;
+      // 후보 명단 (배치 횟수 오름차순, 동률은 랜덤) — 현재 쿼터 참여자만
+      const base = (
+        intra
+          ? attendingMembers.filter((m) => teamByPlayer[m.id] === team)
+          : attendingMembers
+      ).filter((m) => availableSet.has(m.id));
       const candidates = base
         .map((m) => ({ m, c: playCount.get(m.id) ?? 0, r: Math.random() }))
         .sort((a, b) => (a.c !== b.c ? a.c - b.c : a.r - b.r))
@@ -636,7 +708,8 @@ export default function FormationEditor({
 
   function resetTeam(team: "A" | "B") {
     const teamName = isIntra ? (team === "A" ? "A팀 " : "B팀 ") : "";
-    if (!confirm(`${current.id} ${teamName}배치를 비우시겠습니까?`)) return;
+    const qLabel = gameQuarters[activeIdx]?.label ?? current.id;
+    if (!confirm(`${qLabel} ${teamName}배치를 비우시겠습니까?`)) return;
     patchQuarter(activeIdx, (q) => {
       if (team === "A") {
         return { ...q, assignments: buildSlots(q.shape).map(() => null) };
@@ -652,54 +725,33 @@ export default function FormationEditor({
     });
   }
 
-  function addQuarter() {
-    if (quarters.length >= MAX_QUARTERS) return;
-    const nextNum = quarters.length + 1;
-    const newQ: QuarterState = {
-      id: `${nextNum}Q`,
-      shape: current.shape,
-      assignments: buildSlots(current.shape).map(() => null),
-    };
-    if (isIntra) {
-      const bShape = current.teamB?.shape ?? DEFAULT_INTRA_SHAPE;
-      newQ.teamB = {
-        shape: bShape,
-        assignments: buildSlots(bShape).map(() => null),
-      };
-    }
-    setQuarters((prev) => [...prev, newQ]);
-    setActiveIdx(quarters.length);
-  }
-
-  // 추가한 쿼터(기본 1Q~4Q 이후)만 삭제 가능
-  function removeQuarter(idx: number) {
-    if (readonly) return;
-    if (idx < DEFAULT_QUARTER_IDS.length) return;
-    const q = quarters[idx];
-    if (!confirm(`${q?.id ?? "쿼터"}를 삭제할까요? 해당 쿼터 배치도 사라집니다.`))
-      return;
-    setQuarters((prev) =>
-      prev
-        .filter((_, i) => i !== idx)
-        // id 1Q,2Q,… 로 재정렬
-        .map((qq, i) => ({ ...qq, id: `${i + 1}Q` })),
-    );
-    setActiveIdx((cur) => {
-      if (cur === idx) return idx - 1;
-      if (cur > idx) return cur - 1;
-      return cur;
-    });
-  }
-
-
   return (
     <div className="flex flex-col gap-3 desktop:flex-1 desktop:min-h-0">
-      {/* 쿼터 탭 + 추가 버튼 (pt-2: 삭제 X 가 위에서 잘리지 않도록) */}
+      {/* 자동 제거 경고 — 출석 쿼터 변경으로 일부 배치가 제거된 경우 */}
+      {autoRemoved.length > 0 && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <span className="shrink-0">⚠️</span>
+          <span className="flex-1 leading-relaxed">
+            {autoRemoved.join(", ")} 쿼터에서 해당 쿼터에 참석하지 않는 선수의
+            배치를 자동으로 제거했어요. 다시 배치해 주세요.
+          </span>
+          <button
+            type="button"
+            onClick={() => setAutoRemoved([])}
+            aria-label="경고 닫기"
+            className="shrink-0 text-amber-700 hover:text-amber-900"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* 쿼터 탭 — 경기 설정의 게임 쿼터(준비운동·훈련 제외) */}
       <div className="-mx-1 px-1 pt-2 overflow-x-auto">
         <div className="flex gap-2 w-max">
           {quarters.map((q, i) => {
             const active = i === activeIdx;
-            const removable = !readonly && i >= DEFAULT_QUARTER_IDS.length;
+            const label = gameQuarters[i]?.label ?? q.id;
             return (
               <div key={q.id} className="relative shrink-0">
                 <button
@@ -711,34 +763,11 @@ export default function FormationEditor({
                       : "bg-white text-suaza-ink-muted border border-suaza-border hover:text-suaza-ink"
                   }`}
                 >
-                  {q.id}
+                  {label}
                 </button>
-                {removable && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeQuarter(i);
-                    }}
-                    aria-label={`${q.id} 삭제`}
-                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-suaza-accent text-white text-[10px] leading-none flex items-center justify-center shadow ring-2 ring-white hover:bg-red-600 transition"
-                  >
-                    ×
-                  </button>
-                )}
               </div>
             );
           })}
-          {!readonly && quarters.length < MAX_QUARTERS && (
-            <button
-              type="button"
-              onClick={addQuarter}
-              aria-label="쿼터 추가"
-              className="shrink-0 w-10 h-10 rounded-lg border border-dashed border-suaza-border text-suaza-ink-muted text-lg hover:border-suaza-button hover:text-suaza-button transition"
-            >
-              +
-            </button>
-          )}
         </div>
       </div>
 
@@ -784,6 +813,7 @@ export default function FormationEditor({
               onCycleCondition={cycleMyCondition}
               quarters={quarters}
               validIds={validIds}
+              availableIds={availableSet}
               placedSet={placedSet}
               teamOfPlayer={teamOfPlayer}
               isIntra={isIntra}
@@ -851,6 +881,8 @@ export default function FormationEditor({
                 teams={teams}
                 isIntra={pitchIntra}
                 byId={byId}
+                myUserId={myUserId}
+                myCondition={myCondition}
                 readonly={readonly}
                 draggingId={draggingId}
                 onSlotClick={(team, i) =>
@@ -898,6 +930,7 @@ export default function FormationEditor({
                   onCycleCondition={cycleMyCondition}
                   quarters={quarters}
                   validIds={validIds}
+                  availableIds={availableSet}
                   placedSet={placedSet}
                   teamOfPlayer={teamOfPlayer}
                   isIntra={isIntra}
@@ -942,6 +975,7 @@ export default function FormationEditor({
         onCycleCondition={cycleMyCondition}
         quarters={quarters}
         validIds={validIds}
+        availableIds={availableSet}
         placedSet={placedSet}
         teamOfPlayer={teamOfPlayer}
         teamByPlayer={teamByPlayer}
@@ -976,6 +1010,7 @@ export default function FormationEditor({
               : attendingMembers
           }
           placedSet={placedSet}
+          availableIds={availableSet}
           currentPlayerId={
             openSlot.team === "A"
               ? current.assignments[openSlot.idx]
@@ -1000,6 +1035,8 @@ function Pitch({
   teams,
   isIntra,
   byId,
+  myUserId,
+  myCondition,
   readonly,
   draggingId,
   onSlotClick,
@@ -1012,6 +1049,8 @@ function Pitch({
   teams: PitchTeam[];
   isIntra: boolean;
   byId: Map<string, EditorMember>;
+  myUserId: string;
+  myCondition: number;
   readonly: boolean;
   draggingId: string | null;
   onSlotClick: (team: "A" | "B", i: number) => void;
@@ -1334,10 +1373,25 @@ function Pitch({
                 <span
                   className={`${
                     compact ? "text-[9px]" : "text-[11px] sm:text-xs"
-                  } text-white font-medium drop-shadow whitespace-nowrap max-w-[70px] truncate`}
+                  } text-white font-medium drop-shadow whitespace-nowrap inline-flex items-center gap-0.5`}
                 >
-                  {player?.name ?? (
-                    <span className="text-white/70">{s.label ?? s.role}</span>
+                  {player ? (
+                    <>
+                      <span className="max-w-[60px] truncate">
+                        {player.name}
+                      </span>
+                      <ConditionArrow
+                        level={
+                          player.id === myUserId
+                            ? myCondition
+                            : player.condition ?? 3
+                        }
+                      />
+                    </>
+                  ) : (
+                    <span className="text-white/70 max-w-[70px] truncate">
+                      {s.label ?? s.role}
+                    </span>
                   )}
                 </span>
               </button>
@@ -1570,6 +1624,7 @@ function FilterTabs({
 function PlayerList({
   members,
   placedSet,
+  availableIds,
   filter,
   query,
   readonly,
@@ -1580,6 +1635,7 @@ function PlayerList({
 }: {
   members: EditorMember[];
   placedSet: Set<string>;
+  availableIds?: Set<string>;
   filter: Filter;
   query: string;
   readonly: boolean;
@@ -1622,27 +1678,34 @@ function PlayerList({
       )}
       {sorted.map((m) => {
         const placed = placedSet.has(m.id);
+        const disabled = availableIds ? !availableIds.has(m.id) && !placed : false;
         return (
           <div
             key={m.id}
-            draggable={!readonly && !placed}
+            draggable={!readonly && !placed && !disabled}
             onDragStart={(e) => {
+              if (disabled) {
+                e.preventDefault();
+                return;
+              }
               e.dataTransfer.setData("text/plain", m.id);
               e.dataTransfer.effectAllowed = "move";
               onDragStart?.(m.id);
             }}
             onDragEnd={() => onDragEnd?.()}
-            onClick={() => onTap(m.id, placed)}
+            onClick={() => !disabled && onTap(m.id, placed)}
             className={`flex items-center gap-2 px-2 py-2 rounded-lg select-none transition ${
-              readonly ? "cursor-default" : "cursor-pointer"
+              readonly || disabled ? "cursor-default" : "cursor-pointer"
             } ${
-              placed
-                ? "bg-suaza-bg/70 opacity-60 hover:opacity-100"
-                : "bg-white hover:bg-suaza-bg"
+              disabled
+                ? "bg-white opacity-50"
+                : placed
+                  ? "bg-suaza-bg/70 opacity-60 hover:opacity-100"
+                  : "bg-white hover:bg-suaza-bg"
             }`}
           >
             <div className="relative shrink-0">
-              <PlayerAvatar member={m} dimmed={placed} />
+              <PlayerAvatar member={m} dimmed={placed || disabled} />
               {placed && (
                 <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold ring-2 ring-white">
                   ✓
@@ -1686,7 +1749,7 @@ function PlayerList({
                 )}
               </div>
             </div>
-            {placed && (
+            {!disabled && placed && (
               <span className="shrink-0 text-[10px] text-emerald-700 font-semibold px-2 py-0.5 rounded-full bg-emerald-100">
                 배치됨
               </span>
@@ -1877,6 +1940,7 @@ function PlayerRosterMobile({
   members,
   quarters,
   validIds,
+  availableIds,
   placedSet,
   teamOfPlayer,
   isIntra,
@@ -1896,6 +1960,7 @@ function PlayerRosterMobile({
   members: EditorMember[];
   quarters: QuarterWithTeams[];
   validIds: Set<string>;
+  availableIds: Set<string>;
   placedSet: Set<string>;
   teamOfPlayer: Map<string, "A" | "B">;
   isIntra: boolean;
@@ -1958,6 +2023,7 @@ function PlayerRosterMobile({
       key={p.member.id}
       participation={p}
       placed={placedSet.has(p.member.id)}
+      available={availableIds.has(p.member.id)}
       team={
         isIntra
           ? teamByPlayer[p.member.id] ?? teamOfPlayer.get(p.member.id)
@@ -2054,6 +2120,7 @@ function PlayerRosterMobile({
 function PlayerRowMobile({
   participation,
   placed,
+  available = true,
   team,
   readonly,
   onTap,
@@ -2065,6 +2132,7 @@ function PlayerRowMobile({
 }: {
   participation: PlayerParticipation;
   placed: boolean;
+  available?: boolean;
   team?: "A" | "B";
   readonly: boolean;
   onTap: (id: string, placed: boolean) => void;
@@ -2078,6 +2146,8 @@ function PlayerRowMobile({
   const memberPositions = m.positions ?? [];
   const tierColor = getTierColor(participation.totalPlayed);
   const hasPlayed = participation.totalPlayed > 0;
+  // 현재 쿼터에 참여하지 않는 선수 — 배치 불가, 비활성 표시 (단, 이미 배치돼 있으면 평소대로)
+  const disabled = !available && !placed;
 
   // 현재 쿼터 배치(placed) 강조 — A팀 파랑 / B팀 빨강 / 상대전 초록
   const highlight = placed
@@ -2091,25 +2161,30 @@ function PlayerRowMobile({
   return (
     <div
       style={{ touchAction: "manipulation", ...highlight }}
-      draggable={!readonly}
+      draggable={!readonly && !disabled}
       onDragStart={(e) => {
+        if (disabled) {
+          e.preventDefault();
+          return;
+        }
         e.dataTransfer.setData("text/plain", m.id);
         e.dataTransfer.effectAllowed = "move";
         onDragStart?.(m.id);
       }}
       onDragEnd={() => onDragEnd?.()}
-      onClick={() => !readonly && onTap(m.id, placed)}
+      onClick={() => !readonly && !disabled && onTap(m.id, placed)}
       className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-white select-none transition ${
         placed ? "border-2" : "border border-suaza-border"
       } ${
-        readonly ? "cursor-default" : "cursor-pointer"
-      } ${!hasPlayed && !placed ? "opacity-80" : ""}`}
+        readonly || disabled ? "cursor-default" : "cursor-pointer"
+      } ${disabled ? "opacity-50" : !hasPlayed && !placed ? "opacity-80" : ""}`}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <PlayerName
             name={m.name}
             className="text-sm font-semibold text-suaza-ink"
+            allowDropSurname={false}
           />
           <ConditionArrow
             level={conditionLevel}
@@ -2165,6 +2240,7 @@ function PlayerRosterDesktop({
   members,
   quarters,
   validIds,
+  availableIds,
   placedSet,
   teamOfPlayer,
   isIntra,
@@ -2183,6 +2259,7 @@ function PlayerRosterDesktop({
   members: EditorMember[];
   quarters: QuarterWithTeams[];
   validIds: Set<string>;
+  availableIds: Set<string>;
   placedSet: Set<string>;
   teamOfPlayer: Map<string, "A" | "B">;
   isIntra: boolean;
@@ -2298,6 +2375,7 @@ function PlayerRosterDesktop({
                 key={p.member.id}
                 participation={p}
                 placed={placedSet.has(p.member.id)}
+                available={availableIds.has(p.member.id)}
                 team={isIntra ? teamOfPlayer.get(p.member.id) : undefined}
                 readonly={readonly}
                 onTap={onTap}
@@ -2322,6 +2400,7 @@ function PlayerRosterDesktop({
 function DesktopPlayerCard({
   participation,
   placed,
+  available = true,
   team,
   readonly,
   onTap,
@@ -2333,6 +2412,7 @@ function DesktopPlayerCard({
 }: {
   participation: PlayerParticipation;
   placed: boolean;
+  available?: boolean;
   team?: "A" | "B";
   readonly: boolean;
   onTap: (id: string, placed: boolean) => void;
@@ -2344,6 +2424,8 @@ function DesktopPlayerCard({
 }) {
   const m = participation.member;
   const teamBg = team === "A" ? "#3B82F6" : team === "B" ? "#EF4444" : null;
+  // 현재 쿼터에 참여하지 않는 선수 — 배치 불가, 비활성 표시 (이미 배치돼 있으면 평소대로)
+  const disabled = !available && !placed;
   // 현재 쿼터 배치(placed) 강조 — A팀 파랑 / B팀 빨강 / 상대전 초록
   const highlight = placed
     ? team === "A"
@@ -2354,18 +2436,26 @@ function DesktopPlayerCard({
     : undefined;
   return (
     <div
-      draggable={!readonly}
+      draggable={!readonly && !disabled}
       onDragStart={(e) => {
+        if (disabled) {
+          e.preventDefault();
+          return;
+        }
         e.dataTransfer.setData("text/plain", m.id);
         e.dataTransfer.effectAllowed = "move";
         onDragStart?.(m.id);
       }}
       onDragEnd={() => onDragEnd?.()}
-      onClick={() => !readonly && onTap(m.id, placed)}
+      onClick={() => !readonly && !disabled && onTap(m.id, placed)}
       style={highlight}
       className={`relative flex items-center gap-2 p-2.5 rounded-xl bg-white select-none transition ${
         placed ? "border-2" : "border border-suaza-border"
-      } ${readonly ? "cursor-default" : "cursor-pointer hover:bg-suaza-bg"}`}
+      } ${
+        readonly || disabled
+          ? "cursor-default"
+          : "cursor-pointer hover:bg-suaza-bg"
+      } ${disabled ? "opacity-50" : ""}`}
     >
       {team && (
         <span
@@ -2406,6 +2496,7 @@ function BottomSheet({
   slot,
   members,
   placedSet,
+  availableIds,
   currentPlayerId,
   onClose,
   onPick,
@@ -2414,6 +2505,7 @@ function BottomSheet({
   slot: SlotDef;
   members: EditorMember[];
   placedSet: Set<string>;
+  availableIds: Set<string>;
   currentPlayerId: string | null;
   onClose: () => void;
   onPick: (id: string) => void;
@@ -2454,6 +2546,7 @@ function BottomSheet({
           <PlayerList
             members={members}
             placedSet={placedSet}
+            availableIds={availableIds}
             filter={filter}
             query={query}
             readonly={false}

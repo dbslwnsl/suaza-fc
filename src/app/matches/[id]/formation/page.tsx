@@ -5,11 +5,12 @@ import FormationEditor from "./formation-editor";
 
 // 포메이션 데이터가 자주 바뀌므로 매 요청 fresh 로드 (cache 우회)
 export const dynamic = "force-dynamic";
-import { formatMatchDate } from "@/lib/matches/helpers";
 import {
-  DEFAULT_QUARTER_IDS,
-  type SavedQuarter,
-} from "@/lib/formations/helpers";
+  DEFAULT_TOTAL_QUARTERS,
+  formatMatchDate,
+  type QuarterAction,
+} from "@/lib/matches/helpers";
+import { type SavedQuarter } from "@/lib/formations/helpers";
 import type {
   Position,
   MemberTitle,
@@ -35,12 +36,39 @@ type FormationRow = {
   };
 };
 
-function quarterNum(id: string): number {
-  const m = id.match(/^(\d+)Q$/);
-  return m ? parseInt(m[1], 10) : 0;
+// 포메이션 탭에 노출할 "게임 쿼터" (준비운동·훈련 제외).
+// id 는 전체 쿼터 기준 1-based 인덱스(`${globalIndex}Q`), label 은 게임 쿼터 재번호(1Q, 2Q…).
+export type GameQuarter = {
+  id: string;
+  globalIndex: number; // 전체 쿼터 기준 1-based — 출석 attending_quarters 와 매핑
+  label: string;
+};
+
+function buildGameQuarters(
+  totalQuarters: number,
+  actions: (QuarterAction | null)[],
+): GameQuarter[] {
+  const list: GameQuarter[] = [];
+  let gameNum = 0;
+  for (let i = 0; i < totalQuarters; i++) {
+    const a = actions[i] ?? null;
+    if (a === "warmup" || a === "training") continue;
+    gameNum += 1;
+    list.push({ id: `${i + 1}Q`, globalIndex: i + 1, label: `${gameNum}Q` });
+  }
+  // 모든 쿼터가 준비/훈련이면 안전장치로 전체를 게임 쿼터 취급
+  if (list.length === 0) {
+    for (let i = 0; i < totalQuarters; i++) {
+      list.push({ id: `${i + 1}Q`, globalIndex: i + 1, label: `${i + 1}Q` });
+    }
+  }
+  return list;
 }
 
-function buildInitialQuarters(f: FormationRow | null): SavedQuarter[] {
+function buildInitialQuarters(
+  f: FormationRow | null,
+  gameQuarters: GameQuarter[],
+): SavedQuarter[] {
   let saved: SavedQuarter[] = [];
   if (f) {
     if (Array.isArray(f.positions?.quarters)) {
@@ -67,14 +95,11 @@ function buildInitialQuarters(f: FormationRow | null): SavedQuarter[] {
       ];
     }
   }
-  const defaults = DEFAULT_QUARTER_IDS.map<SavedQuarter>((id) => {
-    const found = saved.find((q) => q.id === id);
-    return found ?? { id, shape: "4-2-3-1", player_ids: [] };
+  // 경기 설정 게임 쿼터에 맞춰 정렬 — 저장된 배치는 id 로 매칭, 없으면 빈 쿼터.
+  return gameQuarters.map<SavedQuarter>((gq) => {
+    const found = saved.find((q) => q.id === gq.id);
+    return found ?? { id: gq.id, shape: "4-2-3-1", player_ids: [] };
   });
-  const extras = saved
-    .filter((q) => !DEFAULT_QUARTER_IDS.includes(q.id as never))
-    .sort((a, b) => quarterNum(a.id) - quarterNum(b.id));
-  return [...defaults, ...extras];
 }
 
 export default async function FormationPage({
@@ -102,7 +127,9 @@ export default async function FormationPage({
   ] = await Promise.all([
     supabase
       .from("matches")
-      .select("id, opponent, match_date, location, status")
+      .select(
+        "id, opponent, match_date, location, status, total_quarters, quarter_actions",
+      )
       .eq("id", id)
       .single(),
     supabase.from("profiles").select("role").eq("id", user.id).single(),
@@ -120,7 +147,7 @@ export default async function FormationPage({
       .order("jersey_number", { ascending: true, nullsFirst: false }),
     supabase
       .from("match_attendances")
-      .select("player_id, status, team")
+      .select("player_id, status, team, attending_quarters")
       .eq("match_id", id)
       .eq("status", "attending"),
   ]);
@@ -129,15 +156,27 @@ export default async function FormationPage({
 
   const isStaff = me?.role === "manager" || me?.role === "coach";
   const f = formation as FormationRow | null;
-  const initialQuarters = buildInitialQuarters(f);
+  const totalQuarters =
+    (match.total_quarters as number | null) ?? DEFAULT_TOTAL_QUARTERS;
+  const quarterActions = ((match.quarter_actions as
+    | (QuarterAction | null)[]
+    | null) ?? []) as (QuarterAction | null)[];
+  const gameQuarters = buildGameQuarters(totalQuarters, quarterActions);
+  const initialQuarters = buildInitialQuarters(f, gameQuarters);
   const attendanceRows = (attendances ?? []) as {
     player_id: string;
     team: "A" | "B" | null;
+    attending_quarters: number[] | null;
   }[];
   const attendingIds = attendanceRows.map((a) => a.player_id);
   // 자체전 편성팀 매핑 (player_id → 'A' | 'B' | null)
   const teamByPlayer: Record<string, "A" | "B" | null> = {};
-  for (const a of attendanceRows) teamByPlayer[a.player_id] = a.team;
+  // 참여 쿼터 매핑 (player_id → 전체 쿼터 기준 번호 배열 | null=전체)
+  const attendingQuartersByPlayer: Record<string, number[] | null> = {};
+  for (const a of attendanceRows) {
+    teamByPlayer[a.player_id] = a.team;
+    attendingQuartersByPlayer[a.player_id] = a.attending_quarters ?? null;
+  }
   const isIntra = match.opponent === "자체전";
 
   return (
@@ -179,6 +218,8 @@ export default async function FormationPage({
           members={(members ?? []) as EditorMember[]}
           attendingIds={attendingIds}
           teamByPlayer={teamByPlayer}
+          attendingQuartersByPlayer={attendingQuartersByPlayer}
+          gameQuarters={gameQuarters}
           initialQuarters={initialQuarters}
           isIntra={isIntra}
           readonly={!isStaff}
