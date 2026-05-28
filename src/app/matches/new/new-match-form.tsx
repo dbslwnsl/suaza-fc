@@ -173,13 +173,18 @@ export default function NewMatchForm({
       ? Math.min(initial.totalQuarters, initialMaxQ)
       : initialMaxQ,
   );
+  // 경기 타입별 게임 쿼터 기본 활동: 자체전 → intra, 상대전 → inter
+  const defaultGameAction: QuarterAction = matchType === "intra" ? "intra" : "inter";
   // 길이는 항상 MAX_TOTAL_QUARTERS(8) 로 유지하되, 저장 시엔 앞쪽 totalQuarters 만 사용.
   const [quarterActions, setQuarterActions] = useState<
     (QuarterAction | null)[]
   >(() => {
-    const src = initial?.quarterActions ?? [];
+    const src = initial?.quarterActions ?? null;
     const out: (QuarterAction | null)[] = [];
-    for (let i = 0; i < 8; i++) out.push(src[i] ?? null);
+    // 신규 등록: 경기 타입 기본 활동으로 채움. 편집: 저장값 사용.
+    for (let i = 0; i < 8; i++) {
+      out.push(src ? src[i] ?? null : defaultGameAction);
+    }
     return out;
   });
   const maxQuarters = maxQuartersForDuration(durationHours);
@@ -193,6 +198,18 @@ export default function NewMatchForm({
     setTotalQuarters(maxQuarters);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [durationHours]);
+  // 경기 타입 변경 시: 게임 쿼터(자체전/상대전·미선택)는 새 기본값으로, 준비/훈련은 유지.
+  const matchTypeInitRef = useRef(false);
+  useEffect(() => {
+    if (!matchTypeInitRef.current) {
+      matchTypeInitRef.current = true;
+      return;
+    }
+    const def: QuarterAction = matchType === "intra" ? "intra" : "inter";
+    setQuarterActions((prev) =>
+      prev.map((a) => (a === "warmup" || a === "training" ? a : def)),
+    );
+  }, [matchType]);
   const setQuarterAction = (idx: number, action: QuarterAction | null) => {
     setQuarterActions((prev) => {
       const next = [...prev];

@@ -2,11 +2,13 @@
 
 import { useOptimistic, useState, useTransition } from "react";
 import { setAttendanceFor } from "@/lib/matches/actions";
+import { quarterShortLabel } from "@/lib/matches/helpers";
 
 export type Member = {
   id: string;
   name: string;
   jersey_number?: number | null;
+  attending_quarters?: number[] | null;
 };
 
 type Status = "attending" | "absent" | "undecided" | null;
@@ -26,18 +28,16 @@ type Move = { playerId: string; status: Status };
 
 /**
  * 드래그앤드롭 결과를 byStatus/nonVoters 에 즉시 반영해 새 state 를 만든다.
- * - 옛 위치(어떤 status row 든, 또는 미투표)에서 해당 player 제거
- * - status=null 이면 미투표 row 맨 앞에 추가, 아니면 해당 status row 맨 뒤에 추가
- * - 이름 기준 정렬은 유지 (한국어 로케일)
+ * - 옛 위치에서 제거 후 목적지에 추가 (이름순 정렬 유지)
+ * - 참석(attending)으로 이동하면 항상 '전체 참여'(attending_quarters=null)
  */
 function applyMove(state: BoardState, move: Move): BoardState {
   const { playerId, status } = move;
   const byName = (a: Member, b: Member) => a.name.localeCompare(b.name, "ko");
   const stripFrom = (arr: Member[]) => arr.filter((m) => m.id !== playerId);
 
-  let moved: Member | null = null;
   const findIn = (arr: Member[]) => arr.find((m) => m.id === playerId);
-  moved =
+  const moved =
     findIn(state.byStatus.attending) ??
     findIn(state.byStatus.absent) ??
     findIn(state.byStatus.undecided) ??
@@ -54,6 +54,12 @@ function applyMove(state: BoardState, move: Move): BoardState {
 
   if (status === null) {
     nextNon = [moved, ...nextNon].sort(byName);
+  } else if (status === "attending") {
+    // 참석으로 이동 → 전체 참여로
+    nextBy.attending = [
+      ...nextBy.attending,
+      { ...moved, attending_quarters: null },
+    ].sort(byName);
   } else {
     nextBy[status] = [...nextBy[status], moved].sort(byName);
   }
@@ -64,10 +70,14 @@ export default function AttendanceManagerBoard({
   matchId,
   byStatus,
   nonVoters,
+  totalQuarters = 4,
+  quarterActions,
 }: {
   matchId: string;
   byStatus: ByStatus;
   nonVoters: Member[];
+  totalQuarters?: number;
+  quarterActions?: (string | null)[] | null;
 }) {
   const [, startTransition] = useTransition();
   const [dragging, setDragging] = useState(false);
@@ -87,67 +97,138 @@ export default function AttendanceManagerBoard({
     });
   };
 
+  // 참석을 전체/일부로 분리
+  const isFull = (m: Member) =>
+    m.attending_quarters == null || m.attending_quarters.length >= totalQuarters;
+  const full = optimistic.byStatus.attending.filter(isFull);
+  const partial = optimistic.byStatus.attending.filter((m) => !isFull(m));
+
   return (
-    <div className="flex flex-col gap-2">
-      <DropRow
-        label="참석"
-        badgeClass="bg-green-100 text-green-700"
-        hoverClass="ring-2 ring-green-400"
-        members={optimistic.byStatus.attending}
+    <div className="flex flex-col gap-3">
+      {/* 전체 참여 — 참석 드롭 타깃 */}
+      <DropSection
+        label="전체 참여"
+        count={full.length}
         status="attending"
-        onDrop={handleDrop}
-        onDragStateChange={setDragging}
         dragging={dragging}
-      />
-      <DropRow
+        hoverClass="ring-2 ring-green-400"
+        onDrop={handleDrop}
+      >
+        {full.length === 0 ? (
+          <span className="text-sm text-suaza-ink-faint">—</span>
+        ) : (
+          full.map((m) => (
+            <Chip
+              key={m.id}
+              member={m}
+              chipClass="border-green-300 text-suaza-ink"
+              onDragStateChange={setDragging}
+            />
+          ))
+        )}
+      </DropSection>
+
+      {/* 일부 참여 — 드롭 타깃 아님(쿼터는 본인이 선택). 끌어내기만 가능.
+          DropSection 과 동일한 패딩/테두리로 좌측 정렬을 맞춤. */}
+      {partial.length > 0 && (
+        <div className="flex flex-col gap-1.5 p-1.5 border border-transparent">
+          <span className="self-start text-xs font-bold text-suaza-ink">
+            일부 참여 {partial.length}
+          </span>
+          <ul className="flex flex-col gap-1">
+            {partial.map((m) => (
+              <li
+                key={m.id}
+                className="flex items-center justify-between gap-3"
+              >
+                <Chip
+                  member={m}
+                  chipClass="border-green-300 text-suaza-ink"
+                  onDragStateChange={setDragging}
+                />
+                <QuarterDots
+                  quarters={m.attending_quarters ?? null}
+                  quarterActions={quarterActions}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 불참 / 미정 — 전체·일부 참여와 같은 레벨의 드롭 섹션 */}
+      <DropSection
         label="불참"
-        badgeClass="bg-red-100 text-red-700"
-        hoverClass="ring-2 ring-red-400"
-        members={optimistic.byStatus.absent}
+        count={optimistic.byStatus.absent.length}
         status="absent"
-        onDrop={handleDrop}
-        onDragStateChange={setDragging}
         dragging={dragging}
-      />
-      <DropRow
+        hoverClass="ring-2 ring-red-400"
+        onDrop={handleDrop}
+      >
+        {optimistic.byStatus.absent.length === 0 ? (
+          <span className="text-sm text-suaza-ink-faint">—</span>
+        ) : (
+          optimistic.byStatus.absent.map((m) => (
+            <Chip key={m.id} member={m} onDragStateChange={setDragging} />
+          ))
+        )}
+      </DropSection>
+
+      <DropSection
         label="미정"
-        badgeClass="bg-gray-200 text-gray-700"
-        hoverClass="ring-2 ring-gray-400"
-        members={optimistic.byStatus.undecided}
+        count={optimistic.byStatus.undecided.length}
         status="undecided"
+        dragging={dragging}
+        hoverClass="ring-2 ring-gray-400"
         onDrop={handleDrop}
-        onDragStateChange={setDragging}
-        dragging={dragging}
-      />
+      >
+        {optimistic.byStatus.undecided.length === 0 ? (
+          <span className="text-sm text-suaza-ink-faint">—</span>
+        ) : (
+          optimistic.byStatus.undecided.map((m) => (
+            <Chip key={m.id} member={m} onDragStateChange={setDragging} />
+          ))
+        )}
+      </DropSection>
+
       <div className="h-px bg-suaza-border my-1" />
-      <NonVoterDropRow
-        members={optimistic.nonVoters}
-        onDrop={(id) => handleDrop(id, null)}
-        onDragStateChange={setDragging}
+
+      <DropSection
+        label="미투표"
+        count={optimistic.nonVoters.length}
+        status={null}
         dragging={dragging}
-      />
+        hoverClass="ring-2 ring-gray-400"
+        onDrop={handleDrop}
+      >
+        {optimistic.nonVoters.length === 0 ? (
+          <span className="text-sm text-suaza-ink-faint">—</span>
+        ) : (
+          optimistic.nonVoters.map((m) => (
+            <Chip key={m.id} member={m} onDragStateChange={setDragging} muted />
+          ))
+        )}
+      </DropSection>
     </div>
   );
 }
 
-function DropRow({
+function DropSection({
   label,
-  badgeClass,
-  hoverClass,
-  members,
+  count,
   status,
-  onDrop,
-  onDragStateChange,
   dragging,
+  hoverClass,
+  onDrop,
+  children,
 }: {
   label: string;
-  badgeClass: string;
-  hoverClass: string;
-  members: Member[];
+  count: number;
   status: Status;
-  onDrop: (playerId: string, status: Status) => void;
-  onDragStateChange: (dragging: boolean) => void;
   dragging: boolean;
+  hoverClass: string;
+  onDrop: (playerId: string, status: Status) => void;
+  children: React.ReactNode;
 }) {
   const [over, setOver] = useState(false);
   return (
@@ -168,81 +249,49 @@ function DropRow({
         dragging ? "border-suaza-border" : "border-transparent"
       } ${over ? hoverClass + " bg-blue-50" : ""}`}
     >
-      <span
-        className={`self-start shrink-0 text-xs px-2 py-0.5 rounded font-medium ${badgeClass}`}
-      >
-        {label} {members.length}
+      <span className="self-start text-xs font-bold text-suaza-ink">
+        {label} {count}
       </span>
-      <div className="flex flex-wrap gap-1 min-h-[20px]">
-        {members.length === 0 ? (
-          <span className="text-sm text-suaza-ink-muted">—</span>
-        ) : (
-          members.map((m) => (
-            <Chip key={m.id} member={m} onDragStateChange={onDragStateChange} />
-          ))
-        )}
-      </div>
+      <div className="flex flex-wrap gap-1 min-h-[20px]">{children}</div>
     </div>
   );
 }
 
-function NonVoterDropRow({
-  members,
-  onDrop,
-  onDragStateChange,
-  dragging,
+function QuarterDots({
+  quarters,
+  quarterActions,
 }: {
-  members: Member[];
-  onDrop: (playerId: string) => void;
-  onDragStateChange: (dragging: boolean) => void;
-  dragging: boolean;
+  quarters: number[] | null;
+  quarterActions?: (string | null)[] | null;
 }) {
-  const [over, setOver] = useState(false);
-  return (
-    <div
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        if (!over) setOver(true);
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setOver(false);
-        const playerId = e.dataTransfer.getData("text/plain");
-        if (playerId) onDrop(playerId);
-      }}
-      className={`flex flex-col gap-1.5 p-1.5 rounded-md border border-dashed transition ${
-        dragging ? "border-suaza-border" : "border-transparent"
-      } ${over ? "ring-2 ring-gray-400 bg-blue-50" : ""}`}
-    >
-      <span className="self-start shrink-0 text-xs px-2 py-0.5 rounded font-medium bg-gray-100 text-gray-500">
-        미투표 {members.length}
+  const cls =
+    "w-4 h-4 rounded-full bg-green-500 text-white flex items-center justify-center text-[9px] font-bold leading-none";
+  if (quarters == null) {
+    return (
+      <span className={cls} title="전체 참여">
+        A
       </span>
-      <div className="flex flex-wrap gap-1 min-h-[20px]">
-        {members.length === 0 ? (
-          <span className="text-sm text-suaza-ink-muted">—</span>
-        ) : (
-          members.map((m) => (
-            <Chip
-              key={m.id}
-              member={m}
-              onDragStateChange={onDragStateChange}
-              muted
-            />
-          ))
-        )}
-      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-0.5 shrink-0">
+      {quarters.map((q) => (
+        <span key={q} className={cls} title={`${q}Q`}>
+          {quarterShortLabel(q - 1, quarterActions)}
+        </span>
+      ))}
     </div>
   );
 }
 
 function Chip({
   member,
+  chipClass = "border-suaza-border text-suaza-ink-muted",
   onDragStateChange,
   muted,
 }: {
   member: Member;
+  chipClass?: string;
   onDragStateChange: (dragging: boolean) => void;
   muted?: boolean;
 }) {
@@ -252,13 +301,11 @@ function Chip({
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", member.id);
         e.dataTransfer.effectAllowed = "move";
-        // 드래그 시작 직후 동기 setState 는 일부 브라우저에서 드래그를
-        // 취소시키므로 다음 틱으로 미룬다.
         setTimeout(() => onDragStateChange(true), 0);
       }}
       onDragEnd={() => onDragStateChange(false)}
-      className={`select-none cursor-grab active:cursor-grabbing px-2.5 py-0.5 rounded-full text-xs border border-suaza-border hover:bg-gray-50 ${
-        muted ? "text-suaza-ink-faint" : "text-suaza-ink-muted"
+      className={`select-none cursor-grab active:cursor-grabbing px-2.5 py-0.5 rounded-full text-xs border bg-white hover:bg-gray-50 ${chipClass} ${
+        muted ? "opacity-80" : ""
       }`}
     >
       {member.name}

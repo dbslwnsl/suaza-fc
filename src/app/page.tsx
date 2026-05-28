@@ -222,11 +222,11 @@ export default async function Home() {
     id: string;
     name: string;
     jersey_number: number | null;
-    quarters_attending?: number | null;
+    attending_quarters?: number[] | null;
     voted_at?: string | null;
   };
   let myStatus: string | null = null;
-  let myQuartersAttending: number | null = null;
+  let myAttendingQuarters: number[] | null = null;
   const byStatus: {
     attending: VotePlayer[];
     absent: VotePlayer[];
@@ -240,12 +240,12 @@ export default async function Home() {
         supabase
           .from("match_attendances")
           .select(
-            "status, quarters_attending, updated_at, player:profiles(id, name, jersey_number)",
+            "status, attending_quarters, updated_at, player:profiles(id, name, jersey_number)",
           )
           .eq("match_id", upcoming.id),
         supabase
           .from("match_attendances")
-          .select("status, quarters_attending")
+          .select("status, attending_quarters")
           .eq("match_id", upcoming.id)
           .eq("player_id", user!.id)
           .maybeSingle(),
@@ -259,14 +259,14 @@ export default async function Home() {
     const votedIds = new Set<string>();
     for (const row of (attRaw ?? []) as unknown as {
       status: keyof typeof byStatus;
-      quarters_attending: number | null;
+      attending_quarters: number[] | null;
       updated_at: string | null;
       player: VotePlayer | null;
     }[]) {
       if (row.player && row.status in byStatus) {
         byStatus[row.status].push({
           ...row.player,
-          quarters_attending: row.quarters_attending,
+          attending_quarters: row.attending_quarters,
           voted_at: row.updated_at,
         });
         votedIds.add(row.player.id);
@@ -279,10 +279,10 @@ export default async function Home() {
       byStatus[key].sort((a, b) => a.name.localeCompare(b.name, "ko"));
     }
     const m = mine as
-      | { status: string; quarters_attending: number | null }
+      | { status: string; attending_quarters: number[] | null }
       | null;
     myStatus = m?.status ?? null;
-    myQuartersAttending = m?.quarters_attending ?? null;
+    myAttendingQuarters = m?.attending_quarters ?? null;
   }
 
   const lastResult = last
@@ -543,11 +543,12 @@ export default async function Home() {
               meId={user!.id}
               myName={profile?.name ?? null}
               myStatus={myStatus}
-              myQuartersAttending={myQuartersAttending}
+              myAttendingQuarters={myAttendingQuarters}
               byStatus={byStatus}
               nonVoters={nonVoters}
               isManager={profile?.role === "manager"}
               totalQuarters={upcoming.total_quarters ?? 4}
+              quarterActions={upcoming.quarter_actions ?? null}
               locked={
                 isMatchStarted(upcoming) ||
                 (!!upcoming.vote_deadline &&

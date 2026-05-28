@@ -553,11 +553,13 @@ export async function setAttendanceFor(
     if (!ATTENDANCE_VALUES.includes(status)) {
       throw new Error("올바르지 않은 status 입니다");
     }
+    // 매니저가 참석으로 옮기면 항상 '전체 참여'(attending_quarters=null)로 설정.
     const { error } = await supabase.from("match_attendances").upsert(
       {
         match_id: matchId,
         player_id: playerId,
         status,
+        attending_quarters: null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "match_id,player_id" },
@@ -668,7 +670,7 @@ export async function voteAttendance(matchId: string, status: AttendanceStatus) 
         match_id: matchId,
         player_id: user.id,
         status,
-        quarters_attending: null,
+        attending_quarters: null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "match_id,player_id" },
@@ -680,12 +682,13 @@ export async function voteAttendance(matchId: string, status: AttendanceStatus) 
 }
 
 /**
- * 본인 참석 쿼터 지정. NULL = 전체 쿼터, 1..6 = 'N쿼터까지'.
+ * 본인 참여 쿼터 집합 지정. NULL = 전체 쿼터(기본).
+ * 비-NULL = 참여하는 쿼터 번호 배열(1-indexed). 전체와 동일하면 NULL 로 정규화.
  * 참석(attending) 상태일 때만 의미가 있음 — 그 외에는 무시.
  */
-export async function setMyQuartersAttending(
+export async function setMyAttendingQuarters(
   matchId: string,
-  quartersAttending: number | null,
+  quarters: number[] | null,
 ) {
   const supabase = await createClient();
   const {
@@ -693,35 +696,51 @@ export async function setMyQuartersAttending(
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  if (quartersAttending !== null) {
-    if (
-      !Number.isInteger(quartersAttending) ||
-      quartersAttending < 1 ||
-      quartersAttending > 6
-    ) {
-      return;
-    }
-  }
-
   if (!(await memberVoteAllowed(supabase, matchId, user.id))) {
     revalidatePath(`/matches/${matchId}`);
     return;
   }
 
-  // 참석자만 의미 있음
+  // 참석자만 의미 있음 + 경기 총 쿼터 수 조회
   const { data: existing } = await supabase
     .from("match_attendances")
-    .select("status")
+    .select("status, match:matches(total_quarters)")
     .eq("match_id", matchId)
     .eq("player_id", user.id)
     .maybeSingle();
 
   if (existing?.status !== "attending") return;
 
+  const total =
+    (existing as { match?: { total_quarters?: number } | null } | null)?.match
+      ?.total_quarters ?? 4;
+
+  // 정규화: 1..total 범위 + 중복 제거 + 정렬. 전체면 NULL.
+  let normalized: number[] | null = null;
+  if (Array.isArray(quarters)) {
+    const set = new Set(
+      quarters.filter((q) => Number.isInteger(q) && q >= 1 && q <= total),
+    );
+    // 참여 쿼터를 모두 해제 → 출석 취소(미투표)로 처리: 행 삭제
+    if (set.size === 0) {
+      await supabase
+        .from("match_attendances")
+        .delete()
+        .eq("match_id", matchId)
+        .eq("player_id", user.id);
+      revalidatePath(`/matches/${matchId}`);
+      revalidatePath("/");
+      return;
+    }
+    if (set.size < total) {
+      normalized = Array.from(set).sort((a, b) => a - b);
+    }
+  }
+
   await supabase
     .from("match_attendances")
     .update({
-      quarters_attending: quartersAttending,
+      attending_quarters: normalized,
       updated_at: new Date().toISOString(),
     })
     .eq("match_id", matchId)

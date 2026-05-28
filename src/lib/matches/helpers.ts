@@ -83,6 +83,23 @@ export function isQuarterAction(v: string): v is QuarterAction {
   return (QUARTER_ACTIONS as readonly string[]).includes(v);
 }
 
+// 동그라미 등 좁은 공간용 짧은 라벨: 준비→"준", 훈련→"훈", 그 외엔 게임 쿼터 번호.
+// index 는 0-based 쿼터 인덱스, actions 는 경기의 쿼터 활동 배열.
+export function quarterShortLabel(
+  index: number,
+  actions?: (string | null)[] | null,
+): string {
+  const a = actions?.[index] ?? null;
+  if (a === "warmup") return "준";
+  if (a === "training") return "훈";
+  let nonGameBefore = 0;
+  for (let i = 0; i < index; i++) {
+    const ai = actions?.[i] ?? null;
+    if (ai === "warmup" || ai === "training") nonGameBefore += 1;
+  }
+  return String(index + 1 - nonGameBefore);
+}
+
 // 자체전 유니폼 색상 팔레트 (선택지): 주황 · 검정 · 흰색
 export const UNIFORM_COLORS = [
   "#F97316", // 주황
