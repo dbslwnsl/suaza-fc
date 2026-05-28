@@ -19,6 +19,7 @@ import { getMemberBadges } from "@/lib/members/badges";
 import ProfileEditForm from "./profile-edit-form";
 import AvatarUpload from "./avatar-upload";
 import DeleteMemberButton from "./delete-member-button";
+import CoachCommentSection, { type CoachComment } from "./coach-comments";
 
 type StatDef = { key: string; label: string; sort_order: number };
 
@@ -26,7 +27,12 @@ type ParticipationRow = {
   goals: number;
   assists: number;
   custom_stats: Record<string, number> | null;
-  match: { status: string } | null;
+  match: {
+    id: string;
+    match_date: string;
+    opponent: string;
+    status: string;
+  } | null;
 };
 
 export default async function MemberDetailPage({
@@ -50,6 +56,7 @@ export default async function MemberDetailPage({
     { data: me },
     { data: statsRaw },
     { data: defs },
+    { data: coachCommentsRaw },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -59,10 +66,16 @@ export default async function MemberDetailPage({
       .eq("id", id)
       .is("deleted_at", null)
       .single(),
-    supabase.from("profiles").select("role").eq("id", user.id).single(),
+    supabase
+      .from("profiles")
+      .select("role, title, name, avatar_url")
+      .eq("id", user.id)
+      .single(),
     supabase
       .from("match_participations")
-      .select("goals, assists, custom_stats, match:matches(status)")
+      .select(
+        "goals, assists, custom_stats, match:matches(id, match_date, opponent, status)",
+      )
       .eq("player_id", id)
       .is("archived_at", null),
     supabase
@@ -70,6 +83,13 @@ export default async function MemberDetailPage({
       .select("key, label, sort_order")
       .order("sort_order", { ascending: true })
       .order("key", { ascending: true }),
+    supabase
+      .from("coach_comments")
+      .select(
+        "id, content, created_at, updated_at, author_id, match_id, match:matches(id, match_date, opponent), author:profiles!coach_comments_author_id_fkey(name, title, avatar_url)",
+      )
+      .eq("member_id", id)
+      .order("created_at", { ascending: true }),
   ]);
 
   if (!profile) notFound();
@@ -93,6 +113,32 @@ export default async function MemberDetailPage({
   const canEdit = isSelf || isManager;
   const positions = (profile.positions ?? []) as Position[];
   const title = (profile.title ?? "player") as MemberTitle;
+
+  // 감독&코치 코멘트: 작성은 감독/코치(title)만, 조회는 본인 또는 감독/코치만(RLS 강제)
+  const myTitle = (me?.title ?? "player") as MemberTitle;
+  const isCoachingStaff = myTitle === "head_coach" || myTitle === "coach";
+  const coachComments = (coachCommentsRaw ?? []) as unknown as CoachComment[];
+  const showCoachComments = isCoachingStaff || isSelf;
+
+  // 코멘트 연결용: 이 회원이 참가한 '종료된' 경기 목록 (최신순, 중복 제거)
+  const playedMatches = (() => {
+    const seen = new Set<string>();
+    const list: { id: string; match_date: string; opponent: string }[] = [];
+    for (const r of (statsRaw ?? []) as unknown as ParticipationRow[]) {
+      const mt = r.match;
+      if (!mt || mt.status !== "done" || seen.has(mt.id)) continue;
+      seen.add(mt.id);
+      list.push({
+        id: mt.id,
+        match_date: mt.match_date,
+        opponent: mt.opponent,
+      });
+    }
+    return list.sort(
+      (a, b) =>
+        new Date(b.match_date).getTime() - new Date(a.match_date).getTime(),
+    );
+  })();
 
   // 누적 통계 (종료된 경기만)
   const done = ((statsRaw ?? []) as unknown as ParticipationRow[]).filter(
@@ -193,6 +239,22 @@ export default async function MemberDetailPage({
               preferred_foot: (profile.preferred_foot ?? null) as PreferredFoot | null,
               title,
             }}
+          />
+        )}
+
+        {/* 감독&코치 코멘트 — 주발 정보 아래 */}
+        {showCoachComments && (
+          <CoachCommentSection
+            memberId={profile.id}
+            memberName={profile.name}
+            comments={coachComments}
+            matches={playedMatches}
+            myUserId={user.id}
+            myName={me?.name ?? null}
+            myTitle={myTitle}
+            myAvatarUrl={me?.avatar_url ?? null}
+            canWrite={isCoachingStaff}
+            viewerIsSelf={isSelf}
           />
         )}
 

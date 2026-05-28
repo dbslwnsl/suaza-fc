@@ -278,6 +278,67 @@ export async function softDeleteMember(profileId: string) {
   redirect(`/members?message=${encodeURIComponent("회원이 삭제되었습니다")}`);
 }
 
+// ─────────────────────────────────────────────────────────────
+// 감독&코치 코멘트 (coach_comments)
+// 작성/수정/삭제는 감독·코치만 — 실제 권한은 RLS 가 강제한다.
+// 낙관적 UI 용으로 redirect 없이 revalidate 만 수행.
+// ─────────────────────────────────────────────────────────────
+
+export async function createCoachComment(
+  memberId: string,
+  content: string,
+  matchId: string | null = null,
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const trimmed = content.trim();
+  if (!trimmed) return;
+
+  await supabase.from("coach_comments").insert({
+    member_id: memberId,
+    author_id: user.id,
+    content: trimmed,
+    match_id: matchId,
+  });
+  revalidatePath(`/members/${memberId}`);
+}
+
+export async function updateCoachComment(
+  commentId: string,
+  memberId: string,
+  content: string,
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const trimmed = content.trim();
+  if (!trimmed) return;
+
+  await supabase
+    .from("coach_comments")
+    .update({ content: trimmed, updated_at: new Date().toISOString() })
+    .eq("id", commentId);
+  revalidatePath(`/members/${memberId}`);
+}
+
+export async function deleteCoachComment(commentId: string, memberId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  await supabase.from("coach_comments").delete().eq("id", commentId);
+  revalidatePath(`/members/${memberId}`);
+}
+
 export async function deleteAvatar(profileId: string) {
   const supabase = await createClient();
   const {
