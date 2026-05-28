@@ -69,7 +69,9 @@ export default async function PostDetailPage({
   const myRole = me?.role ?? "player";
   const isManager = myRole === "manager";
   const myTitle = me?.title ?? "player";
-  const canEdit = isAuthor || isManager;
+  // 타인 글 수정/삭제는 회장(president)만 가능. 그 외(감독 포함)는 본인 글만.
+  const isPresident = myTitle === "president";
+  const canEdit = isAuthor || isPresident;
   const editing = edit === "1" && canEdit;
   const comments = (commentsRaw ?? []) as unknown as Comment[];
 
