@@ -32,13 +32,17 @@ export default async function RootLayout({
   } = await supabase.auth.getUser();
 
   let isManager = false;
+  // 감독 설정 탭 활성화 대상: 회장(president) / 감독(head_coach)
+  let canOpenSettings = false;
   if (user) {
     const { data } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, title")
       .eq("id", user.id)
       .single();
     isManager = data?.role === "manager";
+    canOpenSettings =
+      data?.title === "president" || data?.title === "head_coach";
   }
 
   return (
@@ -48,7 +52,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {children}
-        <BottomTabs isManager={isManager} />
+        <BottomTabs isManager={isManager} canOpenSettings={canOpenSettings} />
       </body>
     </html>
   );

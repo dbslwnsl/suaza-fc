@@ -63,8 +63,14 @@ export async function addStatDefinition(formData: FormData) {
   redirect("/settings/stats");
 }
 
-// 시스템 합계 항목 — 사용자가 삭제할 수 없음.
-const PROTECTED_STAT_KEYS = new Set(["points"]);
+// 시스템 항목 — 사용자가 삭제할 수 없음.
+// points: 합계 / goals·assists·attendance: 기본 항목
+const PROTECTED_STAT_KEYS = new Set([
+  "points",
+  "goals",
+  "assists",
+  "attendance",
+]);
 
 /** 받은 키 순서대로 sort_order 를 0, 1, 2... 로 재부여. */
 export async function reorderStatDefinitions(orderedKeys: string[]) {
@@ -75,6 +81,19 @@ export async function reorderStatDefinitions(orderedKeys: string[]) {
       .update({ sort_order: i })
       .eq("key", orderedKeys[i]);
   }
+  revalidatePath("/settings/stats");
+}
+
+/** 항목별 포인트 기준점수 설정 (0~10). 회장/감독(manager)만 가능. */
+export async function setStatPointValue(key: string, value: number) {
+  const { supabase } = await requireManager();
+  // points(합계) 는 기준점수를 갖지 않음
+  if (key === "points") return;
+  const v = Math.max(0, Math.min(10, Math.round(value)));
+  await supabase
+    .from("stat_definitions")
+    .update({ point_value: v })
+    .eq("key", key);
   revalidatePath("/settings/stats");
 }
 

@@ -1,4 +1,56 @@
-export type StatDef = { key: string; label: string; sort_order: number };
+export type StatDef = {
+  key: string;
+  label: string;
+  sort_order: number;
+  point_value?: number;
+};
+
+// 포인트 합계 대상이 아닌 항목 (합계 자체)
+export const AGGREGATE_POINT_KEY = "points";
+
+// 기준일: 이 시각 이전(미만)의 경기는 직접 입력한 포인트(custom_stats.points)를 사용,
+// 이후 경기는 항목 기준점수(point_value)로 계산.
+// "2026-05-16 까지 = 수동(CSV), 그 이후 = 가중치" → 경계 = 2026-05-17 00:00 KST.
+export const POINTS_WEIGHT_CUTOFF_MS = Date.parse("2026-05-17T00:00:00+09:00");
+
+/** def 목록 → { key: point_value } 맵 */
+export function pointValueMap(defs: StatDef[]): Record<string, number> {
+  const m: Record<string, number> = {};
+  for (const d of defs) m[d.key] = d.point_value ?? 0;
+  return m;
+}
+
+/**
+ * 한 경기 참가기록의 포인트.
+ * - 기준일 이전 경기: 직접 입력한 포인트(custom_stats.points) 그대로 사용.
+ * - 기준일 이후 경기: Σ(항목 횟수 × 기준점수). goals/assists 는 컬럼,
+ *   attendance 는 1(참가), 그 외는 custom_stats. 'points'(합계)는 제외.
+ */
+export function pointsForParticipation(
+  p: {
+    goals?: number | null;
+    assists?: number | null;
+    custom_stats: Record<string, number> | null;
+  },
+  matchDate: string | null | undefined,
+  pointValues: Record<string, number>,
+): number {
+  const ms = matchDate ? new Date(matchDate).getTime() : Infinity;
+  if (ms < POINTS_WEIGHT_CUTOFF_MS) {
+    return p.custom_stats?.points ?? 0;
+  }
+  let sum = 0;
+  for (const [key, pv] of Object.entries(pointValues)) {
+    if (!pv || key === AGGREGATE_POINT_KEY) continue;
+    let count: number;
+    if (key === "goals") count = p.goals ?? 0;
+    else if (key === "assists") count = p.assists ?? 0;
+    else if (key === "attendance") count = p.custom_stats?.attendance ?? 1;
+    else count = p.custom_stats?.[key] ?? 0;
+    sum += count * pv;
+  }
+  return sum;
+}
 
 export type ParticipationRow = {
   match_id: string;
@@ -60,9 +112,11 @@ export function buildRichSeasonStats(
   base: PlayerSeasonStat[],
   parts: ParticipationRow[],
   matches: MatchSummary[],
+  defs: StatDef[] = [],
 ): RichPlayerSeasonStat[] {
   const totalMatches = matches.length;
   const matchById = new Map(matches.map((m) => [m.id, m]));
+  const pvMap = pointValueMap(defs);
 
   // 선수별 participation 들을 match_date desc 로 정렬해 가장 최근 5개 결과 산출
   const partsByPlayer = new Map<string, ParticipationRow[]>();
@@ -80,7 +134,6 @@ export function buildRichSeasonStats(
         return m ? { p, m } : null;
       })
       .filter((x): x is { p: ParticipationRow; m: MatchSummary } => !!x);
-    const playedMatches = playedPairs.map((x) => x.m);
     // 승리: custom_stats.win_points > 0 우선, 없으면 일반 경기 점수 기반
     let wins = 0;
     for (const { p, m } of playedPairs) {
@@ -115,7 +168,10 @@ export function buildRichSeasonStats(
       refereeCount: s.custom.referee_count ?? 0,
       mom: s.custom.mom ?? 0,
       wins,
-      points: s.custom.points ?? 0,
+      points: playedPairs.reduce(
+        (acc, { p, m }) => acc + pointsForParticipation(p, m.match_date, pvMap),
+        0,
+      ),
       attendanceRate: totalMatches > 0 ? s.appearances / totalMatches : 0,
       recent5,
     };

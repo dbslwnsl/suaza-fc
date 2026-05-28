@@ -4,9 +4,19 @@ import { useRef, useState, useTransition } from "react";
 import {
   removeStatDefinition,
   reorderStatDefinitions,
+  setStatPointValue,
 } from "@/lib/stats/actions";
 
-type StatItem = { key: string; label: string; sort_order: number };
+type StatItem = {
+  key: string;
+  label: string;
+  sort_order: number;
+  point_value: number;
+};
+
+// 삭제 불가 항목 (기본 항목 + 합계)
+const PROTECTED_KEYS = new Set(["points", "goals", "assists", "attendance"]);
+const POINT_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export default function StatList({ initial }: { initial: StatItem[] }) {
   const [items, setItems] = useState<StatItem[]>(initial);
@@ -81,10 +91,20 @@ export default function StatList({ initial }: { initial: StatItem[] }) {
     }
   };
 
+  const changePointValue = (key: string, value: number) => {
+    setItems((prev) =>
+      prev.map((i) => (i.key === key ? { ...i, point_value: value } : i)),
+    );
+    startTransition(() => {
+      setStatPointValue(key, value);
+    });
+  };
+
   return (
     <ul className="flex flex-col gap-2">
       {items.map((d) => {
-        const isProtected = d.key === "points" || d.label === "포인트";
+        const isAggregate = d.key === "points";
+        const canDelete = !PROTECTED_KEYS.has(d.key) && d.label !== "포인트";
         const dragging = draggingKey === d.key;
         return (
           <li
@@ -94,16 +114,37 @@ export default function StatList({ initial }: { initial: StatItem[] }) {
               dragging ? "ring-2 ring-suaza-button shadow-md" : ""
             }`}
           >
-            <span className="font-medium text-suaza-ink">{d.label}</span>
+            <span className="font-medium text-suaza-ink min-w-0 truncate">
+              {d.label}
+            </span>
             <div className="flex items-center gap-2 shrink-0">
-              {isProtected ? (
+              {/* 기준점수 드롭다운 — 합계(points) 제외 */}
+              {isAggregate ? (
                 <span
                   className="text-[11px] text-suaza-ink-faint"
-                  title="합계 항목은 삭제할 수 없습니다"
+                  title="포인트는 다른 항목들의 합계입니다"
                 >
                   합계
                 </span>
               ) : (
+                <label className="flex items-center gap-1 text-[11px] text-suaza-ink-muted">
+                  <span className="hidden sm:inline">기준점수</span>
+                  <select
+                    value={d.point_value}
+                    onChange={(e) =>
+                      changePointValue(d.key, Number(e.target.value))
+                    }
+                    className="px-2 py-1 rounded-md border border-suaza-border text-sm text-suaza-ink bg-white focus:outline-none focus:border-suaza-button"
+                  >
+                    {POINT_OPTIONS.map((n) => (
+                      <option key={n} value={n}>
+                        {n}점
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {canDelete ? (
                 <form action={removeStatDefinition.bind(null, d.key)}>
                   <button
                     type="submit"
@@ -112,6 +153,15 @@ export default function StatList({ initial }: { initial: StatItem[] }) {
                     삭제
                   </button>
                 </form>
+              ) : (
+                !isAggregate && (
+                  <span
+                    className="text-[11px] text-suaza-ink-faint"
+                    title="기본 항목은 삭제할 수 없습니다"
+                  >
+                    기본
+                  </span>
+                )
               )}
               {/* 드래그 핸들 — 길게 누르고 이동 */}
               <span

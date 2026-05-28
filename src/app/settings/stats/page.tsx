@@ -8,6 +8,7 @@ type StatDef = {
   key: string;
   label: string;
   sort_order: number;
+  point_value: number;
 };
 
 export default async function StatSettingsPage({
@@ -32,13 +33,15 @@ export default async function StatSettingsPage({
     redirect(`/?error=${encodeURIComponent("감독만 접근할 수 있습니다")}`);
   }
 
-  const { data: defs } = await supabase
+  const { data: defs, error: defsError } = await supabase
     .from("stat_definitions")
-    .select("key, label, sort_order")
+    .select("key, label, sort_order, point_value")
     .order("sort_order", { ascending: true })
     .order("key", { ascending: true });
 
   const items = (defs ?? []) as StatDef[];
+  // point_value 컬럼은 마이그레이션 0033 에서 추가됨. 미적용 시 쿼리가 실패한다.
+  const loadError = defsError?.message ?? null;
 
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
@@ -51,13 +54,30 @@ export default async function StatSettingsPage({
         </header>
 
         <p className="text-sm text-suaza-ink-muted -mt-3">
-          기본 항목(출전·골·어시) 외에 팀이 직접 추적하고 싶은 기록을 추가하세요.
+          항목별 <span className="font-medium text-suaza-ink">기준점수</span>를
+          정하면 회원이 그 기록을 올릴 때마다 포인트가 누적됩니다. (예: 클린시트
+          1점, 승리포인트 2점) 기본 항목(골·어시·출석) 외에 팀이 직접 추적할
+          기록도 추가하세요.
         </p>
 
         {error && (
           <p className="-mt-2 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
             {error}
           </p>
+        )}
+        {loadError && (
+          <div className="-mt-2 p-3 bg-amber-50 text-amber-800 rounded-lg text-sm flex flex-col gap-1">
+            <span className="font-medium">
+              항목을 불러오지 못했습니다.
+            </span>
+            <span className="text-xs">
+              마이그레이션 0033(point_value 컬럼)이 적용되지 않았을 수 있어요.
+              Supabase SQL Editor 에서 0033 을 실행해 주세요.
+            </span>
+            <span className="text-[11px] text-amber-700/80 break-all">
+              {loadError}
+            </span>
+          </div>
         )}
 
         {/* 정의 목록 */}

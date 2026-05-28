@@ -75,6 +75,7 @@ export default async function MatchDetailPage({
     { data: attendancesRaw },
     { data: myAttendance },
     { data: commentsRaw },
+    { data: statDefsRaw },
   ] = await Promise.all([
     supabase.from("matches").select("*").eq("id", id).single(),
     supabase
@@ -113,9 +114,16 @@ export default async function MatchDetailPage({
       )
       .eq("match_id", id)
       .order("created_at", { ascending: true }),
+    supabase.from("stat_definitions").select("key, point_value"),
   ]);
 
   const comments = (commentsRaw ?? []) as unknown as MatchComment[];
+  const pointValues = ((statDefsRaw ?? []) as { key: string; point_value: number | null }[]).reduce<
+    Record<string, number>
+  >((acc, d) => {
+    acc[d.key] = d.point_value ?? 0;
+    return acc;
+  }, {});
 
   type VotePlayer = {
     id: string;
@@ -391,6 +399,8 @@ export default async function MatchDetailPage({
                     isStaff={isStaff}
                     isManager={me?.role === "manager"}
                     isStarted={isStarted}
+                    pointValues={pointValues}
+                    matchDate={m.match_date}
                     participations={
                       participations as unknown as ParticipationData[]
                     }

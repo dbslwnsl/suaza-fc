@@ -12,7 +12,13 @@ type TabDef = {
   disabled?: boolean;
 };
 
-export default function BottomTabs({ isManager }: { isManager: boolean }) {
+export default function BottomTabs({
+  isManager,
+  canOpenSettings = false,
+}: {
+  isManager: boolean;
+  canOpenSettings?: boolean;
+}) {
   const pathname = usePathname();
   if (HIDE_ON.some((p) => pathname.startsWith(p))) return null;
 
@@ -25,7 +31,8 @@ export default function BottomTabs({ isManager }: { isManager: boolean }) {
       href: "/settings",
       label: isManager ? "감독설정" : "선수설정",
       Icon: IconGear,
-      disabled: true, // 미구현 — 비활성화
+      // 회장/감독만 활성화, 그 외는 비활성(준비 중)
+      disabled: !canOpenSettings,
     },
   ];
 

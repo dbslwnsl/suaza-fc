@@ -16,12 +16,26 @@ import {
   type PreferredFoot,
 } from "@/lib/members/positions";
 import { getMemberBadges } from "@/lib/members/badges";
+import { pointsForParticipation, pointValueMap } from "@/lib/stats/helpers";
 import ProfileEditForm from "./profile-edit-form";
 import AvatarUpload from "./avatar-upload";
 import DeleteMemberButton from "./delete-member-button";
 import CoachCommentSection, { type CoachComment } from "./coach-comments";
 
-type StatDef = { key: string; label: string; sort_order: number };
+type StatDef = {
+  key: string;
+  label: string;
+  sort_order: number;
+  point_value?: number;
+};
+
+// 기본/합계 항목 — 별도 표기되거나 합계라 항목 목록에서 제외
+const BUILTIN_TOTAL_KEYS = new Set([
+  "goals",
+  "assists",
+  "attendance",
+  "points",
+]);
 
 type ParticipationRow = {
   goals: number;
@@ -80,7 +94,7 @@ export default async function MemberDetailPage({
       .is("archived_at", null),
     supabase
       .from("stat_definitions")
-      .select("key, label, sort_order")
+      .select("key, label, sort_order, point_value")
       .order("sort_order", { ascending: true })
       .order("key", { ascending: true }),
     supabase
@@ -144,16 +158,33 @@ export default async function MemberDetailPage({
   const done = ((statsRaw ?? []) as unknown as ParticipationRow[]).filter(
     (s) => s.match?.status === "done",
   );
+  const statDefs = (defs ?? []) as StatDef[];
+  const pvMap = pointValueMap(statDefs);
+  const totalGoals = done.reduce((a, s) => a + (s.goals ?? 0), 0);
+  const totalAssists = done.reduce((a, s) => a + (s.assists ?? 0), 0);
+  // 항목별 누적 (custom_stats 키)
+  const customAgg: Record<string, number> = {};
+  for (const d of statDefs) {
+    customAgg[d.key] = done.reduce(
+      (a, s) => a + (s.custom_stats?.[d.key] ?? 0),
+      0,
+    );
+  }
+  // 포인트: 경기별 계산 (기준일 이전 = 수동 입력, 이후 = 항목 기준점수)
+  const totalPoints = done.reduce(
+    (sum, s) => sum + pointsForParticipation(s, s.match?.match_date, pvMap),
+    0,
+  );
+
   const totals: { label: string; value: number }[] = [
     { label: "출전", value: done.length },
-    { label: "골", value: done.reduce((a, s) => a + (s.goals ?? 0), 0) },
-    { label: "어시", value: done.reduce((a, s) => a + (s.assists ?? 0), 0) },
+    { label: "골", value: totalGoals },
+    { label: "어시", value: totalAssists },
+    { label: "포인트", value: totalPoints },
   ];
-  for (const d of (defs ?? []) as StatDef[]) {
-    totals.push({
-      label: d.label,
-      value: done.reduce((a, s) => a + (s.custom_stats?.[d.key] ?? 0), 0),
-    });
+  for (const d of statDefs) {
+    if (BUILTIN_TOTAL_KEYS.has(d.key)) continue;
+    totals.push({ label: d.label, value: customAgg[d.key] ?? 0 });
   }
 
   const avatarSrc = profile.avatar_url ?? null;

@@ -103,7 +103,7 @@ export default function SeasonList({
           custom: {},
         },
     );
-    return buildRichSeasonStats(base, period.ps, period.ms);
+    return buildRichSeasonStats(base, period.ps, period.ms, defs);
   }, [period, roster, defs]);
 
   const activeCount = stats.filter((s) => s.appearances > 0).length;

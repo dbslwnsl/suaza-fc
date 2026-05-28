@@ -50,7 +50,7 @@ export default async function SeasonView({
           .is("archived_at", null),
     supabase
       .from("stat_definitions")
-      .select("key, label, sort_order")
+      .select("key, label, sort_order, point_value")
       .order("sort_order", { ascending: true })
       .order("key", { ascending: true }),
   ]);

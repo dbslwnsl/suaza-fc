@@ -20,6 +20,7 @@ import {
   type MemberTitle,
   type Position,
 } from "@/lib/members/positions";
+import { POINTS_WEIGHT_CUTOFF_MS } from "@/lib/stats/helpers";
 
 type Player = {
   id: string;
@@ -131,10 +132,12 @@ function readStats(p: ParticipationData): Stats {
   };
 }
 
-function calcPoints(s: Stats): number {
+// weights: 항목별 기준점수 맵 (없으면 STAT_META 기본 가중치 사용)
+function calcPoints(s: Stats, weights?: Record<string, number>): number {
   let sum = 0;
   for (const meta of STAT_META) {
-    sum += s[meta.key] * meta.weight;
+    const w = weights?.[meta.key] ?? meta.weight;
+    sum += s[meta.key] * w;
   }
   return sum;
 }
@@ -146,6 +149,8 @@ export default function ParticipationBoard({
   isStaff,
   isManager,
   isStarted,
+  pointValues,
+  matchDate,
 }: {
   matchId: string;
   participations: ParticipationData[];
@@ -153,8 +158,14 @@ export default function ParticipationBoard({
   isStaff: boolean;
   isManager: boolean;
   isStarted: boolean;
+  pointValues?: Record<string, number>;
+  matchDate?: string | null;
 }) {
   const canEdit = isStaff && isStarted;
+  // 기준일 이전 경기는 직접 입력한 포인트(custom_stats.points) 를 그대로 사용
+  const useStoredPoints = matchDate
+    ? new Date(matchDate).getTime() < POINTS_WEIGHT_CUTOFF_MS
+    : false;
   const [edited, setEdited] = useState<Map<string, Stats>>(() => {
     const m = new Map<string, Stats>();
     for (const p of participations) m.set(p.id, readStats(p));
@@ -169,11 +180,15 @@ export default function ParticipationBoard({
   const totalPoints = useMemo(() => {
     let sum = 0;
     for (const p of participations) {
-      const s = edited.get(p.id);
-      if (s) sum += calcPoints(s);
+      if (useStoredPoints) {
+        sum += p.custom_stats?.points ?? 0;
+      } else {
+        const s = edited.get(p.id);
+        if (s) sum += calcPoints(s, pointValues);
+      }
     }
     return sum;
-  }, [edited, participations]);
+  }, [edited, participations, pointValues, useStoredPoints]);
 
   // 기록 중인 선수 리스트 (본인 포함 전체)
   const others = participations;
@@ -313,6 +328,8 @@ export default function ParticipationBoard({
                 onChangeStat={(key, delta) => updateStat(p.id, key, delta)}
                 isStaff={isStaff}
                 canEditStats={canEdit}
+                pointValues={pointValues}
+                storedPoints={useStoredPoints ? p.custom_stats?.points ?? 0 : null}
               />
             ))}
           </ul>
@@ -343,6 +360,8 @@ function OtherPlayerRow({
   onChangeStat,
   isStaff,
   canEditStats,
+  pointValues,
+  storedPoints,
 }: {
   p: ParticipationData;
   matchId: string;
@@ -350,8 +369,11 @@ function OtherPlayerRow({
   onChangeStat: (key: StatKey, delta: number) => void;
   isStaff: boolean;
   canEditStats: boolean;
+  pointValues?: Record<string, number>;
+  storedPoints?: number | null;
 }) {
-  const points = calcPoints(stats);
+  const points =
+    storedPoints != null ? storedPoints : calcPoints(stats, pointValues);
   const trailing = (
     <>
       <PointStar points={points} small />

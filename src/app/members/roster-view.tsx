@@ -5,6 +5,8 @@ import {
 } from "@/lib/members/positions";
 import {
   aggregateSeason,
+  pointsForParticipation,
+  pointValueMap,
   yearRange,
   type ParticipationRow,
   type PlayerSeasonStat,
@@ -44,12 +46,18 @@ export default async function RosterView({ year }: { year: number }) {
 
   const { data: matchesRaw } = await supabase
     .from("matches")
-    .select("id")
+    .select("id, match_date")
     .eq("status", "done")
     .gte("match_date", from)
     .lt("match_date", to);
 
   const matchIds = (matchesRaw ?? []).map((m) => m.id);
+  const matchDateById = new Map(
+    ((matchesRaw ?? []) as { id: string; match_date: string }[]).map((m) => [
+      m.id,
+      m.match_date,
+    ]),
+  );
 
   const [{ data: partsRaw }, { data: defsRaw }] = await Promise.all([
     matchIds.length
@@ -63,17 +71,26 @@ export default async function RosterView({ year }: { year: number }) {
       : Promise.resolve({ data: [] as ParticipationRow[] }),
     supabase
       .from("stat_definitions")
-      .select("key, label, sort_order"),
+      .select("key, label, sort_order, point_value"),
   ]);
 
   const defs = (defsRaw ?? []) as StatDef[];
-  const aggregated = aggregateSeason(
-    (partsRaw ?? []) as unknown as ParticipationRow[],
-    defs,
-  );
+  const pvMap = pointValueMap(defs);
+  const parts = (partsRaw ?? []) as unknown as ParticipationRow[];
+  const aggregated = aggregateSeason(parts, defs);
   const statsMap = new Map<string, PlayerSeasonStat>(
     aggregated.map((s) => [s.player_id, s]),
   );
+  // 포인트는 경기별로 계산 (기준일 이전: 수동 입력, 이후: 가중치)
+  const pointsByPlayer = new Map<string, number>();
+  for (const p of parts) {
+    const pts = pointsForParticipation(
+      p,
+      matchDateById.get(p.match_id),
+      pvMap,
+    );
+    pointsByPlayer.set(p.player_id, (pointsByPlayer.get(p.player_id) ?? 0) + pts);
+  }
 
   const raw = (members ?? []) as MemberRow[];
   const sorted = myId
@@ -107,7 +124,7 @@ export default async function RosterView({ year }: { year: number }) {
       goals: stat?.goals ?? 0,
       assists: stat?.assists ?? 0,
       cleanSheets: stat?.custom.clean_sheets ?? 0,
-      points: stat?.custom.points ?? 0,
+      points: pointsByPlayer.get(m.id) ?? 0,
     };
   });
 

@@ -28,6 +28,11 @@ import {
   formatPostDate,
   type PostCategory,
 } from "@/lib/board/helpers";
+import {
+  pointsForParticipation,
+  pointValueMap,
+  type StatDef,
+} from "@/lib/stats/helpers";
 import { AttendanceVote } from "./matches/[id]/page";
 import {
   fetchWeatherDebug,
@@ -175,6 +180,7 @@ export default async function Home() {
     { data: upcomingMatch },
     { data: lastMatch },
     { data: partsRaw },
+    { data: statDefsRaw },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -208,9 +214,12 @@ export default async function Home() {
       .maybeSingle(),
     supabase
       .from("match_participations")
-      .select("goals, assists, custom_stats, match:matches(status)")
+      .select("goals, assists, custom_stats, match:matches(match_date, status)")
       .eq("player_id", user!.id)
       .is("archived_at", null),
+    supabase
+      .from("stat_definitions")
+      .select("key, label, sort_order, point_value"),
   ]);
 
   const upcoming = upcomingMatch as Match | null;
@@ -294,11 +303,14 @@ export default async function Home() {
     goals: number;
     assists: number;
     custom_stats: Record<string, number> | null;
-    match: { status: string } | null;
+    match: { match_date: string; status: string } | null;
   };
   const done = ((partsRaw ?? []) as unknown as Part[]).filter(
     (p) => p.match?.status === "done",
   );
+  // 포인트: 경기별 계산 (기준일 이전 = 수동 입력, 이후 = 항목 기준점수)
+  const statDefs = (statDefsRaw ?? []) as StatDef[];
+  const pvMap = pointValueMap(statDefs);
   const homeStats: { label: string; value: number }[] = [
     { label: "출전", value: done.length },
     { label: "골", value: done.reduce((a, p) => a + (p.goals ?? 0), 0) },
@@ -312,7 +324,10 @@ export default async function Home() {
     },
     {
       label: "포인트",
-      value: done.reduce((a, p) => a + (p.custom_stats?.points ?? 0), 0),
+      value: done.reduce(
+        (a, p) => a + pointsForParticipation(p, p.match?.match_date, pvMap),
+        0,
+      ),
     },
   ];
 
