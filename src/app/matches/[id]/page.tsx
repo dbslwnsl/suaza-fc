@@ -98,7 +98,7 @@ export default async function MatchDetailPage({
     supabase
       .from("match_attendances")
       .select(
-        "status, team, attending_quarters, updated_at, player:profiles(id, name, jersey_number, positions, title)",
+        "status, team, attending_quarters, updated_at, player:profiles(id, name, jersey_number, positions, title, deleted_at)",
       )
       .eq("match_id", id),
     supabase
@@ -143,13 +143,19 @@ export default async function MatchDetailPage({
   // 자체전 팀 편성용: 참석자 + team 배정
   const teamMembers: { id: string; name: string; team: "A" | "B" | null }[] =
     [];
+  // 종료/취소된 경기는 지난 기록이므로 삭제 회원도 그대로 보존,
+  // 예정·진행 중 경기에서는 삭제 회원을 명단에서 제외.
+  const matchStatus = (match as Match | null)?.status ?? null;
+  const isPastMatch = matchStatus === "done" || matchStatus === "canceled";
   for (const row of (attendancesRaw ?? []) as unknown as {
     status: keyof typeof byStatus;
     team: "A" | "B" | null;
     attending_quarters: number[] | null;
     updated_at: string | null;
-    player: VotePlayer | null;
+    player: (VotePlayer & { deleted_at?: string | null }) | null;
   }[]) {
+    // 소프트 삭제된 회원: 예정·진행 경기에서만 제외 (지난 경기는 기록 보존)
+    if (!isPastMatch && row.player?.deleted_at) continue;
     if (row.player && row.status in byStatus) {
       const enriched: VotePlayer = {
         ...row.player,

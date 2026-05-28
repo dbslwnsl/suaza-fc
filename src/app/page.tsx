@@ -249,7 +249,7 @@ export default async function Home() {
         supabase
           .from("match_attendances")
           .select(
-            "status, attending_quarters, updated_at, player:profiles(id, name, jersey_number)",
+            "status, attending_quarters, updated_at, player:profiles(id, name, jersey_number, deleted_at)",
           )
           .eq("match_id", upcoming.id),
         supabase
@@ -270,8 +270,10 @@ export default async function Home() {
       status: keyof typeof byStatus;
       attending_quarters: number[] | null;
       updated_at: string | null;
-      player: VotePlayer | null;
+      player: (VotePlayer & { deleted_at?: string | null }) | null;
     }[]) {
+      // 소프트 삭제된 회원은 출석 명단에서 제외
+      if (row.player?.deleted_at) continue;
       if (row.player && row.status in byStatus) {
         byStatus[row.status].push({
           ...row.player,
