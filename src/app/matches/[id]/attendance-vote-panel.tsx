@@ -16,7 +16,25 @@ export type VotePlayer = {
   attending_quarters?: number[] | null;
   // 응답 시각 — 정렬 기준
   voted_at?: string | null;
+  // 부상 여부 — 이름 옆 + 배지 표기 (불참 그룹으로 자동 이동됨)
+  is_injured?: boolean | null;
 };
+
+// 부상 표기용 빨강 + 배지 (명단 카드와 동일 디자인)
+export function InjuryBadge() {
+  return (
+    <span
+      className="shrink-0 inline-flex items-center justify-center w-3.5 h-3.5 rounded-[3px] bg-suaza-accent text-white align-middle"
+      role="img"
+      aria-label="부상"
+      title="부상"
+    >
+      <svg viewBox="0 0 24 24" className="w-2 h-2" fill="currentColor" aria-hidden>
+        <path d="M9 2h6v7h7v6h-7v7H9v-7H2V9h7z" />
+      </svg>
+    </span>
+  );
+}
 
 type Groups = {
   attending: VotePlayer[];
@@ -714,12 +732,13 @@ function MemberGroup({
           members.map((m) => (
             <span
               key={m.id}
-              className={`text-xs px-2.5 py-0.5 rounded-full border transition ${
+              className={`inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full border transition ${
                 muted ? "text-suaza-ink-muted bg-gray-50" : "text-suaza-ink bg-white"
               }`}
               style={{ borderColor: muted ? "#E5E7EB" : color }}
             >
               {m.name}
+              {m.is_injured && <InjuryBadge />}
             </span>
           ))
         )}
@@ -739,7 +758,6 @@ function AttendanceRow({
   badgeClass: string;
   members: VotePlayer[];
 }) {
-  const names = members.map((m) => m.name);
   return (
     <div className="flex items-start gap-2">
       <span
@@ -748,7 +766,15 @@ function AttendanceRow({
         {label} {count}
       </span>
       <span className="text-sm text-suaza-ink-muted leading-relaxed break-keep">
-        {names.length > 0 ? names.join(", ") : "—"}
+        {members.length > 0
+          ? members.map((m, i) => (
+              <span key={m.id} className="inline-flex items-center gap-0.5">
+                {m.name}
+                {m.is_injured && <InjuryBadge />}
+                {i < members.length - 1 ? <span>,&nbsp;</span> : null}
+              </span>
+            ))
+          : "—"}
       </span>
     </div>
   );

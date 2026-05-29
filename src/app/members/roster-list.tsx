@@ -28,6 +28,7 @@ export type RosterMember = {
   avatarUrl: string | null;
   birthDate: string | null;
   preferredFoot: PreferredFoot | null;
+  isInjured: boolean;
   appearances: number;
   goals: number;
   assists: number;
@@ -339,6 +340,18 @@ function MemberCard({
                   style={{ color: "#BDC4CF" }}
                 >
                   {age}세
+                </span>
+              )}
+              {m.isInjured && (
+                <span
+                  className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-[4px] bg-suaza-accent text-white font-bold leading-none"
+                  role="img"
+                  aria-label="부상"
+                  title="부상"
+                >
+                  <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="currentColor" aria-hidden>
+                    <path d="M9 2h6v7h7v6h-7v7H9v-7H2V9h7z" />
+                  </svg>
                 </span>
               )}
             </div>

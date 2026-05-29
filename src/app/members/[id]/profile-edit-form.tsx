@@ -22,6 +22,7 @@ type Initial = {
   jersey_number: number | null;
   birth_date: string | null;
   preferred_foot: PreferredFoot | null;
+  is_injured: boolean;
   title: MemberTitle;
 };
 
@@ -59,6 +60,7 @@ export default function ProfileEditForm({
   const [foot, setFoot] = useState<PreferredFoot | null>(
     initial.preferred_foot,
   );
+  const [injured, setInjured] = useState(initial.is_injured);
 
   const isDirty = useMemo(() => {
     if (name.trim() !== initial.name) return true;
@@ -66,12 +68,13 @@ export default function ProfileEditForm({
     if (jersey.trim() !== String(initial.jersey_number ?? "")) return true;
     if (birth.trim() !== (initial.birth_date ?? "")) return true;
     if (foot !== initial.preferred_foot) return true;
+    if (injured !== initial.is_injured) return true;
     // 순서(주/부)가 의미를 가지므로 정렬 없이 비교
     if (positions.length !== initial.positions.length) return true;
     if (positions.some((p, i) => p !== initial.positions[i])) return true;
     if (isManager && title !== initial.title) return true;
     return false;
-  }, [name, nickname, jersey, birth, foot, positions, title, isManager, initial]);
+  }, [name, nickname, jersey, birth, foot, injured, positions, title, isManager, initial]);
 
   // 필수: 이름, 등번호, 생년월일, 주포지션, 주발
   const requiredValid =
@@ -92,6 +95,7 @@ export default function ProfileEditForm({
     setActiveSlot("primary");
     setTitle(initial.title);
     setFoot(initial.preferred_foot);
+    setInjured(initial.is_injured);
   };
 
   // 카드 클릭 → 현재 단계(주/부)에 배정. 같은 칸 재선택 시 해제.
@@ -125,10 +129,38 @@ export default function ProfileEditForm({
       ))}
       {isManager && <input type="hidden" name="title" value={title} />}
       {foot && <input type="hidden" name="preferred_foot" value={foot} />}
+      <input type="hidden" name="is_injured" value={injured ? "1" : "0"} />
 
       {/* 이름 / 별명 */}
       <div className="grid grid-cols-2 gap-3">
-        <Field label="이름" required>
+        <Field
+          label="이름"
+          required
+          action={
+            <button
+              type="button"
+              role="switch"
+              aria-checked={injured}
+              onClick={() => setInjured((v) => !v)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition ${
+                injured
+                  ? "text-suaza-accent"
+                  : "text-suaza-ink-muted hover:text-suaza-ink"
+              }`}
+            >
+              부상
+              <span
+                className={`inline-flex items-center justify-center w-3.5 h-3.5 rounded-[4px] border text-white text-[9px] leading-none ${
+                  injured
+                    ? "bg-suaza-accent border-suaza-accent"
+                    : "bg-white border-suaza-border"
+                }`}
+              >
+                {injured ? "✓" : ""}
+              </span>
+            </button>
+          }
+        >
           <input
             type="text"
             value={name}
@@ -416,20 +448,25 @@ function Field({
   label,
   hint,
   required,
+  action,
   children,
 }: {
   label: string;
   hint?: string;
   required?: boolean;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-suaza-ink text-base font-medium inline-flex items-baseline gap-1">
-        {label}
-        {required && (
-          <span className="text-suaza-accent text-xs font-medium">*</span>
-        )}
+      <span className="flex items-center justify-between gap-2 min-h-[28px]">
+        <span className="text-suaza-ink text-base font-medium inline-flex items-baseline gap-1">
+          {label}
+          {required && (
+            <span className="text-suaza-accent text-xs font-medium">*</span>
+          )}
+        </span>
+        {action}
       </span>
       {hint && <span className="text-suaza-ink-faint text-xs">{hint}</span>}
       {children}

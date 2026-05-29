@@ -9,6 +9,7 @@ export type Member = {
   name: string;
   jersey_number?: number | null;
   attending_quarters?: number[] | null;
+  is_injured?: boolean | null;
 };
 
 type Status = "attending" | "absent" | "undecided" | null;
@@ -304,11 +305,28 @@ function Chip({
         setTimeout(() => onDragStateChange(true), 0);
       }}
       onDragEnd={() => onDragStateChange(false)}
-      className={`select-none cursor-grab active:cursor-grabbing px-2.5 py-0.5 rounded-full text-xs border bg-white hover:bg-gray-50 ${chipClass} ${
+      className={`select-none cursor-grab active:cursor-grabbing inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs border bg-white hover:bg-gray-50 ${chipClass} ${
         muted ? "opacity-80" : ""
       }`}
     >
       {member.name}
+      {member.is_injured && <InjuryBadge />}
+    </span>
+  );
+}
+
+// 부상 표기용 빨강 + 배지
+function InjuryBadge() {
+  return (
+    <span
+      className="shrink-0 inline-flex items-center justify-center w-3.5 h-3.5 rounded-[3px] bg-suaza-accent text-white"
+      role="img"
+      aria-label="부상"
+      title="부상"
+    >
+      <svg viewBox="0 0 24 24" className="w-2 h-2" fill="currentColor" aria-hidden>
+        <path d="M9 2h6v7h7v6h-7v7H9v-7H2V9h7z" />
+      </svg>
     </span>
   );
 }

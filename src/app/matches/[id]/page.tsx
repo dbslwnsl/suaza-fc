@@ -80,7 +80,7 @@ export default async function MatchDetailPage({
     supabase.from("matches").select("*").eq("id", id).single(),
     supabase
       .from("profiles")
-      .select("role, name, avatar_url")
+      .select("role, name, avatar_url, is_injured")
       .eq("id", user.id)
       .single(),
     supabase
@@ -92,13 +92,13 @@ export default async function MatchDetailPage({
       .is("archived_at", null),
     supabase
       .from("profiles")
-      .select("id, name, jersey_number, positions, title")
+      .select("id, name, jersey_number, positions, title, is_injured")
       .is("deleted_at", null)
       .order("name", { ascending: true }),
     supabase
       .from("match_attendances")
       .select(
-        "status, team, attending_quarters, updated_at, player:profiles(id, name, jersey_number, positions, title, deleted_at)",
+        "status, team, attending_quarters, updated_at, player:profiles(id, name, jersey_number, positions, title, deleted_at, is_injured)",
       )
       .eq("match_id", id),
     supabase
@@ -133,6 +133,7 @@ export default async function MatchDetailPage({
     title?: string | null;
     attending_quarters?: number[] | null;
     voted_at?: string | null;
+    is_injured?: boolean | null;
   };
   const byStatus: {
     attending: VotePlayer[];
@@ -166,9 +167,12 @@ export default async function MatchDetailPage({
         attending_quarters: row.attending_quarters,
         voted_at: row.updated_at,
       };
-      byStatus[row.status].push(enriched);
+      // 부상자는 실제 투표와 무관하게 불참으로 강제 이동 (지난 경기는 기록 보존)
+      const injuredNow = !isPastMatch && !!row.player.is_injured;
+      const effectiveStatus = injuredNow ? "absent" : row.status;
+      byStatus[effectiveStatus].push(enriched);
       votedIds.add(row.player.id);
-      if (row.status === "attending") {
+      if (effectiveStatus === "attending") {
         teamMembers.push({
           id: row.player.id,
           name: row.player.name,
@@ -178,17 +182,32 @@ export default async function MatchDetailPage({
       }
     }
   }
-  const nonVoters = ((allMembers ?? []) as VotePlayer[]).filter(
+  const rawNonVoters = ((allMembers ?? []) as VotePlayer[]).filter(
     (m) => !votedIds.has(m.id),
   );
+  // 부상 미투표자도 불참으로 이동 (지난 경기는 그대로 둔다)
+  const nonVoters = isPastMatch
+    ? rawNonVoters
+    : rawNonVoters.filter((m) => !m.is_injured);
+  if (!isPastMatch) {
+    for (const m of rawNonVoters) {
+      if (m.is_injured) byStatus.absent.push(m);
+    }
+  }
   for (const key of ["attending", "absent", "undecided"] as const) {
     byStatus[key].sort((a, b) => a.name.localeCompare(b.name, "ko"));
   }
   const myAtt = myAttendance as
     | { status: string; attending_quarters: number[] | null }
     | null;
-  const myStatus = myAtt?.status ?? null;
-  const myAttendingQuarters = myAtt?.attending_quarters ?? null;
+  // 부상자는 본인 응답도 불참으로 고정하고 투표 UI 를 잠근다 (지난 경기는 제외).
+  const myInjured = !!(me as { is_injured?: boolean | null } | null)?.is_injured;
+  const matchIsPast = matchStatus === "done" || matchStatus === "canceled";
+  const injuredLock = myInjured && !matchIsPast;
+  const myStatus = injuredLock ? "absent" : myAtt?.status ?? null;
+  const myAttendingQuarters = injuredLock
+    ? null
+    : myAtt?.attending_quarters ?? null;
 
   if (!match) notFound();
 
@@ -355,6 +374,7 @@ export default async function MatchDetailPage({
                     meId={user.id}
                     myStatus={myStatus}
                     myAttendingQuarters={myAttendingQuarters}
+                    myInjured={injuredLock}
                     byStatus={byStatus}
                     nonVoters={nonVoters}
                     isManager={isStaff}
@@ -365,15 +385,18 @@ export default async function MatchDetailPage({
                     deadlineStr={deadlineStr}
                     voteClosed={voteClosed}
                     locked={
+                      injuredLock ||
                       isStarted ||
                       ((deadlinePassed || voteClosed) && !isStaff)
                     }
                     lockedMessage={
-                      isStarted
-                        ? "🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다"
-                        : voteClosed
-                          ? "🔒 출석 투표가 종료되었습니다"
-                          : "🔒 투표가 마감되었습니다 (매니저·감독만 변경 가능)"
+                      injuredLock
+                        ? "🚑 부상 상태로 자동 불참 처리되었습니다 (프로필에서 부상 해제 시 투표 가능)"
+                        : isStarted
+                          ? "🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다"
+                          : voteClosed
+                            ? "🔒 출석 투표가 종료되었습니다"
+                            : "🔒 투표가 마감되었습니다 (매니저·감독만 변경 가능)"
                     }
                   />
                 </div>
@@ -795,6 +818,7 @@ type AttendancePlayer = {
   jersey_number: number | null;
   attending_quarters?: number[] | null;
   voted_at?: string | null;
+  is_injured?: boolean | null;
 };
 
 function AttendanceCard({
@@ -802,6 +826,7 @@ function AttendanceCard({
   meId,
   myStatus,
   myAttendingQuarters,
+  myInjured,
   byStatus,
   nonVoters,
   isManager,
@@ -818,6 +843,7 @@ function AttendanceCard({
   meId: string;
   myStatus: string | null;
   myAttendingQuarters: number[] | null;
+  myInjured?: boolean;
   byStatus: {
     attending: AttendancePlayer[];
     absent: AttendancePlayer[];
@@ -870,7 +896,7 @@ function AttendanceCard({
 
       <AttendanceCardVote
         matchId={matchId}
-        me={{ id: meId, name: myName ?? "" }}
+        me={{ id: meId, name: myName ?? "", is_injured: myInjured }}
         myName={myName}
         myStatus={myStatus}
         myAttendingQuarters={myAttendingQuarters}
