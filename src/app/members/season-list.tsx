@@ -39,6 +39,16 @@ const DEFAULT_DIR: Partial<Record<SortKey, "desc" | "asc">> = {
   name: "asc",
 };
 
+// 현재 정렬 기준 컬럼의 비교 값. 순위 산정/정렬 양쪽에서 동일하게 사용.
+function sortValue(
+  row: RichPlayerSeasonStat,
+  sortKey: SortKey,
+): number | string {
+  if (sortKey === "name") return row.name;
+  if (sortKey === "recent5Wins") return row.recent5.filter((r) => r === "W").length;
+  return row[sortKey];
+}
+
 export default function SeasonList({
   myId,
   year,
@@ -110,17 +120,9 @@ export default function SeasonList({
 
   const sortedAll = useMemo(() => {
     const sign = sortDir === "desc" ? 1 : -1;
-    const getVal = (
-      row: RichPlayerSeasonStat,
-    ): number | string => {
-      if (sortKey === "name") return row.name;
-      if (sortKey === "recent5Wins")
-        return row.recent5.filter((r) => r === "W").length;
-      return row[sortKey];
-    };
     return [...stats].sort((a, b) => {
-      const av = getVal(a);
-      const bv = getVal(b);
+      const av = sortValue(a, sortKey);
+      const bv = sortValue(b, sortKey);
       if (typeof av === "string" || typeof bv === "string") {
         const cmp = String(av).localeCompare(String(bv), "ko");
         if (cmp !== 0) return cmp * sign;
@@ -131,11 +133,24 @@ export default function SeasonList({
     });
   }, [stats, sortKey, sortDir]);
 
-  // 순위는 정렬 결과의 인덱스 + 1 (기록 없어도 모든 회원이 포함됨)
-  const ranked = useMemo(
-    () => sortedAll.map((s, i) => ({ ...s, rank: i + 1 })),
-    [sortedAll],
-  );
+  // 순위 — 정렬 기준 값이 같은 선수는 공동순위로 묶는다(예: 1, 2, 2, 4).
+  // 기록 없어도 모든 회원이 포함됨.
+  const ranked = useMemo(() => {
+    const sameRank = (a: RichPlayerSeasonStat, b: RichPlayerSeasonStat) => {
+      const av = sortValue(a, sortKey);
+      const bv = sortValue(b, sortKey);
+      if (typeof av === "string" || typeof bv === "string") {
+        return String(av) === String(bv);
+      }
+      return av === bv;
+    };
+    return sortedAll.reduce<RowWithRank[]>((acc, s, i) => {
+      const rank =
+        i > 0 && sameRank(sortedAll[i - 1], s) ? acc[i - 1].rank : i + 1;
+      acc.push({ ...s, rank });
+      return acc;
+    }, []);
+  }, [sortedAll, sortKey]);
   const rankedAll = ranked;
 
   const filtered = ranked;
