@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  FOOT_LABEL,
   POSITION_COLOR,
   POSITIONS,
   type MemberTitle,
   type Position,
+  type PreferredFoot,
 } from "@/lib/members/positions";
 import { getMemberBadges } from "@/lib/members/badges";
 import AvatarBadges from "@/components/avatar-badges";
@@ -25,6 +27,7 @@ export type RosterMember = {
   jerseyNumber: number | null;
   avatarUrl: string | null;
   birthDate: string | null;
+  preferredFoot: PreferredFoot | null;
   appearances: number;
   goals: number;
   assists: number;
@@ -348,6 +351,12 @@ function MemberCard({
               ))}
             </div>
           )}
+
+          {m.preferredFoot && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <FootChip foot={m.preferredFoot} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -394,6 +403,14 @@ function PositionChip({ position }: { position: Position }) {
         style={{ backgroundColor: color }}
       />
       {position}
+    </span>
+  );
+}
+
+function FootChip({ foot }: { foot: PreferredFoot }) {
+  return (
+    <span className="inline-flex items-center text-[11px] desktop:text-xs px-2 py-0.5 rounded-full font-medium bg-suaza-bg text-suaza-ink-muted">
+      {FOOT_LABEL[foot]}
     </span>
   );
 }
