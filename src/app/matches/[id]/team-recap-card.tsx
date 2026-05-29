@@ -1,8 +1,9 @@
 "use client";
 
 import { useOptimistic, useState, useTransition } from "react";
-import { setMatchTeam } from "@/lib/matches/actions";
+import { setMatchCaptain, setMatchTeam } from "@/lib/matches/actions";
 import { displayMemberName } from "@/lib/members/name";
+import CaptainPicker, { CAPTAIN_CHIP_CLASS } from "./captain-picker";
 
 type RecapMember = { id: string; name: string; team: "A" | "B" | null };
 
@@ -10,12 +11,16 @@ export default function TeamRecapCard({
   attendees,
   teamAName,
   teamBName,
+  teamACaptain = null,
+  teamBCaptain = null,
   matchId,
   editable = false,
 }: {
   attendees: RecapMember[];
   teamAName: string;
   teamBName: string;
+  teamACaptain?: string | null;
+  teamBCaptain?: string | null;
   /** 편집(드래그앤드롭) 활성화 시 필수 */
   matchId?: string;
   editable?: boolean;
@@ -24,8 +29,24 @@ export default function TeamRecapCard({
     RecapMember[],
     RecapMember[]
   >(attendees, (_current, next) => next);
+  const [optCaptains, applyCaptains] = useOptimistic<
+    { a: string | null; b: string | null },
+    { a: string | null; b: string | null }
+  >({ a: teamACaptain, b: teamBCaptain }, (_current, next) => next);
   const [, startTransition] = useTransition();
   const [dragging, setDragging] = useState(false);
+
+  const setCaptain = (team: "A" | "B", playerId: string | null) => {
+    if (!editable || !matchId) return;
+    startTransition(() => {
+      applyCaptains(
+        team === "A"
+          ? { ...optCaptains, a: playerId }
+          : { ...optCaptains, b: playerId },
+      );
+      setMatchCaptain(matchId, team, playerId);
+    });
+  };
 
   const sortByName = (a: RecapMember, b: RecapMember) =>
     a.name.localeCompare(b.name, "ko");
@@ -49,9 +70,7 @@ export default function TeamRecapCard({
   return (
     <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4 desktop:h-full">
       <div className="flex items-baseline justify-between gap-2">
-        <h3 className="font-bold text-suaza-ink text-lg">
-          A & B 팀 편성 결과
-        </h3>
+        <h3 className="font-bold text-suaza-ink text-lg">팀 편성 결과</h3>
         {editable && (
           <span className="text-[11px] text-suaza-ink-faint">
             드래그해서 팀 변경
@@ -67,10 +86,12 @@ export default function TeamRecapCard({
           dotColor="#EF3E3E"
           chipClass="bg-red-50 text-suaza-accent border-red-200"
           members={teamA}
+          captainId={optCaptains.a}
           editable={editable}
           dragging={dragging}
           onDragStateChange={setDragging}
           onDropTo={moveTo}
+          onCaptainChange={(id) => setCaptain("A", id)}
         />
         <div
           aria-hidden
@@ -82,10 +103,12 @@ export default function TeamRecapCard({
           dotColor="#3B82F6"
           chipClass="bg-blue-50 text-blue-600 border-blue-200"
           members={teamB}
+          captainId={optCaptains.b}
           editable={editable}
           dragging={dragging}
           onDragStateChange={setDragging}
           onDropTo={moveTo}
+          onCaptainChange={(id) => setCaptain("B", id)}
         />
       </div>
 
@@ -133,34 +156,44 @@ function TeamColumn({
   dotColor,
   chipClass,
   members,
+  captainId,
   editable,
   dragging,
   onDragStateChange,
   onDropTo,
+  onCaptainChange,
 }: {
   team: "A" | "B";
   label: string;
   dotColor: string;
   chipClass: string;
   members: RecapMember[];
+  captainId: string | null;
   editable: boolean;
   dragging: boolean;
   onDragStateChange: (b: boolean) => void;
   onDropTo: (playerId: string, team: "A" | "B" | null) => void;
+  onCaptainChange: (playerId: string | null) => void;
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-1.5">
-        <span className="inline-flex items-center gap-1.5 font-bold text-suaza-ink">
+      <div className="flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1.5 font-bold text-suaza-ink min-w-0">
           <span
-            className="w-2.5 h-2.5 rounded-full"
+            className="w-2.5 h-2.5 rounded-full shrink-0"
             style={{ backgroundColor: dotColor }}
           />
-          {label}
+          <span className="truncate">{label}</span>
+          <span className="text-sm text-suaza-ink-muted font-normal leading-none shrink-0">
+            {members.length}명
+          </span>
         </span>
-        <span className="text-sm text-suaza-ink-muted font-normal leading-none">
-          {members.length}명
-        </span>
+        <CaptainPicker
+          members={members}
+          captainId={captainId}
+          editable={editable}
+          onChange={onCaptainChange}
+        />
       </div>
       <DropZone
         team={team}
@@ -177,6 +210,7 @@ function TeamColumn({
               key={m.id}
               member={m}
               chipClass={`border ${chipClass}`}
+              isCaptain={m.id === captainId}
               editable={editable}
               onDragStateChange={onDragStateChange}
             />
@@ -190,11 +224,13 @@ function TeamColumn({
 function PlayerChip({
   member,
   chipClass,
+  isCaptain = false,
   editable,
   onDragStateChange,
 }: {
   member: RecapMember;
   chipClass: string;
+  isCaptain?: boolean;
   editable: boolean;
   onDragStateChange: (b: boolean) => void;
 }) {
@@ -207,7 +243,9 @@ function PlayerChip({
         setTimeout(() => onDragStateChange(true), 0);
       }}
       onDragEnd={() => onDragStateChange(false)}
-      className={`inline-flex items-center text-xs px-2.5 py-0.5 rounded-full border select-none ${chipClass} ${
+      className={`inline-flex items-center text-xs px-2.5 py-0.5 rounded-full border select-none ${
+        isCaptain ? CAPTAIN_CHIP_CLASS : chipClass
+      } ${
         editable
           ? "cursor-grab active:cursor-grabbing hover:opacity-80"
           : ""

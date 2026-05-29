@@ -387,6 +387,8 @@ export default async function MatchDetailPage({
                     teamBColor={m.team_b_color}
                     teamAName={getTeamName(m, "A")}
                     teamBName={getTeamName(m, "B")}
+                    teamACaptain={m.team_a_captain}
+                    teamBCaptain={m.team_b_captain}
                     readonly={!isStaff}
                   />
                 </div>
@@ -398,6 +400,8 @@ export default async function MatchDetailPage({
                     attendees={teamMembers}
                     teamAName={getTeamName(m, "A")}
                     teamBName={getTeamName(m, "B")}
+                    teamACaptain={m.team_a_captain}
+                    teamBCaptain={m.team_b_captain}
                     editable={isStaff}
                   />
                 </div>

@@ -6,6 +6,7 @@ import {
   autoBalanceTeams,
   cycleMatchTeam,
   resetMatchTeams,
+  setMatchCaptain,
   setMatchTeam,
   setTeamColor,
 } from "@/lib/matches/actions";
@@ -15,6 +16,7 @@ import {
 } from "@/lib/matches/helpers";
 import { displayMemberName } from "@/lib/members/name";
 import { useIntraTeamColors } from "@/components/intra-team-colors";
+import CaptainPicker, { CAPTAIN_CHIP_CLASS } from "./captain-picker";
 
 export type TeamMember = {
   id: string;
@@ -32,6 +34,8 @@ export default function TeamBuilder({
   teamBColor,
   teamAName,
   teamBName,
+  teamACaptain = null,
+  teamBCaptain = null,
   readonly,
 }: {
   matchId: string;
@@ -43,6 +47,8 @@ export default function TeamBuilder({
   teamBColor: string | null;
   teamAName: string;
   teamBName: string;
+  teamACaptain?: string | null;
+  teamBCaptain?: string | null;
   readonly: boolean;
 }) {
   const [, startTransition] = useTransition();
@@ -65,6 +71,22 @@ export default function TeamBuilder({
     TeamMember[],
     TeamMember[]
   >(attendees, (_current, next) => next);
+  const [optCaptains, applyCaptains] = useOptimistic<
+    { a: string | null; b: string | null },
+    { a: string | null; b: string | null }
+  >({ a: teamACaptain, b: teamBCaptain }, (_current, next) => next);
+
+  const setCaptain = (team: "A" | "B", playerId: string | null) => {
+    if (readonly) return;
+    startTransition(() => {
+      applyCaptains(
+        team === "A"
+          ? { ...optCaptains, a: playerId }
+          : { ...optCaptains, b: playerId },
+      );
+      setMatchCaptain(matchId, team, playerId);
+    });
+  };
 
   const changeColor = (team: "A" | "B", color: string) => {
     if (readonly) return;
@@ -132,6 +154,7 @@ export default function TeamBuilder({
     }));
     startTransition(() => {
       applyOptimistic(next);
+      applyCaptains({ a: null, b: null });
       autoBalanceTeams(matchId);
     });
   };
@@ -143,6 +166,7 @@ export default function TeamBuilder({
     }));
     startTransition(() => {
       applyOptimistic(next);
+      applyCaptains({ a: null, b: null });
       resetMatchTeams(matchId);
     });
   };
@@ -167,7 +191,7 @@ export default function TeamBuilder({
     <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4 desktop:h-full">
       {/* 편성 결과 */}
       <div className="flex items-center justify-between gap-2">
-        <h3 className="font-bold text-suaza-ink text-lg">A & B 팀 편성 결과</h3>
+        <h3 className="font-bold text-suaza-ink text-lg">팀 편성 결과</h3>
         {!readonly && (
           <div className="flex items-center gap-1.5 shrink-0">
             <button
@@ -221,6 +245,7 @@ export default function TeamBuilder({
         members={teamA}
         chipClass="bg-red-50 text-suaza-accent border-red-200"
         team="A"
+        captainId={optCaptains.a}
         readonly={readonly}
         dragging={dragging}
         uniformColor={colorA}
@@ -228,6 +253,7 @@ export default function TeamBuilder({
         onCycle={cycle}
         onDropTo={dropTo}
         onDragStateChange={setDragging}
+        onCaptainChange={(id) => setCaptain("A", id)}
       />
       {/* B팀 */}
       <TeamGroup
@@ -236,6 +262,7 @@ export default function TeamBuilder({
         members={teamB}
         chipClass="bg-blue-50 text-blue-600 border-blue-200"
         team="B"
+        captainId={optCaptains.b}
         readonly={readonly}
         dragging={dragging}
         uniformColor={colorB}
@@ -243,6 +270,7 @@ export default function TeamBuilder({
         onCycle={cycle}
         onDropTo={dropTo}
         onDragStateChange={setDragging}
+        onCaptainChange={(id) => setCaptain("B", id)}
       />
 
       <div className="h-px bg-suaza-border" />
@@ -425,6 +453,7 @@ function TeamGroup({
   members,
   chipClass,
   team,
+  captainId,
   readonly,
   dragging,
   uniformColor,
@@ -432,12 +461,14 @@ function TeamGroup({
   onCycle,
   onDropTo,
   onDragStateChange,
+  onCaptainChange,
 }: {
   label: string;
   color: string;
   members: TeamMember[];
   chipClass: string;
   team: "A" | "B";
+  captainId: string | null;
   readonly: boolean;
   dragging: boolean;
   uniformColor: string;
@@ -445,18 +476,27 @@ function TeamGroup({
   onCycle: (playerId: string) => void;
   onDropTo: (playerId: string, team: "A" | "B" | null) => void;
   onDragStateChange: (dragging: boolean) => void;
+  onCaptainChange: (playerId: string | null) => void;
 }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1.5 font-bold text-suaza-ink">
+        <span className="inline-flex items-center gap-1.5 font-bold text-suaza-ink min-w-0">
           <span
-            className="w-2.5 h-2.5 rounded-full"
+            className="w-2.5 h-2.5 rounded-full shrink-0"
             style={{ backgroundColor: color }}
           />
-          {label}
+          <span className="truncate">{label}</span>
+          <span className="font-normal text-sm text-suaza-ink-muted shrink-0">
+            {members.length}명
+          </span>
         </span>
-        <span className="font-bold text-suaza-ink">{members.length}명</span>
+        <CaptainPicker
+          members={members}
+          captainId={captainId}
+          editable={!readonly}
+          onChange={onCaptainChange}
+        />
       </div>
 
       {/* 유니폼 상의 + 색 선택 */}
@@ -510,7 +550,9 @@ function TeamGroup({
                 setTimeout(() => onDragStateChange(true), 0);
               }}
               onDragEnd={() => onDragStateChange(false)}
-              className={`text-xs px-2.5 py-0.5 rounded-full border select-none ${chipClass} ${
+              className={`inline-flex items-center text-xs px-2.5 py-0.5 rounded-full border select-none ${
+                m.id === captainId ? CAPTAIN_CHIP_CLASS : chipClass
+              } ${
                 readonly
                   ? "cursor-default"
                   : "cursor-pointer hover:opacity-80 desktop:cursor-grab desktop:active:cursor-grabbing"

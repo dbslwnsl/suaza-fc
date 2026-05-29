@@ -881,6 +881,8 @@ export async function cycleMatchTeam(matchId: string, playerId: string) {
   if (error) return;
   // 팀이 바뀐 선수의 기존 포메이션 배치를 모든 쿼터에서 제거
   await resetPlayersInFormation(supabase, matchId, [playerId]);
+  // 떠난 팀의 주장이었다면 주장 해제
+  await clearCaptainIfLeft(supabase, matchId, playerId, next);
   revalidatePath(`/matches/${matchId}`);
   revalidatePath(`/matches/${matchId}/formation`);
 }
@@ -923,6 +925,11 @@ export async function autoBalanceTeams(matchId: string) {
 
   // 팀이 바뀐 선수들의 포메이션 배치 제거
   await resetPlayersInFormation(supabase, matchId, changed);
+  // 팀이 새로 섞였으므로 주장 초기화
+  await supabase
+    .from("matches")
+    .update({ team_a_captain: null, team_b_captain: null })
+    .eq("id", matchId);
   revalidatePath(`/matches/${matchId}`);
   revalidatePath(`/matches/${matchId}/formation`);
 }
@@ -956,8 +963,68 @@ export async function setMatchTeam(
   if (error) return;
   // 팀이 바뀐 선수의 기존 포메이션 배치를 모든 쿼터에서 제거
   await resetPlayersInFormation(supabase, matchId, [playerId]);
+  // 떠난 팀의 주장이었다면 주장 해제
+  await clearCaptainIfLeft(supabase, matchId, playerId, team);
   revalidatePath(`/matches/${matchId}`);
   revalidatePath(`/matches/${matchId}/formation`);
+}
+
+/**
+ * 한 팀(A/B)의 주장을 지정/해제. playerId=null 이면 해제.
+ * 지정 시 해당 선수가 그 팀에 편성된 참석자여야 한다. 매니저/코치만 가능.
+ */
+export async function setMatchCaptain(
+  matchId: string,
+  team: "A" | "B",
+  playerId: string | null,
+) {
+  const { supabase } = await requireStaff();
+  if (team !== "A" && team !== "B") return;
+  const col = team === "A" ? "team_a_captain" : "team_b_captain";
+
+  if (playerId) {
+    const { data: row } = await supabase
+      .from("match_attendances")
+      .select("status, team")
+      .eq("match_id", matchId)
+      .eq("player_id", playerId)
+      .maybeSingle();
+    // 그 팀에 편성된 참석자만 주장이 될 수 있음
+    if (!row || row.status !== "attending" || row.team !== team) return;
+  }
+
+  const { error } = await supabase
+    .from("matches")
+    .update({ [col]: playerId })
+    .eq("id", matchId);
+  if (error) return;
+  revalidatePath(`/matches/${matchId}`);
+}
+
+/**
+ * 선수가 팀을 떠나면(다른 팀/미배정) 해당 팀의 주장이었을 경우 주장을 해제한다.
+ * newTeam=null 이면 양쪽 주장에서 모두 해제 검사.
+ */
+async function clearCaptainIfLeft(
+  supabase: Awaited<ReturnType<typeof requireStaff>>["supabase"],
+  matchId: string,
+  playerId: string,
+  newTeam: "A" | "B" | null,
+) {
+  const { data: mm } = await supabase
+    .from("matches")
+    .select("team_a_captain, team_b_captain")
+    .eq("id", matchId)
+    .maybeSingle();
+  if (!mm) return;
+  const patch: Record<string, null> = {};
+  if (mm.team_a_captain === playerId && newTeam !== "A")
+    patch.team_a_captain = null;
+  if (mm.team_b_captain === playerId && newTeam !== "B")
+    patch.team_b_captain = null;
+  if (Object.keys(patch).length > 0) {
+    await supabase.from("matches").update(patch).eq("id", matchId);
+  }
 }
 
 /**
@@ -1025,6 +1092,11 @@ export async function resetMatchTeams(matchId: string) {
     matchId,
     (attendees ?? []).map((a) => a.player_id),
   );
+  // 팀이 모두 해제되므로 주장도 초기화
+  await supabase
+    .from("matches")
+    .update({ team_a_captain: null, team_b_captain: null })
+    .eq("id", matchId);
   revalidatePath(`/matches/${matchId}`);
   revalidatePath(`/matches/${matchId}/formation`);
 }

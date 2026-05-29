@@ -24,6 +24,8 @@ export type Match = {
   team_b_color: string | null;
   team_a_name: string | null;
   team_b_name: string | null;
+  team_a_captain: string | null;
+  team_b_captain: string | null;
   vote_deadline: string | null;
   vote_closed_at: string | null;
   total_quarters: number;
