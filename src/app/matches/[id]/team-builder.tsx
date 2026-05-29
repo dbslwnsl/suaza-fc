@@ -15,6 +15,7 @@ import {
   UNIFORM_COLORS,
 } from "@/lib/matches/helpers";
 import { displayMemberName } from "@/lib/members/name";
+import { POSITION_COLOR, type Position } from "@/lib/members/positions";
 import { useIntraTeamColors } from "@/components/intra-team-colors";
 import CaptainPicker, { CAPTAIN_CHIP_CLASS } from "./captain-picker";
 
@@ -22,7 +23,68 @@ export type TeamMember = {
   id: string;
   name: string;
   team: "A" | "B" | null;
+  positions?: string[] | null;
 };
+
+// 주 포지션(positions[0]) 기준 표기 순서. 미지정 회원은 맨 뒤 "기타" 그룹.
+const POSITION_ORDER: Position[] = ["FW", "MF", "DF", "GK"];
+
+function groupByPosition(
+  members: TeamMember[],
+): { pos: Position | null; members: TeamMember[] }[] {
+  const buckets = new Map<Position | "none", TeamMember[]>();
+  for (const m of members) {
+    const primary = (m.positions?.[0] as Position | undefined) ?? null;
+    const key = primary && POSITION_ORDER.includes(primary) ? primary : "none";
+    const arr = buckets.get(key);
+    if (arr) arr.push(m);
+    else buckets.set(key, [m]);
+  }
+  const result: { pos: Position | null; members: TeamMember[] }[] = [];
+  for (const pos of POSITION_ORDER) {
+    const arr = buckets.get(pos);
+    if (arr?.length) result.push({ pos, members: arr });
+  }
+  const none = buckets.get("none");
+  if (none?.length) result.push({ pos: null, members: none });
+  return result;
+}
+
+// 포지션 라벨(좌) + 해당 그룹 칩(우)을 줄바꿈으로 나열. 칩 렌더링은 호출부가 결정.
+function PositionGroupedChips({
+  members,
+  emptyText = "—",
+  renderChip,
+}: {
+  members: TeamMember[];
+  emptyText?: string;
+  renderChip: (m: TeamMember) => React.ReactNode;
+}) {
+  if (members.length === 0) {
+    return (
+      <span className="text-xs text-suaza-ink-faint self-center">
+        {emptyText}
+      </span>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1.5 w-full">
+      {groupByPosition(members).map((g) => (
+        <div key={g.pos ?? "none"} className="flex items-start gap-2">
+          <span
+            className="shrink-0 w-7 text-[11px] font-bold leading-6"
+            style={{ color: g.pos ? POSITION_COLOR[g.pos] : "#9CA3AF" }}
+          >
+            {g.pos ?? "기타"}
+          </span>
+          <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
+            {g.members.map(renderChip)}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function TeamBuilder({
   matchId,
@@ -307,15 +369,18 @@ export default function TeamBuilder({
             모든 참석자가 배정되었습니다 ✓
           </p>
         ) : (
-          unassigned.map((m) => (
-            <TapChip
-              key={m.id}
-              member={m}
-              readonly={readonly}
-              onClick={() => cycle(m.id)}
-              onDragStateChange={setDragging}
-            />
-          ))
+          <PositionGroupedChips
+            members={unassigned}
+            renderChip={(m) => (
+              <TapChip
+                key={m.id}
+                member={m}
+                readonly={readonly}
+                onClick={() => cycle(m.id)}
+                onDragStateChange={setDragging}
+              />
+            )}
+          />
         )}
       </DropZone>
 
@@ -534,10 +599,9 @@ function TeamGroup({
         onDropTo={onDropTo}
         className="flex flex-wrap items-start content-start gap-2 min-h-[36px] rounded-lg"
       >
-        {members.length === 0 ? (
-          <span className="text-xs text-suaza-ink-faint self-center">—</span>
-        ) : (
-          members.map((m) => (
+        <PositionGroupedChips
+          members={members}
+          renderChip={(m) => (
             <span
               key={m.id}
               role="button"
@@ -560,8 +624,8 @@ function TeamGroup({
             >
               {displayMemberName(m.name)}
             </span>
-          ))
-        )}
+          )}
+        />
       </DropZone>
     </div>
   );

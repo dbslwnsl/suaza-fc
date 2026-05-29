@@ -140,9 +140,13 @@ export default async function MatchDetailPage({
     undecided: VotePlayer[];
   } = { attending: [], absent: [], undecided: [] };
   const votedIds = new Set<string>();
-  // 자체전 팀 편성용: 참석자 + team 배정
-  const teamMembers: { id: string; name: string; team: "A" | "B" | null }[] =
-    [];
+  // 자체전 팀 편성용: 참석자 + team 배정 + 주 포지션(positions[0]) 분류용
+  const teamMembers: {
+    id: string;
+    name: string;
+    team: "A" | "B" | null;
+    positions: string[] | null;
+  }[] = [];
   // 종료/취소된 경기는 지난 기록이므로 삭제 회원도 그대로 보존,
   // 예정·진행 중 경기에서는 삭제 회원을 명단에서 제외.
   const matchStatus = (match as Match | null)?.status ?? null;
@@ -169,6 +173,7 @@ export default async function MatchDetailPage({
           id: row.player.id,
           name: row.player.name,
           team: row.team ?? null,
+          positions: row.player.positions ?? null,
         });
       }
     }
