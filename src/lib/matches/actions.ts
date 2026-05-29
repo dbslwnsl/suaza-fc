@@ -16,6 +16,7 @@ import {
   maxQuartersForDuration,
   type QuarterAction,
 } from "./helpers";
+import type { SavedQuarter } from "@/lib/formations/helpers";
 
 type MatchInput = {
   opponent: string;
@@ -172,6 +173,143 @@ export async function createMatch(formData: FormData) {
   redirect(`/matches/${data!.id}`);
 }
 
+function actionsEqual(
+  a: (QuarterAction | null)[],
+  b: (QuarterAction | null)[],
+): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if ((a[i] ?? null) !== (b[i] ?? null)) return false;
+  }
+  return true;
+}
+
+/**
+ * 경기 수정으로 쿼터 구성(총 쿼터수/활동)이 바뀌면 출석 투표·포메이션을 보정한다.
+ *
+ * 모델: 끝나는 시간이 고정이라 쿼터 증감은 "앞쪽(시작쪽)"에서 일어난다.
+ *   새 글로벌 인덱스 = 기존 인덱스 + (새 총쿼터수 − 기존 총쿼터수)
+ *
+ * - 출석 쿼터(attending_quarters: 글로벌 1-based 인덱스)는 위 식으로 시프트.
+ *   범위(1..새총)를 벗어나면 제거. 모두 사라지면 그 회원은 불참 처리.
+ *   null(전체 참여)은 그대로 전체 참여 유지.
+ * - 포메이션 쿼터는 같은 시프트로 id 재지정. 범위 밖이거나 게임 쿼터(준비/훈련 제외)가
+ *   아니게 되면 제거. 해당 쿼터에 더 이상 참석하지 않는 선수는 슬롯에서 비운다.
+ */
+async function migrateQuartersAfterEdit(
+  supabase: Awaited<ReturnType<typeof requireStaff>>["supabase"],
+  matchId: string,
+  oldTotal: number,
+  newTotal: number,
+  newActions: (QuarterAction | null)[],
+) {
+  const shift = newTotal - oldTotal;
+  const now = new Date().toISOString();
+
+  // 1) 출석 보정 + 최종 참석맵 구성 (status=attending 인 회원만 맵에 포함)
+  const { data: rows } = await supabase
+    .from("match_attendances")
+    .select("player_id, status, attending_quarters")
+    .eq("match_id", matchId);
+
+  const attendingMap = new Map<string, number[] | null>();
+  for (const r of (rows ?? []) as {
+    player_id: string;
+    status: string;
+    attending_quarters: number[] | null;
+  }[]) {
+    if (r.status !== "attending") continue;
+    const aq = r.attending_quarters;
+    if (aq == null) {
+      attendingMap.set(r.player_id, null); // 전체 참여 유지
+      continue;
+    }
+    if (shift === 0) {
+      attendingMap.set(r.player_id, aq); // 쿼터수 변화 없음 → 인덱스 그대로
+      continue;
+    }
+    const migrated = aq
+      .map((i) => i + shift)
+      .filter((i) => i >= 1 && i <= newTotal)
+      .sort((x, y) => x - y);
+    if (migrated.length === 0) {
+      // 참석 쿼터가 모두 사라짐 → 불참
+      await supabase
+        .from("match_attendances")
+        .update({ status: "absent", attending_quarters: null, updated_at: now })
+        .eq("match_id", matchId)
+        .eq("player_id", r.player_id);
+      continue;
+    }
+    const finalAq = migrated.length === newTotal ? null : migrated;
+    await supabase
+      .from("match_attendances")
+      .update({ attending_quarters: finalAq, updated_at: now })
+      .eq("match_id", matchId)
+      .eq("player_id", r.player_id);
+    attendingMap.set(r.player_id, finalAq);
+  }
+
+  // 2) 포메이션 보정
+  const { data: fRow } = await supabase
+    .from("formations")
+    .select("positions")
+    .eq("match_id", matchId)
+    .maybeSingle();
+  const quarters = (fRow?.positions as { quarters?: SavedQuarter[] } | null)
+    ?.quarters;
+  if (!quarters || quarters.length === 0) return;
+
+  const isGameQuarter = (gi: number) => {
+    const a = newActions[gi - 1] ?? null;
+    return a !== "warmup" && a !== "training";
+  };
+  const attendsQuarter = (pid: string, gi: number) => {
+    if (!attendingMap.has(pid)) return false; // 불참·미투표 → 슬롯에서 제거
+    const aq = attendingMap.get(pid)!;
+    return aq == null || aq.includes(gi);
+  };
+  const cleanSlots = (ids: (string | null)[] | undefined, gi: number) =>
+    (ids ?? []).map((pid) => (pid && attendsQuarter(pid, gi) ? pid : null));
+
+  const migratedQuarters: SavedQuarter[] = [];
+  for (const q of quarters) {
+    const gi = parseInt(String(q.id), 10);
+    if (!Number.isFinite(gi)) continue;
+    const newGi = gi + shift;
+    if (newGi < 1 || newGi > newTotal) continue; // 범위 밖 → 제거
+    if (!isGameQuarter(newGi)) continue; // 준비/훈련이 됨 → 포메이션 없음
+    const out: SavedQuarter = {
+      id: `${newGi}Q`,
+      shape: q.shape,
+      player_ids: cleanSlots(q.player_ids, newGi),
+    };
+    if (q.teamB) {
+      out.teamB = {
+        shape: q.teamB.shape,
+        player_ids: cleanSlots(q.teamB.player_ids, newGi),
+      };
+    }
+    migratedQuarters.push(out);
+  }
+  migratedQuarters.sort(
+    (a, b) => parseInt(a.id, 10) - parseInt(b.id, 10),
+  );
+
+  if (migratedQuarters.length === 0) {
+    await supabase.from("formations").delete().eq("match_id", matchId);
+    return;
+  }
+  const first = migratedQuarters[0];
+  await supabase
+    .from("formations")
+    .update({
+      shape: first.shape,
+      positions: { quarters: migratedQuarters, player_ids: first.player_ids },
+    })
+    .eq("match_id", matchId);
+}
+
 export async function updateMatch(matchId: string, formData: FormData) {
   const { supabase } = await requireStaff();
   const input = parseForm(formData);
@@ -183,10 +321,10 @@ export async function updateMatch(matchId: string, formData: FormData) {
     redirect(`/matches/${matchId}?error=${encodeURIComponent("경기 날짜를 선택해 주세요")}`);
   }
 
-  // 기존 status 와 비교하여 명시적 변경이면 override 시각 기록
+  // 기존 status·쿼터 구성과 비교 (쿼터 변경 시 출석/포메이션 보정에 사용)
   const { data: existing } = await supabase
     .from("matches")
-    .select("status")
+    .select("status, total_quarters, quarter_actions")
     .eq("id", matchId)
     .single();
 
@@ -204,8 +342,28 @@ export async function updateMatch(matchId: string, formData: FormData) {
     redirect(`/matches/${matchId}?error=${encodeURIComponent(error.message)}`);
   }
 
+  // 쿼터 구성(총 쿼터수/활동)이 바뀌었으면 이미 투표한 출석·포메이션을 보정
+  const oldTotal =
+    (existing?.total_quarters as number | null) ?? input.total_quarters;
+  const oldActions = ((existing?.quarter_actions as
+    | (QuarterAction | null)[]
+    | null) ?? []) as (QuarterAction | null)[];
+  if (
+    oldTotal !== input.total_quarters ||
+    !actionsEqual(oldActions, input.quarter_actions)
+  ) {
+    await migrateQuartersAfterEdit(
+      supabase,
+      matchId,
+      oldTotal,
+      input.total_quarters,
+      input.quarter_actions,
+    );
+  }
+
   revalidatePath("/matches");
   revalidatePath(`/matches/${matchId}`);
+  revalidatePath(`/matches/${matchId}/formation`);
   redirect(`/matches/${matchId}?message=${encodeURIComponent("저장되었습니다")}`);
 }
 
