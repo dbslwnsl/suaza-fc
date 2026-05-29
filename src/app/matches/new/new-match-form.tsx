@@ -10,12 +10,15 @@ import {
   DEFAULT_MATCH_DURATION_HOURS,
   DEFAULT_TEAM_COLOR,
   DEFAULT_VS_COLOR,
+  MATCH_DURATION_MAX,
+  MATCH_DURATION_MIN,
   MATCH_DURATION_OPTIONS,
+  MATCH_DURATION_STEP,
   QUARTER_ACTIONS,
   QUARTER_ACTION_COLOR,
   QUARTER_ACTION_LABEL,
+  formatDurationLabel,
   maxQuartersForDuration,
-  type MatchDurationHours,
   type QuarterAction,
 } from "@/lib/matches/helpers";
 
@@ -156,18 +159,20 @@ export default function NewMatchForm({
   const [location, setLocation] = useState(initial?.location ?? "");
   const [status, setStatus] = useState<Status>(initial?.status ?? "scheduled");
   const [notes, setNotes] = useState(initial?.notes ?? "");
-  const [durationHours, setDurationHours] = useState<MatchDurationHours>(
-    (MATCH_DURATION_OPTIONS as readonly number[]).includes(
-      initial?.durationHours ?? DEFAULT_MATCH_DURATION_HOURS,
-    )
-      ? ((initial?.durationHours ??
-          DEFAULT_MATCH_DURATION_HOURS) as MatchDurationHours)
-      : (DEFAULT_MATCH_DURATION_HOURS as MatchDurationHours),
-  );
-  // 쿼터 설정: duration_hours 별 최대 (1h=2, 2h=4, 3h=6, 4h=8). 사용자는 ≤ max 로 줄일 수 있음.
-  const initialMaxQ = maxQuartersForDuration(
+  // numeric 컬럼이 문자열로 올 수 있어 Number 로 강제 변환. 0.5~4 범위만 허용.
+  const initialDurationRaw = Number(
     initial?.durationHours ?? DEFAULT_MATCH_DURATION_HOURS,
   );
+  const initialDuration =
+    Number.isFinite(initialDurationRaw) &&
+    initialDurationRaw >= 0.5 &&
+    initialDurationRaw <= 4
+      ? initialDurationRaw
+      : DEFAULT_MATCH_DURATION_HOURS;
+  // 경기 시간(시간). 30분 단위. 쿼터 수 조정으로 0.5 단위 값이 될 수 있어 number.
+  const [durationHours, setDurationHours] = useState<number>(initialDuration);
+  // 쿼터 설정: 30분당 1쿼터(시간×2)가 최대. 사용자는 ≤ max 로 줄일 수 있음.
+  const initialMaxQ = maxQuartersForDuration(durationHours);
   const [totalQuarters, setTotalQuarters] = useState<number>(
     initial?.totalQuarters && initial.totalQuarters > 0
       ? Math.min(initial.totalQuarters, initialMaxQ)
@@ -217,6 +222,20 @@ export default function NewMatchForm({
       return next;
     });
   };
+  // 진행 쿼터 수 변경: 종료 시각을 유지한 채 시작 시각·경기 시간(쿼터×30분)을 함께 갱신.
+  // 1 ~ 8쿼터(=0.5~4시간). 줄이면 시작이 늦춰지고, 늘리면 시작이 앞당겨진다.
+  const changeTotalQuarters = (nextRaw: number) => {
+    const nextQ = Math.max(
+      MATCH_DURATION_MIN * 2,
+      Math.min(MATCH_DURATION_MAX * 2, nextRaw),
+    );
+    if (nextQ === totalQuarters) return;
+    // 시작 보정량 = (현재 최대쿼터 − 새 쿼터) × 30분 (종료 고정)
+    const shiftMin = (maxQuarters - nextQ) * 30;
+    if (time) setTime(addMinutesToTime(time, shiftMin));
+    setDurationHours(nextQ * 0.5);
+    setTotalQuarters(nextQ);
+  };
   // 라벨 산출: warmup/training 쿼터는 각자 "준비"/"훈련" 으로 표시되고
   // 게임 쿼터 번호(Q1, Q2, …)에서 제외된다.
   const computeQuarterLabel = (idx: number): string => {
@@ -252,9 +271,11 @@ export default function NewMatchForm({
 
   const opponentInputRef = useRef<HTMLInputElement>(null);
 
-  const matchDate = date && time ? `${date}T${time}` : "";
   const effectiveOpponent = matchType === "intra" ? "자체전" : opponent;
+  // 종료 시간 표시용. 쿼터 수 조정 시 시작 시간·경기 시간이 직접 갱신되므로
+  // 저장 값은 입력된 시작(time)·경기 시간(durationHours)을 그대로 사용한다.
   const finishTimeLabel = computeFinishTime(time, durationHours);
+  const matchDate = date && time ? `${date}T${time}` : "";
 
   // 계산된 투표 마감(datetime-local 문자열)
   const voteDeadline =
@@ -456,7 +477,7 @@ export default function NewMatchForm({
             className={`${inputCls} hidden desktop:block`}
           />
         </Field>
-        <Field label="킥오프 시간" hint="30분 단위" required>
+        <Field label="시작 시간" hint="30분 단위" required>
           {/* 모바일: 커스텀 시간 픽커 */}
           <div className="desktop:hidden">
             <TimePicker
@@ -491,11 +512,7 @@ export default function NewMatchForm({
           <span className="text-suaza-ink text-base font-medium">경기 시간</span>
           <span className="text-xs text-suaza-accent font-medium">필수</span>
         </div>
-        <DurationSegmented
-          value={durationHours}
-          onChange={setDurationHours}
-          options={MATCH_DURATION_OPTIONS}
-        />
+        <DurationStepper value={durationHours} onChange={setDurationHours} />
         {finishTimeLabel && (
           <span className="text-xs text-suaza-ink-faint mt-1">
             종료 시간: {finishTimeLabel} (자동 계산)
@@ -505,12 +522,11 @@ export default function NewMatchForm({
 
       {/* 쿼터 설정 */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-suaza-ink text-base font-medium">쿼터 설정</span>
-          <span className="text-[11px] text-suaza-ink-muted bg-gray-100 px-2 py-0.5 rounded-md">
-            최대 {maxQuarters}쿼터 ({durationHours}시간 기준)
-          </span>
-        </div>
+        <span className="text-suaza-ink text-base font-medium">쿼터 설정</span>
+        <p className="text-xs text-suaza-ink-muted leading-relaxed -mt-1.5">
+          쿼터 수를 조절하면 <b className="text-suaza-ink">종료 시간을 유지</b>한
+          채 시작 시간과 경기 시간이 자동으로 맞춰집니다.
+        </p>
 
         {/* 진행 쿼터 수 stepper */}
         <div className="flex items-center justify-between gap-2 rounded-lg bg-suaza-bg/60 px-3 py-2">
@@ -518,10 +534,8 @@ export default function NewMatchForm({
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() =>
-                setTotalQuarters((cur) => Math.max(1, cur - 1))
-              }
-              disabled={totalQuarters <= 1}
+              onClick={() => changeTotalQuarters(totalQuarters - 1)}
+              disabled={totalQuarters <= MATCH_DURATION_MIN * 2}
               className="w-8 h-8 rounded-md border border-suaza-border text-suaza-ink hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed font-bold"
               aria-label="쿼터 수 감소"
             >
@@ -532,17 +546,15 @@ export default function NewMatchForm({
             </span>
             <button
               type="button"
-              onClick={() =>
-                setTotalQuarters((cur) => Math.min(maxQuarters, cur + 1))
-              }
-              disabled={totalQuarters >= maxQuarters}
+              onClick={() => changeTotalQuarters(totalQuarters + 1)}
+              disabled={totalQuarters >= MATCH_DURATION_MAX * 2}
               className="w-8 h-8 rounded-md border border-suaza-border text-suaza-ink hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed font-bold"
               aria-label="쿼터 수 증가"
             >
               +
             </button>
-            <span className="text-xs text-suaza-ink-muted">
-              / 최대 {maxQuarters}
+            <span className="w-20 text-right text-xs text-suaza-ink-muted">
+              {formatDurationLabel(totalQuarters * 0.5)}
             </span>
           </div>
         </div>
@@ -1088,55 +1100,88 @@ function previewTeamName(input: string, fallback: string): string {
   return t.endsWith("팀") ? t : `${t}팀`;
 }
 
+// "HH:MM" 에 분을 더해 "HH:MM" 반환 (24시간 wrap).
+function addMinutesToTime(time: string, addMin: number): string {
+  const [hStr, mStr] = time.split(":");
+  const h = Number(hStr);
+  const m = Number(mStr);
+  if (Number.isNaN(h) || Number.isNaN(m)) return time;
+  const total = (((h * 60 + m + addMin) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(
+    total % 60,
+  ).padStart(2, "0")}`;
+}
+
 function computeFinishTime(time: string, hours: number): string {
   if (!time) return "";
   const [hStr, mStr] = time.split(":");
   const h = Number(hStr);
   const m = Number(mStr);
   if (Number.isNaN(h) || Number.isNaN(m)) return "";
-  const endH = (h + hours) % 24;
-  return `${String(endH).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  const total = (h * 60 + m + Math.round(hours * 60)) % (24 * 60);
+  const endH = Math.floor(total / 60);
+  const endM = total % 60;
+  return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
 }
 
-function DurationSegmented({
+function DurationStepper({
   value,
   onChange,
-  options,
 }: {
-  value: MatchDurationHours;
-  onChange: (v: MatchDurationHours) => void;
-  options: readonly MatchDurationHours[];
+  value: number;
+  onChange: (v: number) => void;
 }) {
-  const index = options.indexOf(value);
-  const count = options.length;
+  const dec = () =>
+    onChange(Math.max(MATCH_DURATION_MIN, value - MATCH_DURATION_STEP));
+  const inc = () =>
+    onChange(Math.min(MATCH_DURATION_MAX, value + MATCH_DURATION_STEP));
   return (
-    <div
-      className="relative bg-gray-100 rounded-xl p-1 grid gap-0"
-      style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}
-    >
-      <span
-        aria-hidden
-        className="absolute top-1 bottom-1 rounded-lg bg-suaza-accent shadow-sm transition-all duration-200 ease-out"
-        style={{
-          width: `calc((100% - 0.5rem) / ${count})`,
-          left: `calc(0.25rem + ${index} * ((100% - 0.5rem) / ${count}))`,
-        }}
-      />
-      {options.map((opt) => {
-        const on = opt === value;
-        return (
-          <button
-            key={opt}
-            type="button"
-            onClick={() => onChange(opt)}
-            className={`relative z-10 h-11 rounded-lg text-sm font-bold inline-flex items-center justify-center transition-colors ${
-              on ? "text-white" : "text-suaza-ink-muted"
-            }`}
-          >
-            {opt}시간
-          </button>
-        );
-      })}
+    <div className="flex flex-col gap-2.5">
+      {/* 스태퍼: − / 표시 / + */}
+      <div className="flex items-stretch gap-2">
+        <button
+          type="button"
+          onClick={dec}
+          disabled={value <= MATCH_DURATION_MIN}
+          aria-label="30분 감소"
+          className="w-14 h-14 rounded-xl border border-suaza-border text-suaza-ink text-2xl font-bold flex items-center justify-center hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          −
+        </button>
+        <div className="flex-1 h-14 rounded-xl border border-suaza-border flex items-center justify-center text-xl font-bold text-suaza-ink">
+          {formatDurationLabel(value)}
+        </div>
+        <button
+          type="button"
+          onClick={inc}
+          disabled={value >= MATCH_DURATION_MAX}
+          aria-label="30분 증가"
+          className="w-14 h-14 rounded-xl bg-suaza-accent text-white text-2xl font-bold flex items-center justify-center hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          +
+        </button>
+      </div>
+      {/* 빠른 선택 칩 — 모바일: 패딩 없이 가운데 정렬.
+          데스크탑: 가운데 시간 표시 bar 와 좌우 끝을 맞춤 (−/+ 버튼 w-14 + gap-2 = 4rem). */}
+      <div className="flex items-center justify-center desktop:justify-start gap-1.5 flex-wrap desktop:px-16">
+        {MATCH_DURATION_OPTIONS.map((opt) => {
+          const on = opt === value;
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onChange(opt)}
+              className={`px-2.5 py-0.5 desktop:px-3 desktop:py-1 rounded-full text-xs desktop:text-sm font-medium transition ${
+                on
+                  ? "bg-suaza-accent text-white"
+                  : "bg-gray-100 text-suaza-ink-muted hover:bg-gray-200"
+              }`}
+            >
+              {opt}시간
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

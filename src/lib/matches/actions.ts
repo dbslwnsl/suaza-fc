@@ -7,7 +7,6 @@ import type { MatchStatus } from "./helpers";
 import {
   DEFAULT_MATCH_DURATION_HOURS,
   DEFAULT_TOTAL_QUARTERS,
-  MATCH_DURATION_OPTIONS,
   MATCH_STATUS,
   MAX_TOTAL_QUARTERS,
   MIN_TOTAL_QUARTERS,
@@ -63,12 +62,16 @@ function parseForm(formData: FormData): MatchInput {
     : "scheduled";
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
+  // 진행 쿼터 축소 시 실제 경기 시간(쿼터×30분)이 0.5h 단위로 저장될 수 있음.
+  // 0.5 ~ 4시간 사이의 30분 배수만 허용.
   const durationRaw = Number(formData.get("duration_hours"));
-  const duration_hours = (
-    MATCH_DURATION_OPTIONS as readonly number[]
-  ).includes(durationRaw)
-    ? durationRaw
-    : DEFAULT_MATCH_DURATION_HOURS;
+  const duration_hours =
+    Number.isFinite(durationRaw) &&
+    durationRaw >= 0.5 &&
+    durationRaw <= 4 &&
+    Math.round(durationRaw * 2) === durationRaw * 2
+      ? durationRaw
+      : DEFAULT_MATCH_DURATION_HOURS;
 
   const deadlineLocal = String(formData.get("vote_deadline") ?? "");
   const vote_deadline = deadlineLocal ? kstLocalToISO(deadlineLocal) : null;

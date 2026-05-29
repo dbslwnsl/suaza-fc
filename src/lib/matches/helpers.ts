@@ -35,16 +35,13 @@ export const DEFAULT_TOTAL_QUARTERS = 4;
 export const MIN_TOTAL_QUARTERS = 1;
 export const MAX_TOTAL_QUARTERS = 8;
 
-// 경기 시간(시간 단위) → 최대 쿼터 수.
-// 1시간=2쿼터 / 2시간=4쿼터 / 3시간=6쿼터 / 4시간=8쿼터
-export const MAX_QUARTERS_BY_DURATION: Record<number, number> = {
-  1: 2,
-  2: 4,
-  3: 6,
-  4: 8,
-};
+// 경기 시간(시간 단위) → 최대 쿼터 수 = 30분당 1쿼터(= 시간 × 2).
+// 2시간=4 / 2.5시간=5 / 3시간=6 / 3.5시간=7 / 4시간=8
 export function maxQuartersForDuration(durationHours: number): number {
-  return MAX_QUARTERS_BY_DURATION[durationHours] ?? DEFAULT_TOTAL_QUARTERS;
+  const q = Math.round(durationHours * 2);
+  if (q < MIN_TOTAL_QUARTERS) return MIN_TOTAL_QUARTERS;
+  if (q > MAX_TOTAL_QUARTERS) return MAX_TOTAL_QUARTERS;
+  return q;
 }
 
 export function getTotalQuarters(m: {
@@ -139,8 +136,19 @@ export function getTeamName(
 }
 
 export const DEFAULT_MATCH_DURATION_HOURS = 3;
-export const MATCH_DURATION_OPTIONS = [2, 3, 4] as const;
+// 30분 단위 (2 ~ 4시간)
+export const MATCH_DURATION_OPTIONS = [2, 2.5, 3, 3.5, 4] as const;
 export type MatchDurationHours = (typeof MATCH_DURATION_OPTIONS)[number];
+export const MATCH_DURATION_MIN = 2;
+export const MATCH_DURATION_MAX = 4;
+export const MATCH_DURATION_STEP = 0.5;
+
+// "3시간" / "3시간 30분" 형식 라벨
+export function formatDurationLabel(hours: number): string {
+  const h = Math.floor(hours);
+  const min = Math.round((hours - h) * 60);
+  return min > 0 ? `${h}시간 ${min}분` : `${h}시간`;
+}
 
 export function getMatchFinishTime(m: {
   match_date: string;
