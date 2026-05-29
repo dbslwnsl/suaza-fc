@@ -515,13 +515,14 @@ async function memberVoteAllowed(
     supabase.from("profiles").select("role").eq("id", userId).single(),
     supabase
       .from("matches")
-      .select("status, match_date, vote_deadline")
+      .select("status, match_date, vote_deadline, vote_closed_at")
       .eq("id", matchId)
       .single(),
   ]);
   if (me?.role === "manager" || me?.role === "coach") return true;
   if (!match) return false;
   if (isMatchStarted(match)) return false;
+  if (match.vote_closed_at) return false;
   if (
     match.vote_deadline &&
     Date.now() > new Date(match.vote_deadline).getTime()
@@ -529,6 +530,36 @@ async function memberVoteAllowed(
     return false;
   }
   return true;
+}
+
+/**
+ * 출석 투표 종료/재개. 회장/감독만 가능.
+ * 종료 시 vote_closed_at 설정 → 일반 회원 투표 잠금.
+ */
+export async function closeAttendanceVote(matchId: string) {
+  const { supabase } = await requireStaff();
+  const { error } = await supabase
+    .from("matches")
+    .update({ vote_closed_at: new Date().toISOString() })
+    .eq("id", matchId);
+  if (error) {
+    redirect(`/matches/${matchId}?error=${encodeURIComponent(error.message)}`);
+  }
+  revalidatePath(`/matches/${matchId}`);
+  revalidatePath("/");
+}
+
+export async function reopenAttendanceVote(matchId: string) {
+  const { supabase } = await requireStaff();
+  const { error } = await supabase
+    .from("matches")
+    .update({ vote_closed_at: null })
+    .eq("id", matchId);
+  if (error) {
+    redirect(`/matches/${matchId}?error=${encodeURIComponent(error.message)}`);
+  }
+  revalidatePath(`/matches/${matchId}`);
+  revalidatePath("/");
 }
 
 /**

@@ -25,6 +25,7 @@ export type Match = {
   team_a_name: string | null;
   team_b_name: string | null;
   vote_deadline: string | null;
+  vote_closed_at: string | null;
   total_quarters: number;
   quarter_actions: (QuarterAction | null)[];
 };

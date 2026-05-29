@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { deleteMatch } from "@/lib/matches/actions";
+import { closeAttendanceVote, deleteMatch } from "@/lib/matches/actions";
 import { WeatherInlineClient } from "@/components/weather-client";
 import {
   IntraTeamCircle,
@@ -239,6 +239,8 @@ export default async function MatchDetailPage({
   const deadlinePassed = m.vote_deadline
     ? Date.now() > new Date(m.vote_deadline).getTime()
     : false;
+  // 수동 종료 여부
+  const voteClosed = m.vote_closed_at != null;
   // 상태 자동 진행은 위에서 auto_progress_due_matches 로 이미 처리됨
   // (조회한 match 는 갱신 후 최신 상태)
 
@@ -356,14 +358,17 @@ export default async function MatchDetailPage({
                     totalQuarters={m.total_quarters ?? 4}
                     quarterActions={m.quarter_actions ?? null}
                     deadlineStr={deadlineStr}
+                    voteClosed={voteClosed}
                     locked={
                       isStarted ||
-                      (deadlinePassed && !isStaff)
+                      ((deadlinePassed || voteClosed) && !isStaff)
                     }
                     lockedMessage={
                       isStarted
                         ? "🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다"
-                        : "🔒 투표가 마감되었습니다 (매니저·감독만 변경 가능)"
+                        : voteClosed
+                          ? "🔒 출석 투표가 종료되었습니다"
+                          : "🔒 투표가 마감되었습니다 (매니저·감독만 변경 가능)"
                     }
                   />
                 </div>
@@ -796,6 +801,7 @@ function AttendanceCard({
   totalQuarters,
   quarterActions,
   deadlineStr,
+  voteClosed,
   locked,
   lockedMessage,
 }: {
@@ -815,6 +821,7 @@ function AttendanceCard({
   totalQuarters: number;
   quarterActions?: (string | null)[] | null;
   deadlineStr: string;
+  voteClosed?: boolean;
   locked?: boolean;
   lockedMessage?: string;
 }) {
@@ -828,9 +835,28 @@ function AttendanceCard({
             {totalMembers}명
           </span>
         </div>
-        <span className="text-xs text-suaza-ink-muted">
-          마감 {deadlineStr}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          {voteClosed ? (
+            <span className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600 font-medium">
+              종료됨
+            </span>
+          ) : (
+            <span className="text-xs text-suaza-ink-muted">
+              마감 {deadlineStr}
+            </span>
+          )}
+          {isManager && (
+            <form action={closeAttendanceVote.bind(null, matchId)}>
+              <button
+                type="submit"
+                disabled={voteClosed}
+                className="text-xs font-medium px-2.5 py-1 rounded-md border border-red-300 text-red-600 hover:bg-red-50 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              >
+                투표 종료
+              </button>
+            </form>
+          )}
+        </div>
       </div>
 
       <AttendanceCardVote

@@ -568,14 +568,18 @@ export default async function Home() {
               quarterActions={upcoming.quarter_actions ?? null}
               locked={
                 isMatchStarted(upcoming) ||
-                (!!upcoming.vote_deadline &&
-                  Date.now() > new Date(upcoming.vote_deadline).getTime() &&
+                ((upcoming.vote_closed_at != null ||
+                  (!!upcoming.vote_deadline &&
+                    Date.now() >
+                      new Date(upcoming.vote_deadline).getTime())) &&
                   profile?.role !== "manager")
               }
               lockedMessage={
                 isMatchStarted(upcoming)
                   ? "🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다"
-                  : "🔒 투표가 마감되었습니다 (매니저·감독만 변경 가능)"
+                  : upcoming.vote_closed_at != null
+                    ? "🔒 출석 투표가 종료되었습니다"
+                    : "🔒 투표가 마감되었습니다 (매니저·감독만 변경 가능)"
               }
             />
           </section>
