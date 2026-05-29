@@ -217,7 +217,8 @@ export default function FormationEditor({
   gameQuarters,
   initialQuarters,
   isIntra,
-  readonly,
+  editableTeam,
+  captainIds = [],
 }: {
   matchId: string;
   myUserId: string;
@@ -228,8 +229,16 @@ export default function FormationEditor({
   gameQuarters: GameQuarter[];
   initialQuarters: SavedQuarter[];
   isIntra: boolean;
-  readonly: boolean;
+  // 편집 권한: "both"=감독/회장(양 팀), "A"/"B"=해당 팀 주장만, null=보기 전용
+  editableTeam: "A" | "B" | "both" | null;
+  // 팀 주장 player id 목록 — 경기장 배치 시 이름 앞에 "C" 표시
+  captainIds?: string[];
 }) {
+  // 전혀 편집할 수 없으면 readonly. 감독/회장은 양 팀, 주장은 자기 팀만 편집 가능.
+  const readonly = editableTeam == null;
+  const fullAccess = editableTeam === "both";
+  const canEditTeam = (team: "A" | "B") =>
+    editableTeam === "both" || editableTeam === team;
   // 출석 쿼터 변경으로 자동 제거된 배치 경고 (쿼터 라벨 목록)
   const [autoRemoved, setAutoRemoved] = useState<string[]>([]);
 
@@ -374,6 +383,7 @@ export default function FormationEditor({
     () => new Map(members.map((m) => [m.id, m])),
     [members],
   );
+  const captainSet = useMemo(() => new Set(captainIds), [captainIds]);
   // 유효 = 활성 회원 ∩ 출석 회원 (배치/카운트/강조 공통 기준)
   const validIds = useMemo(() => {
     const attendSet = new Set(attendingIds);
@@ -437,8 +447,8 @@ export default function FormationEditor({
 
   // 본인의 자체전 팀 ("A" | "B" | null)
   const myTeam: "A" | "B" | null = teamByPlayer[myUserId] ?? null;
-  // 자체전 일반 회원: 본인 팀 정보만 노출. 회장/감독(=!readonly)은 양쪽 모두 표시.
-  const restrictedView = isIntra && readonly;
+  // 자체전에서 양 팀을 모두 보는 건 감독/회장(fullAccess)뿐. 주장·일반 회원은 본인 팀만.
+  const restrictedView = isIntra && !fullAccess;
   const showTeamA = !restrictedView || myTeam === "A";
   const showTeamB = !restrictedView || myTeam === "B";
   // 자체전 일반 회원이지만 아직 팀 미배정 → 명단은 숨기고 안내만, 운동장은 양 팀 그대로
@@ -449,6 +459,7 @@ export default function FormationEditor({
   }
 
   function changeShape(team: "A" | "B", next: string) {
+    if (!canEditTeam(team)) return;
     patchQuarter(activeIdx, (q) => {
       const nextSlots = buildSlots(next);
       const tf =
@@ -480,6 +491,7 @@ export default function FormationEditor({
     slotIndex: number,
     playerId: string | null,
   ) {
+    if (!canEditTeam(team)) return;
     // 현재 쿼터에 참여하지 않는 선수는 배치 불가
     if (playerId && !isAvailable(playerId)) {
       setOpenSlot(null);
@@ -526,6 +538,7 @@ export default function FormationEditor({
     targetTeam: "A" | "B",
     targetIdx: number,
   ) {
+    if (!canEditTeam(sourceTeam) || !canEditTeam(targetTeam)) return;
     if (sourceTeam === targetTeam && sourceIdx === targetIdx) return;
     patchQuarter(activeIdx, (q) => {
       const aAssigns = [...q.assignments];
@@ -567,15 +580,18 @@ export default function FormationEditor({
   }
 
   function unassignPlayer(playerId: string) {
+    // 편집 가능한 팀에서만 제거 (주장은 자기 팀 슬롯만)
     patchQuarter(activeIdx, (q) => ({
       ...q,
-      assignments: q.assignments.map((p) => (p === playerId ? null : p)),
+      assignments: canEditTeam("A")
+        ? q.assignments.map((p) => (p === playerId ? null : p))
+        : q.assignments,
       teamB: q.teamB
         ? {
             ...q.teamB,
-            assignments: q.teamB.assignments.map((p) =>
-              p === playerId ? null : p,
-            ),
+            assignments: canEditTeam("B")
+              ? q.teamB.assignments.map((p) => (p === playerId ? null : p))
+              : q.teamB.assignments,
           }
         : q.teamB,
     }));
@@ -608,12 +624,14 @@ export default function FormationEditor({
     const t: "A" | "B" = isIntra
       ? teamByPlayer[playerId] ?? teamOfPlayer.get(playerId) ?? "A"
       : "A";
+    if (!canEditTeam(t)) return;
     const slot = findSlotForPlayer(playerId, t);
     if (slot != null) assignSlot(t, slot, playerId);
   }
 
   // 한 팀만 자동 배치. 자체전이면 team 인자에 해당하는 팀만, 상대전이면 항상 "A".
   function autoPlaceTeam(team: "A" | "B") {
+    if (!canEditTeam(team)) return;
     setQuarters((prev) => {
       const q = prev[activeIdx];
       if (!q) return prev;
@@ -707,6 +725,7 @@ export default function FormationEditor({
   }
 
   function resetTeam(team: "A" | "B") {
+    if (!canEditTeam(team)) return;
     const teamName = isIntra ? (team === "A" ? "A팀 " : "B팀 ") : "";
     const qLabel = gameQuarters[activeIdx]?.label ?? current.id;
     if (!confirm(`${qLabel} ${teamName}배치를 비우시겠습니까?`)) return;
@@ -881,13 +900,14 @@ export default function FormationEditor({
                 teams={teams}
                 isIntra={pitchIntra}
                 byId={byId}
+                captainSet={captainSet}
                 myUserId={myUserId}
                 myCondition={myCondition}
                 readonly={readonly}
                 draggingId={draggingId}
-                onSlotClick={(team, i) =>
-                  !readonly && setOpenSlot({ team, idx: i })
-                }
+                onSlotClick={(team, i) => {
+                  if (canEditTeam(team)) setOpenSlot({ team, idx: i });
+                }}
                 onSlotDrop={handleSlotDrop}
                 onDragStart={(id) => setDraggingId(id)}
                 onDragEnd={() => setDraggingId(null)}
@@ -1035,6 +1055,7 @@ function Pitch({
   teams,
   isIntra,
   byId,
+  captainSet,
   myUserId,
   myCondition,
   readonly,
@@ -1049,6 +1070,7 @@ function Pitch({
   teams: PitchTeam[];
   isIntra: boolean;
   byId: Map<string, EditorMember>;
+  captainSet: Set<string>;
   myUserId: string;
   myCondition: number;
   readonly: boolean;
@@ -1377,6 +1399,19 @@ function Pitch({
                 >
                   {player ? (
                     <>
+                      {captainSet.has(player.id) && (
+                        <span
+                          className={`inline-flex items-center justify-center rounded-full bg-amber-400 text-amber-950 font-bold leading-none shrink-0 ${
+                            compact
+                              ? "w-3 h-3 text-[7px]"
+                              : "w-3.5 h-3.5 text-[8px]"
+                          }`}
+                          aria-label="주장"
+                          title="주장"
+                        >
+                          C
+                        </span>
+                      )}
                       <span className="max-w-[60px] truncate">
                         {player.name}
                       </span>

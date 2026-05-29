@@ -125,14 +125,9 @@ export default async function FormationPage({
     { data: members },
     { data: attendances },
   ] = await Promise.all([
-    supabase
-      .from("matches")
-      .select(
-        "id, opponent, match_date, location, status, total_quarters, quarter_actions",
-      )
-      .eq("id", id)
-      .single(),
-    supabase.from("profiles").select("role").eq("id", user.id).single(),
+    // select("*") 로 조회해 마이그레이션(주장 컬럼) 미적용 시에도 페이지가 깨지지 않게 함.
+    supabase.from("matches").select("*").eq("id", id).single(),
+    supabase.from("profiles").select("role, title").eq("id", user.id).single(),
     supabase
       .from("formations")
       .select("shape, positions")
@@ -154,7 +149,21 @@ export default async function FormationPage({
 
   if (!match) notFound();
 
-  const isStaff = me?.role === "manager" || me?.role === "coach";
+  // 풀 권한(양 팀 편집): 권한 role=manager, 또는 직책 회장(president)/감독(head_coach)
+  const isFullStaff =
+    me?.role === "manager" ||
+    me?.title === "president" ||
+    me?.title === "head_coach";
+  // 코치(직책 coach 또는 role=coach): 본인이 속한 팀만 편집 (회장·감독보다 약한 권한)
+  const isCoach = me?.role === "coach" || me?.title === "coach";
+  // 이 경기 자체전 주장 여부 — 주장도 자기 팀만 편집.
+  const teamACaptain = (match.team_a_captain as string | null) ?? null;
+  const teamBCaptain = (match.team_b_captain as string | null) ?? null;
+  const captainIds = [teamACaptain, teamBCaptain].filter(
+    (x): x is string => !!x,
+  );
+  const myCaptainTeam: "A" | "B" | null =
+    teamACaptain === user.id ? "A" : teamBCaptain === user.id ? "B" : null;
   const f = formation as FormationRow | null;
   const totalQuarters =
     (match.total_quarters as number | null) ?? DEFAULT_TOTAL_QUARTERS;
@@ -178,6 +187,20 @@ export default async function FormationPage({
     attendingQuartersByPlayer[a.player_id] = a.attending_quarters ?? null;
   }
   const isIntra = match.opponent === "자체전";
+
+  // 편집 권한 산출:
+  // - 회장·감독(isFullStaff) → 양 팀("both")
+  // - 코치 → 본인 배정 팀만. 자체전은 teamByPlayer 기준, 상대전은 팀이 하나라 그 팀 전체("both")
+  // - 주장 → 본인 팀("A"/"B")
+  // - 그 외 → null(보기 전용)
+  const myTeam = teamByPlayer[user.id] ?? null;
+  const editableTeam: "A" | "B" | "both" | null = isFullStaff
+    ? "both"
+    : isCoach
+      ? isIntra
+        ? myTeam
+        : "both"
+      : myCaptainTeam;
 
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg desktop:overflow-hidden">
@@ -222,7 +245,8 @@ export default async function FormationPage({
           gameQuarters={gameQuarters}
           initialQuarters={initialQuarters}
           isIntra={isIntra}
-          readonly={!isStaff}
+          editableTeam={editableTeam}
+          captainIds={captainIds}
         />
       </div>
     </main>
