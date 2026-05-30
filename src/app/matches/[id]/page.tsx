@@ -18,6 +18,7 @@ import ScoreControl from "./score-control";
 import TeamRecapCard from "./team-recap-card";
 import TeamBuilder from "./team-builder";
 import FormationEmbed from "./formation/embed";
+import MatchInfoReadonly from "./match-info-readonly";
 import MatchCommentSection, { type MatchComment } from "./match-comments";
 import {
   DEFAULT_TEAM_COLOR,
@@ -249,11 +250,15 @@ export default async function MatchDetailPage({
                 />
               </Link>
               <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
-                경기 정보 수정
+                {m.status === "done" || m.status === "canceled"
+                  ? "경기 정보 조회"
+                  : "경기 정보 수정"}
               </h1>
             </div>
             <p className="text-sm text-suaza-ink-muted">
-              경기 정보를 수정합니다
+              {m.status === "done" || m.status === "canceled"
+                ? "종료된 경기는 정보 조회만 가능합니다"
+                : "경기 정보를 수정합니다"}
             </p>
           </header>
 
@@ -263,27 +268,31 @@ export default async function MatchDetailPage({
             </p>
           )}
 
-          <NewMatchForm
-            mode="edit"
-            matchId={m.id}
-            initial={{
-              opponent: m.opponent,
-              matchDate: m.match_date,
-              location: m.location,
-              status: m.status,
-              notes: m.notes,
-              durationHours: m.duration_hours,
-              voteDeadline: m.vote_deadline,
-              teamAName: m.team_a_name,
-              teamBName: m.team_b_name,
-              teamAColor: m.team_a_color,
-              teamBColor: m.team_b_color,
-              totalQuarters: m.total_quarters,
-              quarterActions: m.quarter_actions,
-            }}
-            recentOpponents={[]}
-            recentLocations={[]}
-          />
+          {m.status === "done" || m.status === "canceled" ? (
+            <MatchInfoReadonly match={m} />
+          ) : (
+            <NewMatchForm
+              mode="edit"
+              matchId={m.id}
+              initial={{
+                opponent: m.opponent,
+                matchDate: m.match_date,
+                location: m.location,
+                status: m.status,
+                notes: m.notes,
+                durationHours: m.duration_hours,
+                voteDeadline: m.vote_deadline,
+                teamAName: m.team_a_name,
+                teamBName: m.team_b_name,
+                teamAColor: m.team_a_color,
+                teamBColor: m.team_b_color,
+                totalQuarters: m.total_quarters,
+                quarterActions: m.quarter_actions,
+              }}
+              recentOpponents={[]}
+              recentLocations={[]}
+            />
+          )}
         </div>
       </main>
     );
@@ -628,7 +637,9 @@ function VSCard({
             href={`/matches/${m.id}?edit=1`}
             className="text-sm font-bold text-suaza-accent bg-red-50 hover:bg-red-100 transition px-4 py-1.5 rounded-lg"
           >
-            경기 정보 수정 ›
+            {m.status === "done" || m.status === "canceled"
+              ? "경기 정보 조회 ›"
+              : "경기 정보 수정 ›"}
           </Link>
         )}
         {m.status === "done" || m.status === "canceled" ? (

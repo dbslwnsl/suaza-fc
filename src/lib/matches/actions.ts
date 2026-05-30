@@ -328,6 +328,15 @@ export async function updateMatch(matchId: string, formData: FormData) {
     .eq("id", matchId)
     .single();
 
+  // 종료/취소된 경기는 정보 수정 불가 (조회 전용)
+  if (existing?.status === "done" || existing?.status === "canceled") {
+    redirect(
+      `/matches/${matchId}?error=${encodeURIComponent(
+        "종료된 경기는 정보를 수정할 수 없습니다",
+      )}`,
+    );
+  }
+
   const update: Record<string, unknown> = { ...input };
   if (existing && existing.status !== input.status) {
     update.status_overridden_at = new Date().toISOString();
