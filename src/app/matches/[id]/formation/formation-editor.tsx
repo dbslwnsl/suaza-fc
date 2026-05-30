@@ -2089,52 +2089,80 @@ function PlayerRosterMobile({
         </p>
       </div>
       {isIntra ? (
-        <div
-          className={`grid gap-2 ${
-            showOnlyTeam ? "grid-cols-1" : "grid-cols-2"
-          }`}
-        >
-          {/* A팀 컬럼 */}
-          {showOnlyTeam !== "B" && (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-1">
-                <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
-                  <span className="w-2 h-2 rounded-full bg-blue-500" />A팀{" "}
-                  <span className="text-xs text-suaza-ink-muted font-normal">
-                    {teamACards.length}
-                  </span>
+        showOnlyTeam ? (
+          // 본인 팀만 표시 — 단일 컬럼, zip 불필요
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-1">
+              <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    showOnlyTeam === "A" ? "bg-blue-500" : "bg-red-500"
+                  }`}
+                />
+                {showOnlyTeam}팀{" "}
+                <span className="text-xs text-suaza-ink-muted font-normal">
+                  {(showOnlyTeam === "A" ? teamACards : teamBCards).length}
                 </span>
-                {!readonly && (
-                  <TeamMiniActions
-                    onReset={() => onResetTeam?.("A")}
-                    onAutoPlace={() => onAutoPlaceTeam?.("A")}
-                  />
-                )}
-              </div>
-              {teamACards.map(renderCard)}
+              </span>
+              {!readonly && (
+                <TeamMiniActions
+                  onReset={() => onResetTeam?.(showOnlyTeam)}
+                  onAutoPlace={() => onAutoPlaceTeam?.(showOnlyTeam)}
+                />
+              )}
             </div>
-          )}
-          {/* B팀 컬럼 */}
-          {showOnlyTeam !== "A" && (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-1">
-                <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
-                  <span className="w-2 h-2 rounded-full bg-red-500" />B팀{" "}
-                  <span className="text-xs text-suaza-ink-muted font-normal">
-                    {teamBCards.length}
-                  </span>
+            {(showOnlyTeam === "A" ? teamACards : teamBCards).map(renderCard)}
+          </div>
+        ) : (
+          // A/B 양 팀을 한 grid 에 zip 배치 — 두 카드가 한 row 를 공유해
+          // 카드 높이 차이가 누적되지 않도록 행 정렬을 grid 에 맡긴다.
+          <div className="grid grid-cols-2 gap-2 items-start">
+            {/* 헤더: 같은 grid 의 첫 두 셀로 배치해야 카드와 컬럼 폭이 일치 */}
+            <div className="flex items-center justify-between gap-1">
+              <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
+                <span className="w-2 h-2 rounded-full bg-blue-500" />A팀{" "}
+                <span className="text-xs text-suaza-ink-muted font-normal">
+                  {teamACards.length}
                 </span>
-                {!readonly && (
-                  <TeamMiniActions
-                    onReset={() => onResetTeam?.("B")}
-                    onAutoPlace={() => onAutoPlaceTeam?.("B")}
-                  />
-                )}
-              </div>
-              {teamBCards.map(renderCard)}
+              </span>
+              {!readonly && (
+                <TeamMiniActions
+                  onReset={() => onResetTeam?.("A")}
+                  onAutoPlace={() => onAutoPlaceTeam?.("A")}
+                />
+              )}
             </div>
-          )}
-        </div>
+            <div className="flex items-center justify-between gap-1">
+              <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
+                <span className="w-2 h-2 rounded-full bg-red-500" />B팀{" "}
+                <span className="text-xs text-suaza-ink-muted font-normal">
+                  {teamBCards.length}
+                </span>
+              </span>
+              {!readonly && (
+                <TeamMiniActions
+                  onReset={() => onResetTeam?.("B")}
+                  onAutoPlace={() => onAutoPlaceTeam?.("B")}
+                />
+              )}
+            </div>
+            {/* zip: 행 i 의 두 셀 = (A[i], B[i]). 한쪽이 짧으면 빈 칸으로 채움 */}
+            {Array.from({
+              length: Math.max(teamACards.length, teamBCards.length),
+            }).flatMap((_, i) => [
+              teamACards[i] ? (
+                renderCard(teamACards[i])
+              ) : (
+                <div key={`A-empty-${i}`} aria-hidden />
+              ),
+              teamBCards[i] ? (
+                renderCard(teamBCards[i])
+              ) : (
+                <div key={`B-empty-${i}`} aria-hidden />
+              ),
+            ])}
+          </div>
+        )
       ) : (
         <>
           {!readonly && (
@@ -2208,8 +2236,8 @@ function PlayerRowMobile({
       }}
       onDragEnd={() => onDragEnd?.()}
       onClick={() => !readonly && !disabled && onTap(m.id, placed)}
-      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-white select-none transition ${
-        placed ? "border-2" : "border border-suaza-border"
+      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-white select-none transition border-2 ${
+        placed ? "" : "border-suaza-border"
       } ${
         readonly || disabled ? "cursor-default" : "cursor-pointer"
       } ${disabled ? "opacity-50" : !hasPlayed && !placed ? "opacity-80" : ""}`}
@@ -2220,11 +2248,6 @@ function PlayerRowMobile({
             name={m.name}
             className="text-sm font-semibold text-suaza-ink"
             allowDropSurname={false}
-          />
-          <ConditionArrow
-            level={conditionLevel}
-            interactive={isMe}
-            onCycle={onCycleCondition}
           />
           <FootBadge foot={m.preferred_foot} />
         </div>
@@ -2505,11 +2528,6 @@ function DesktopPlayerCard({
           <PlayerName
             name={m.name}
             className="text-xs font-semibold text-suaza-ink"
-          />
-          <ConditionArrow
-            level={conditionLevel}
-            interactive={isMe}
-            onCycle={onCycleCondition}
           />
           <FootBadge foot={m.preferred_foot} />
         </div>
