@@ -221,6 +221,7 @@ export default function FormationEditor({
   teamBName = "B팀",
   editableTeam,
   captainIds = [],
+  matchLocked = false,
 }: {
   matchId: string;
   myUserId: string;
@@ -238,6 +239,8 @@ export default function FormationEditor({
   editableTeam: "A" | "B" | "both" | null;
   // 팀 주장 player id 목록 — 경기장 배치 시 이름 앞에 "C" 표시
   captainIds?: string[];
+  // 경기가 종료/취소된 상태 — 실수 방지 위해 초기화·자동 버튼 비활성화
+  matchLocked?: boolean;
 }) {
   // 전혀 편집할 수 없으면 readonly. 감독/회장은 양 팀, 주장은 자기 팀만 편집 가능.
   const readonly = editableTeam == null;
@@ -641,6 +644,7 @@ export default function FormationEditor({
 
   // 한 팀만 자동 배치. 자체전이면 team 인자에 해당하는 팀만, 상대전이면 항상 "A".
   function autoPlaceTeam(team: "A" | "B") {
+    if (matchLocked) return;
     if (!canEditTeam(team)) return;
     setQuarters((prev) => {
       const q = prev[activeIdx];
@@ -735,6 +739,7 @@ export default function FormationEditor({
   }
 
   function resetTeam(team: "A" | "B") {
+    if (matchLocked) return;
     if (!canEditTeam(team)) return;
     const teamName = isIntra
       ? team === "A"
@@ -842,6 +847,7 @@ export default function FormationEditor({
               onDragEnd={() => setDraggingId(null)}
               onReset={() => resetTeam("A")}
               onAutoPlace={() => autoPlaceTeam("A")}
+              matchLocked={matchLocked}
             />
           </DesktopRosterPane>
         )}
@@ -1012,6 +1018,7 @@ export default function FormationEditor({
                   onAutoPlace={() =>
                     autoPlaceTeam(isIntra ? rightTeam : "A")
                   }
+                  matchLocked={matchLocked}
                 />
               </DesktopRosterPane>
             );
@@ -1067,6 +1074,7 @@ export default function FormationEditor({
         }))}
         activeQuarterIdx={activeIdx}
         onQuarterChange={setActiveIdx}
+        matchLocked={matchLocked}
         onTap={(id: string, placed: boolean) => {
           if (readonly) return;
           if (placed) unassignPlayer(id);
@@ -2098,23 +2106,31 @@ function FilterTabsWithCounts({
 function TeamMiniActions({
   onReset,
   onAutoPlace,
+  disabled = false,
+  disabledTitle,
 }: {
   onReset: () => void;
   onAutoPlace: () => void;
+  disabled?: boolean;
+  disabledTitle?: string;
 }) {
   return (
     <span className="flex items-center gap-1 shrink-0">
       <button
         type="button"
         onClick={onReset}
-        className="h-6 px-2 rounded-md border border-suaza-border text-[10px] font-medium text-suaza-ink bg-white hover:bg-suaza-bg"
+        disabled={disabled}
+        title={disabled ? disabledTitle : undefined}
+        className="h-6 px-2 rounded-md border border-suaza-border text-[10px] font-medium text-suaza-ink bg-white hover:bg-suaza-bg disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
       >
         초기화
       </button>
       <button
         type="button"
         onClick={onAutoPlace}
-        className="h-6 px-2 rounded-md bg-suaza-button text-white text-[10px] font-medium hover:opacity-90"
+        disabled={disabled}
+        title={disabled ? disabledTitle : undefined}
+        className="h-6 px-2 rounded-md bg-suaza-button text-white text-[10px] font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:opacity-40"
       >
         자동
       </button>
@@ -2237,6 +2253,7 @@ function PlayerRosterMobile({
   quarterTabs,
   activeQuarterIdx,
   onQuarterChange,
+  matchLocked = false,
 }: {
   members: EditorMember[];
   quarters: QuarterWithTeams[];
@@ -2274,6 +2291,8 @@ function PlayerRosterMobile({
   quarterTabs?: { id: string; label: string }[];
   activeQuarterIdx?: number;
   onQuarterChange?: (idx: number) => void;
+  /** 종료/취소된 경기 — 초기화·자동 비활성 */
+  matchLocked?: boolean;
 }) {
   const participations = useMemo(
     () => computeParticipations(members, quarters),
@@ -2407,6 +2426,8 @@ function PlayerRosterMobile({
                 <TeamMiniActions
                   onReset={() => onResetTeam?.(showOnlyTeam)}
                   onAutoPlace={() => onAutoPlaceTeam?.(showOnlyTeam)}
+                  disabled={matchLocked}
+                  disabledTitle="종료된 경기는 변경할 수 없습니다"
                 />
               )}
             </div>
@@ -2441,6 +2462,8 @@ function PlayerRosterMobile({
                   <TeamMiniActions
                     onReset={() => onResetTeam?.("A")}
                     onAutoPlace={() => onAutoPlaceTeam?.("A")}
+                    disabled={matchLocked}
+                    disabledTitle="종료된 경기는 변경할 수 없습니다"
                   />
                 )}
               </div>
@@ -2467,6 +2490,8 @@ function PlayerRosterMobile({
                   <TeamMiniActions
                     onReset={() => onResetTeam?.("B")}
                     onAutoPlace={() => onAutoPlaceTeam?.("B")}
+                    disabled={matchLocked}
+                    disabledTitle="종료된 경기는 변경할 수 없습니다"
                   />
                 )}
               </div>
@@ -2505,6 +2530,8 @@ function PlayerRosterMobile({
               <TeamMiniActions
                 onReset={() => onResetTeam?.("A")}
                 onAutoPlace={() => onAutoPlaceTeam?.("A")}
+                disabled={matchLocked}
+                disabledTitle="종료된 경기는 변경할 수 없습니다"
               />
             </div>
           )}
@@ -2642,6 +2669,7 @@ function PlayerRosterDesktop({
   myUserId,
   myCondition,
   onCycleCondition,
+  matchLocked = false,
 }: {
   members: EditorMember[];
   quarters: QuarterWithTeams[];
@@ -2663,6 +2691,7 @@ function PlayerRosterDesktop({
   myUserId: string;
   myCondition: number;
   onCycleCondition: () => void;
+  matchLocked?: boolean;
 }) {
   const [filter, setFilter] = useState<Filter>("ALL");
 
@@ -2731,7 +2760,11 @@ function PlayerRosterDesktop({
               <button
                 type="button"
                 onClick={onReset}
-                className="h-7 px-2.5 rounded-md border border-suaza-border text-[11px] font-medium text-suaza-ink bg-white hover:bg-suaza-bg"
+                disabled={matchLocked}
+                title={
+                  matchLocked ? "종료된 경기는 변경할 수 없습니다" : undefined
+                }
+                className="h-7 px-2.5 rounded-md border border-suaza-border text-[11px] font-medium text-suaza-ink bg-white hover:bg-suaza-bg disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
               >
                 초기화
               </button>
@@ -2740,7 +2773,11 @@ function PlayerRosterDesktop({
               <button
                 type="button"
                 onClick={onAutoPlace}
-                className="h-7 px-2.5 rounded-md bg-suaza-button text-white text-[11px] font-medium hover:opacity-90"
+                disabled={matchLocked}
+                title={
+                  matchLocked ? "종료된 경기는 변경할 수 없습니다" : undefined
+                }
+                className="h-7 px-2.5 rounded-md bg-suaza-button text-white text-[11px] font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:opacity-40"
               >
                 자동
               </button>

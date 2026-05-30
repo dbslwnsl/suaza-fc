@@ -250,6 +250,9 @@ export default async function FormationPage({
           teamBName={getTeamName(match, "B")}
           editableTeam={editableTeam}
           captainIds={captainIds}
+          matchLocked={
+            match.status === "done" || match.status === "canceled"
+          }
         />
       </div>
     </main>
