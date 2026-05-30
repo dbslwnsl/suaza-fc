@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 import {
   DEFAULT_TOTAL_QUARTERS,
   formatMatchDate,
+  getTeamName,
   type QuarterAction,
 } from "@/lib/matches/helpers";
 import { type SavedQuarter } from "@/lib/formations/helpers";
@@ -245,6 +246,8 @@ export default async function FormationPage({
           gameQuarters={gameQuarters}
           initialQuarters={initialQuarters}
           isIntra={isIntra}
+          teamAName={getTeamName(match, "A")}
+          teamBName={getTeamName(match, "B")}
           editableTeam={editableTeam}
           captainIds={captainIds}
         />

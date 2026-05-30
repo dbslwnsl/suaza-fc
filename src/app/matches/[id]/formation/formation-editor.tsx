@@ -217,6 +217,8 @@ export default function FormationEditor({
   gameQuarters,
   initialQuarters,
   isIntra,
+  teamAName = "A팀",
+  teamBName = "B팀",
   editableTeam,
   captainIds = [],
 }: {
@@ -229,6 +231,9 @@ export default function FormationEditor({
   gameQuarters: GameQuarter[];
   initialQuarters: SavedQuarter[];
   isIntra: boolean;
+  // 자체전 팀 표시명 (경기 설정에서 입력한 이름 — 미입력 시 "A팀"/"B팀")
+  teamAName?: string;
+  teamBName?: string;
   // 편집 권한: "both"=감독/회장(양 팀), "A"/"B"=해당 팀 주장만, null=보기 전용
   editableTeam: "A" | "B" | "both" | null;
   // 팀 주장 player id 목록 — 경기장 배치 시 이름 앞에 "C" 표시
@@ -291,6 +296,11 @@ export default function FormationEditor({
     return next;
   });
   const [activeIdx, setActiveIdx] = useState(0);
+  // 자체전 + 회장·감독(fullAccess) 운동장 보기 모드.
+  //   "all": 양 팀 동시 표시(기존 동작), "A"/"B": 해당 팀만 단독 표시(상대전처럼).
+  //  - 데스크탑: 운동장 표기에만 적용, 양옆 명단은 그대로.
+  //  - 모바일: 운동장 + 선수 명단 필터 모두에 적용.
+  const [pitchView, setPitchView] = useState<"all" | "A" | "B">("all");
   const [openSlot, setOpenSlot] = useState<{
     team: "A" | "B";
     idx: number;
@@ -726,7 +736,11 @@ export default function FormationEditor({
 
   function resetTeam(team: "A" | "B") {
     if (!canEditTeam(team)) return;
-    const teamName = isIntra ? (team === "A" ? "A팀 " : "B팀 ") : "";
+    const teamName = isIntra
+      ? team === "A"
+        ? `${teamAName} `
+        : `${teamBName} `
+      : "";
     const qLabel = gameQuarters[activeIdx]?.label ?? current.id;
     if (!confirm(`${qLabel} ${teamName}배치를 비우시겠습니까?`)) return;
     patchQuarter(activeIdx, (q) => {
@@ -765,49 +779,21 @@ export default function FormationEditor({
         </div>
       )}
 
-      {/* 쿼터 탭 — 경기 설정의 게임 쿼터(준비운동·훈련 제외) */}
-      <div className="-mx-1 px-1 pt-2 overflow-x-auto">
-        <div className="flex gap-2 w-max">
-          {quarters.map((q, i) => {
-            const active = i === activeIdx;
-            const label = gameQuarters[i]?.label ?? q.id;
-            return (
-              <div key={q.id} className="relative shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setActiveIdx(i)}
-                  className={`min-w-[64px] h-10 px-4 rounded-lg text-sm font-medium transition ${
-                    active
-                      ? "bg-suaza-button text-white shadow-sm"
-                      : "bg-white text-suaza-ink-muted border border-suaza-border hover:text-suaza-ink"
-                  }`}
-                >
-                  {label}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* 쿼터 탭은 모든 사용자에게 선수명단 카드 위 리본으로 표시
+          (PlayerRosterMobile / DesktopRosterPane 내부). 운동장 위 탭은 없음. */}
 
-      {/* 포메이션 칩 */}
-      {showTeamA && (
-        <FormationChipRow
-          label={isIntra ? "A팀" : null}
-          teamColor={isIntra ? "#3B82F6" : null}
-          currentShape={current.shape}
-          readonly={readonly}
-          onChange={(s) => changeShape("A", s)}
-        />
-      )}
-      {isIntra && current.teamB && showTeamB && (
-        <FormationChipRow
-          label="B팀"
-          teamColor="#EF4444"
-          currentShape={current.teamB.shape}
-          readonly={readonly}
-          onChange={(s) => changeShape("B", s)}
-        />
+      {/* 포메이션 칩 — 모바일 상대전 전용 (자체전은 PlayerRosterMobile 헤더로,
+          데스크탑은 PlayerRosterDesktop 헤더로 이동) */}
+      {!isIntra && showTeamA && (
+        <div className="desktop:hidden">
+          <FormationChipRow
+            label={null}
+            teamColor={null}
+            currentShape={current.shape}
+            readonly={readonly}
+            onChange={(s) => changeShape("A", s)}
+          />
+        </div>
       )}
 
       {/* 저장 상태 — 떠 있는 토스트 (레이아웃 공간 차지 안 함) */}
@@ -822,11 +808,21 @@ export default function FormationEditor({
         {/* 자체전 A팀 명단 (데스크탑 좌측) — 양 팀을 모두 보는 매니저 전용.
             일반회원(restrictedView)은 본인 팀이 A든 B든 우측 명단으로 통일. */}
         {isIntra && showTeamA && !restrictedView && (
-          <aside className="hidden desktop:flex desktop:w-[280px] flex-col bg-white rounded-2xl border border-suaza-border p-4 gap-3 min-h-0">
+          <DesktopRosterPane
+            showRibbon
+            ribbonTabs={quarters.map((q, i) => ({
+              id: q.id,
+              label: gameQuarters[i]?.label ?? q.id,
+            }))}
+            activeRibbonIdx={activeIdx}
+            onRibbonChange={setActiveIdx}
+          >
             <PlayerRosterDesktop
               members={teamAMembers}
-              teamLabel="A팀"
+              teamLabel={teamAName}
               teamColor="#3B82F6"
+              currentShape={current.shape}
+              onShapeChange={(s) => changeShape("A", s)}
               myUserId={myUserId}
               myCondition={myCondition}
               onCycleCondition={cycleMyCondition}
@@ -847,16 +843,30 @@ export default function FormationEditor({
               onReset={() => resetTeam("A")}
               onAutoPlace={() => autoPlaceTeam("A")}
             />
-          </aside>
+          </DesktopRosterPane>
         )}
 
         {/* 경기장 */}
-        <div className="relative desktop:flex-1 desktop:flex desktop:items-center desktop:justify-center">
+        <div className="relative desktop:flex-1 desktop:flex desktop:flex-col desktop:items-center desktop:justify-center">
+          {/* 자체전 + 회장·감독: 운동장 위 보기 모드 리본 (A팀 / 전체 / B팀) */}
+          {fullAccess && isIntra && current.teamB && (
+            <div className="flex justify-center pb-2 desktop:pb-3">
+              <PitchViewToggle
+                value={pitchView}
+                onChange={setPitchView}
+                teamAName={teamAName}
+                teamBName={teamBName}
+              />
+            </div>
+          )}
           {(() => {
             // 자체전 + 일반 회원: 본인 팀 슬롯만 표시 (운동장 전체 사용)
             // 미배정 시(noTeamView)에는 양 팀 모두 표시 (운동장은 보이게)
             const restrictPitchToMyTeam =
               restrictedView && myTeam != null && !!current.teamB;
+            // 회장·감독이 단일 팀만 선택한 경우 — 상대전처럼 단독 표기
+            const fullAccessSingle =
+              fullAccess && isIntra && current.teamB && pitchView !== "all";
             const teams = restrictPitchToMyTeam
               ? [
                   myTeam === "A"
@@ -874,26 +884,43 @@ export default function FormationEditor({
                         assignments: current.teamB!.assignments,
                       },
                 ]
-              : current.teamB
+              : fullAccessSingle
                 ? [
-                    {
-                      team: "A" as const,
-                      slots: buildSlotsForTeam(current.shape, "A"),
-                      assignments: current.assignments,
-                    },
-                    {
-                      team: "B" as const,
-                      slots: buildSlotsForTeam(current.teamB.shape, "B"),
-                      assignments: current.teamB.assignments,
-                    },
+                    pitchView === "A"
+                      ? {
+                          team: "A" as const,
+                          slots: buildSlotsForTeam(current.shape, "single"),
+                          assignments: current.assignments,
+                        }
+                      : {
+                          team: "B" as const,
+                          slots: buildSlotsForTeam(
+                            current.teamB!.shape,
+                            "single",
+                          ),
+                          assignments: current.teamB!.assignments,
+                        },
                   ]
-                : [
-                    {
-                      team: "A" as const,
-                      slots: slotsA,
-                      assignments: current.assignments,
-                    },
-                  ];
+                : current.teamB
+                  ? [
+                      {
+                        team: "A" as const,
+                        slots: buildSlotsForTeam(current.shape, "A"),
+                        assignments: current.assignments,
+                      },
+                      {
+                        team: "B" as const,
+                        slots: buildSlotsForTeam(current.teamB.shape, "B"),
+                        assignments: current.teamB.assignments,
+                      },
+                    ]
+                  : [
+                      {
+                        team: "A" as const,
+                        slots: slotsA,
+                        assignments: current.assignments,
+                      },
+                    ];
             const pitchIntra = teams.length === 2;
             return (
               <Pitch
@@ -904,6 +931,8 @@ export default function FormationEditor({
                 myUserId={myUserId}
                 myCondition={myCondition}
                 readonly={readonly}
+                teamAName={teamAName}
+                teamBName={teamBName}
                 draggingId={draggingId}
                 onSlotClick={(team, i) => {
                   if (canEditTeam(team)) setOpenSlot({ team, idx: i });
@@ -932,19 +961,36 @@ export default function FormationEditor({
             const rightLabel = !isIntra
               ? undefined
               : restrictedAOnRight
-                ? "A팀"
-                : "B팀";
+                ? teamAName
+                : teamBName;
             const rightColor = !isIntra
               ? undefined
               : restrictedAOnRight
                 ? "#3B82F6"
                 : "#EF4444";
+            const rightShape = !isIntra
+              ? current.shape
+              : restrictedAOnRight
+                ? current.shape
+                : current.teamB?.shape ?? DEFAULT_INTRA_SHAPE;
+            const rightChangeTeam: "A" | "B" =
+              !isIntra ? "A" : restrictedAOnRight ? "A" : "B";
             return (
-              <aside className="hidden desktop:flex desktop:w-[280px] flex-col bg-white rounded-2xl border border-suaza-border p-4 gap-3 min-h-0">
+              <DesktopRosterPane
+                showRibbon
+                ribbonTabs={quarters.map((q, i) => ({
+                  id: q.id,
+                  label: gameQuarters[i]?.label ?? q.id,
+                }))}
+                activeRibbonIdx={activeIdx}
+                onRibbonChange={setActiveIdx}
+              >
                 <PlayerRosterDesktop
                   members={rightMembers}
                   teamLabel={rightLabel}
                   teamColor={rightColor}
+                  currentShape={rightShape}
+                  onShapeChange={(s) => changeShape(rightChangeTeam, s)}
                   myUserId={myUserId}
                   myCondition={myCondition}
                   onCycleCondition={cycleMyCondition}
@@ -967,7 +1013,7 @@ export default function FormationEditor({
                     autoPlaceTeam(isIntra ? rightTeam : "A")
                   }
                 />
-              </aside>
+              </DesktopRosterPane>
             );
           })()}
 
@@ -1001,8 +1047,26 @@ export default function FormationEditor({
         teamByPlayer={teamByPlayer}
         isIntra={isIntra}
         readonly={readonly}
-        showOnlyTeam={restrictedView && myTeam ? myTeam : undefined}
+        showOnlyTeam={
+          restrictedView && myTeam
+            ? myTeam
+            : fullAccess && isIntra && current.teamB && pitchView !== "all"
+              ? pitchView
+              : undefined
+        }
         unassignedNotice={noTeamView}
+        teamAName={teamAName}
+        teamBName={teamBName}
+        shapeA={current.shape}
+        shapeB={current.teamB?.shape}
+        onShapeChangeTeam={(team, s) => changeShape(team, s)}
+        fullAccess={fullAccess}
+        quarterTabs={quarters.map((q, i) => ({
+          id: q.id,
+          label: gameQuarters[i]?.label ?? q.id,
+        }))}
+        activeQuarterIdx={activeIdx}
+        onQuarterChange={setActiveIdx}
         onTap={(id: string, placed: boolean) => {
           if (readonly) return;
           if (placed) unassignPlayer(id);
@@ -1059,6 +1123,8 @@ function Pitch({
   myUserId,
   myCondition,
   readonly,
+  teamAName = "A팀",
+  teamBName = "B팀",
   draggingId,
   onSlotClick,
   onSlotDrop,
@@ -1074,6 +1140,8 @@ function Pitch({
   myUserId: string;
   myCondition: number;
   readonly: boolean;
+  teamAName?: string;
+  teamBName?: string;
   draggingId: string | null;
   onSlotClick: (team: "A" | "B", i: number) => void;
   onSlotDrop: (
@@ -1281,13 +1349,13 @@ function Pitch({
             className="absolute top-2 left-3 px-2 py-0.5 rounded-md text-[11px] font-bold text-white shadow-sm"
             style={{ backgroundColor: "#3B82F6" }}
           >
-            A팀
+            {teamAName}
           </div>
           <div
             className="absolute bottom-2 left-3 px-2 py-0.5 rounded-md text-[11px] font-bold text-white shadow-sm"
             style={{ backgroundColor: "#EF4444" }}
           >
-            B팀
+            {teamBName}
           </div>
         </>
       )}
@@ -1479,11 +1547,9 @@ function FormationChipRow({
   }
 
   return (
-    <div className="flex items-center gap-2 -mx-4 sm:mx-0 px-4 sm:px-0">
+    <div className="flex items-center gap-2 px-1">
       {label && (
-        <span
-          className="shrink-0 inline-flex items-center gap-1 text-xs font-bold text-suaza-ink"
-        >
+        <span className="shrink-0 inline-flex items-center gap-1 text-xs font-bold text-suaza-ink">
           <span
             className="w-2 h-2 rounded-full"
             style={{ backgroundColor: teamColor ?? undefined }}
@@ -1491,27 +1557,110 @@ function FormationChipRow({
           {label}
         </span>
       )}
-      <div className="flex-1 overflow-x-auto">
-        <div className="flex gap-2 w-max">
-          {FORMATIONS.map((f) => {
-            const active = f.shape === currentShape;
-            return (
-              <button
-                key={f.shape}
-                type="button"
-                onClick={() => onChange(f.shape)}
-                className={`shrink-0 h-9 px-3 rounded-xl border text-xs font-semibold transition ${
-                  active
-                    ? "bg-suaza-button text-white border-suaza-button shadow-sm"
-                    : "bg-white text-suaza-ink border-suaza-border hover:border-suaza-ink-muted"
-                }`}
-              >
-                {f.shape}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <FormationDropdown
+        currentShape={currentShape}
+        onChange={onChange}
+      />
+    </div>
+  );
+}
+
+function FormationDropdown({
+  currentShape,
+  onChange,
+  fullWidth = false,
+}: {
+  currentShape: string;
+  onChange: (shape: string) => void;
+  fullWidth?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const currentMeta = FORMATIONS.find((f) => f.shape === currentShape);
+
+  return (
+    <div className={`relative ${fullWidth ? "flex w-full" : "inline-flex"}`}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={`${
+          fullWidth ? "flex w-full justify-between" : "inline-flex"
+        } items-center gap-2 h-9 px-3 rounded-xl border text-xs font-semibold transition ${
+          open
+            ? "bg-suaza-button text-white border-suaza-button shadow-sm"
+            : "bg-white text-suaza-ink border-suaza-border hover:border-suaza-ink-muted"
+        }`}
+      >
+        <span className="inline-flex items-center gap-2 min-w-0">
+          <span className="font-bold tabular-nums">{currentShape}</span>
+          {currentMeta?.name && (
+            <span
+              className={`text-[11px] font-normal truncate ${
+                open ? "text-white/80" : "text-suaza-ink-muted"
+              }`}
+            >
+              {currentMeta.name}
+            </span>
+          )}
+        </span>
+        <span
+          aria-hidden
+          className={`text-[10px] leading-none transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+        >
+          ▼
+        </span>
+      </button>
+      {open && (
+        <>
+          {/* 외부 클릭/터치로 닫기 */}
+          <div
+            className="fixed inset-0 z-30"
+            onClick={() => setOpen(false)}
+            onTouchStart={() => setOpen(false)}
+          />
+          <div
+            role="listbox"
+            className={`absolute top-full left-0 mt-1 z-40 bg-white border border-suaza-border rounded-xl shadow-lg whitespace-nowrap max-h-[60vh] overflow-y-auto ${
+              fullWidth
+                ? "w-full"
+                : "w-max min-w-[180px] max-w-[260px]"
+            }`}
+          >
+            {FORMATIONS.map((f) => {
+              const active = f.shape === currentShape;
+              return (
+                <button
+                  key={f.shape}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  onClick={() => {
+                    onChange(f.shape);
+                    setOpen(false);
+                  }}
+                  className={`flex items-center justify-between gap-3 w-full px-3 py-2.5 text-left text-sm transition ${
+                    active
+                      ? "bg-red-50 text-suaza-accent font-bold"
+                      : "text-suaza-ink hover:bg-gray-50"
+                  }`}
+                >
+                  <span className="tabular-nums font-semibold">{f.shape}</span>
+                  <span
+                    className={`text-xs ${
+                      active ? "text-suaza-accent/80" : "text-suaza-ink-muted"
+                    }`}
+                  >
+                    {f.name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1973,6 +2122,92 @@ function TeamMiniActions({
   );
 }
 
+// 회장·감독 자체전 전용 — 운동장 보기 모드 토글(A팀 / 전체 / B팀)
+function PitchViewToggle({
+  value,
+  onChange,
+  teamAName,
+  teamBName,
+}: {
+  value: "all" | "A" | "B";
+  onChange: (v: "all" | "A" | "B") => void;
+  teamAName: string;
+  teamBName: string;
+}) {
+  const opts: { key: "A" | "all" | "B"; label: string }[] = [
+    { key: "A", label: teamAName },
+    { key: "all", label: "전체" },
+    { key: "B", label: teamBName },
+  ];
+  return (
+    <div className="inline-flex items-center rounded-full border border-suaza-border bg-white p-0.5 shadow-sm">
+      {opts.map((o) => {
+        const active = o.key === value;
+        return (
+          <button
+            key={o.key}
+            type="button"
+            onClick={() => onChange(o.key)}
+            className={`min-w-[56px] h-7 px-3 rounded-full text-xs font-semibold transition ${
+              active
+                ? "bg-suaza-button text-white shadow-sm"
+                : "text-suaza-ink-muted hover:text-suaza-ink"
+            }`}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// 데스크탑 명단 카드 wrapper — 상단에 쿼터 탭 리본을 붙일 수 있다.
+function DesktopRosterPane({
+  showRibbon,
+  ribbonTabs,
+  activeRibbonIdx,
+  onRibbonChange,
+  children,
+}: {
+  showRibbon: boolean;
+  ribbonTabs: { id: string; label: string }[];
+  activeRibbonIdx: number;
+  onRibbonChange: (idx: number) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="hidden desktop:flex desktop:w-[280px] flex-col min-h-0">
+      {showRibbon && ribbonTabs.length > 0 && (
+        <div className="overflow-x-auto -mb-px">
+          <div className="flex gap-1 px-3 w-max">
+            {ribbonTabs.map((q, i) => {
+              const active = i === activeRibbonIdx;
+              return (
+                <button
+                  key={q.id}
+                  type="button"
+                  onClick={() => onRibbonChange(i)}
+                  className={`shrink-0 min-w-[48px] h-8 px-3 rounded-t-lg text-xs font-bold transition border-x border-t ${
+                    active
+                      ? "bg-white border-suaza-border text-suaza-button"
+                      : "bg-suaza-bg border-transparent text-suaza-ink-muted hover:text-suaza-ink"
+                  }`}
+                >
+                  {q.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <aside className="flex-1 flex flex-col bg-white rounded-2xl border border-suaza-border p-4 gap-3 min-h-0">
+        {children}
+      </aside>
+    </div>
+  );
+}
+
 function PlayerRosterMobile({
   members,
   quarters,
@@ -1993,6 +2228,15 @@ function PlayerRosterMobile({
   onCycleCondition,
   showOnlyTeam,
   unassignedNotice,
+  teamAName = "A팀",
+  teamBName = "B팀",
+  shapeA,
+  shapeB,
+  onShapeChangeTeam,
+  fullAccess = false,
+  quarterTabs,
+  activeQuarterIdx,
+  onQuarterChange,
 }: {
   members: EditorMember[];
   quarters: QuarterWithTeams[];
@@ -2015,16 +2259,35 @@ function PlayerRosterMobile({
   showOnlyTeam?: "A" | "B";
   /** 자체전 일반 회원이 팀 미배정일 때 안내만 표시 */
   unassignedNotice?: boolean;
+  /** 자체전 팀 표시명 */
+  teamAName?: string;
+  teamBName?: string;
+  /** A팀 현재 포메이션 (자체전 양팀/팀별 보기 헤더에 드롭다운 노출) */
+  shapeA?: string;
+  /** B팀 현재 포메이션 (자체전 한정) */
+  shapeB?: string;
+  /** 팀별 포메이션 변경 콜백 */
+  onShapeChangeTeam?: (team: "A" | "B", shape: string) => void;
+  /** 회장·감독(양 팀 편집) 여부 — true 면 명단 카드 위 쿼터 탭 숨김 (운동장 위 탭 사용) */
+  fullAccess?: boolean;
+  /** 회장·감독 외(코치·주장·일반)용 — 선수명단 카드 상단에 쿼터 탭 노출 */
+  quarterTabs?: { id: string; label: string }[];
+  activeQuarterIdx?: number;
+  onQuarterChange?: (idx: number) => void;
 }) {
   const participations = useMemo(
     () => computeParticipations(members, quarters),
     [members, quarters],
   );
-  const total = members.length;
-  const played = participations.filter((p) => p.totalPlayed > 0).length;
-  const sumQuarters = participations.reduce((s, p) => s + p.totalPlayed, 0);
-  const avg = played > 0 ? (sumQuarters / played).toFixed(1) : "0.0";
-
+  // 멤버 부분집합 기준 통계(총원/출전/평균쿼터). 자체전이면 각 팀별로 따로 계산.
+  const calcStats = (parts: PlayerParticipation[]) => {
+    const total = parts.length;
+    const played = parts.filter((p) => p.totalPlayed > 0).length;
+    const sumQ = parts.reduce((s, p) => s + p.totalPlayed, 0);
+    const avg = played > 0 ? (sumQ / played).toFixed(1) : "0.0";
+    return { total, played, avg };
+  };
+  const totalStats = calcStats(participations);
 
   const sorted = useMemo(() => {
     // 가나다순 정렬
@@ -2081,14 +2344,53 @@ function PlayerRosterMobile({
   // 자체전: 편성팀 기준 A/B 좌우 컬럼으로 분리
   const teamACards = sorted.filter((p) => teamByPlayer[p.member.id] === "A");
   const teamBCards = sorted.filter((p) => teamByPlayer[p.member.id] === "B");
+  const teamAStats = calcStats(teamACards);
+  const teamBStats = calcStats(teamBCards);
+  // 상단 요약 — 상대전 또는 본인 팀만 보기일 때만 표시.
+  // 매니저 자체전(양팀)에서는 컬럼 헤더에 팀별 통계를 표시하므로 상단 요약 생략.
+  const summaryStats = !isIntra
+    ? totalStats
+    : showOnlyTeam === "A"
+      ? teamAStats
+      : showOnlyTeam === "B"
+        ? teamBStats
+        : null;
 
   return (
-    <div className="desktop:hidden flex flex-col gap-3 rounded-2xl bg-white border border-suaza-border p-4">
-      <div>
+    <div className="desktop:hidden flex flex-col">
+      {/* 쿼터 탭 리본 — 카드 상단에 폴더탭처럼 붙음 (모든 사용자) */}
+      {quarterTabs && quarterTabs.length > 0 && (
+        <div className="overflow-x-auto -mb-px">
+          <div className="flex gap-1 px-3 w-max">
+            {quarterTabs.map((q, i) => {
+              const active = i === activeQuarterIdx;
+              return (
+                <button
+                  key={q.id}
+                  type="button"
+                  onClick={() => onQuarterChange?.(i)}
+                  className={`shrink-0 min-w-[44px] h-7 px-3 rounded-t-lg text-xs font-bold transition border-x border-t ${
+                    active
+                      ? "bg-white border-suaza-border text-suaza-button"
+                      : "bg-suaza-bg border-transparent text-suaza-ink-muted hover:text-suaza-ink"
+                  }`}
+                >
+                  {q.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <div className="flex flex-col gap-3 rounded-2xl bg-white border border-suaza-border p-4">
+        <div>
         <h3 className="text-base font-bold text-suaza-ink">선수명단</h3>
-        <p className="text-xs text-suaza-ink-muted mt-0.5">
-          총 {total}명 · 출전 {played}명 · 평균 {avg}쿼터
-        </p>
+        {summaryStats && (
+          <p className="text-xs text-suaza-ink-muted mt-0.5">
+            총 {summaryStats.total}명 · 출전 {summaryStats.played}명 · 평균{" "}
+            {summaryStats.avg}쿼터
+          </p>
+        )}
       </div>
       {isIntra ? (
         showOnlyTeam ? (
@@ -2096,12 +2398,7 @@ function PlayerRosterMobile({
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-1">
               <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    showOnlyTeam === "A" ? "bg-blue-500" : "bg-red-500"
-                  }`}
-                />
-                {showOnlyTeam}팀{" "}
+                {showOnlyTeam === "A" ? teamAName : teamBName}{" "}
                 <span className="text-xs text-suaza-ink-muted font-normal">
                   {(showOnlyTeam === "A" ? teamACards : teamBCards).length}
                 </span>
@@ -2113,6 +2410,18 @@ function PlayerRosterMobile({
                 />
               )}
             </div>
+            {/* 포메이션 드롭다운 — 한 줄 가득 */}
+            {(showOnlyTeam === "A" ? shapeA : shapeB) && (
+              <FormationDropdown
+                currentShape={
+                  (showOnlyTeam === "A" ? shapeA : shapeB) as string
+                }
+                onChange={(s) =>
+                  onShapeChangeTeam?.(showOnlyTeam, s)
+                }
+                fullWidth
+              />
+            )}
             {(showOnlyTeam === "A" ? teamACards : teamBCards).map(renderCard)}
           </div>
         ) : (
@@ -2120,31 +2429,55 @@ function PlayerRosterMobile({
           // 카드 높이 차이가 누적되지 않도록 행 정렬을 grid 에 맡긴다.
           <div className="grid grid-cols-2 gap-2 items-start">
             {/* 헤더: 같은 grid 의 첫 두 셀로 배치해야 카드와 컬럼 폭이 일치 */}
-            <div className="flex items-center justify-between gap-1">
-              <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
-                <span className="w-2 h-2 rounded-full bg-blue-500" />A팀{" "}
-                <span className="text-xs text-suaza-ink-muted font-normal">
-                  {teamACards.length}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between gap-1">
+                <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
+                  {teamAName}{" "}
+                  <span className="text-xs text-suaza-ink-muted font-normal">
+                    {teamACards.length}
+                  </span>
                 </span>
-              </span>
-              {!readonly && (
-                <TeamMiniActions
-                  onReset={() => onResetTeam?.("A")}
-                  onAutoPlace={() => onAutoPlaceTeam?.("A")}
+                {!readonly && (
+                  <TeamMiniActions
+                    onReset={() => onResetTeam?.("A")}
+                    onAutoPlace={() => onAutoPlaceTeam?.("A")}
+                  />
+                )}
+              </div>
+              <p className="text-[11px] text-suaza-ink-muted">
+                출전 {teamAStats.played}명 · 평균 {teamAStats.avg}쿼터
+              </p>
+              {shapeA && (
+                <FormationDropdown
+                  currentShape={shapeA}
+                  onChange={(s) => onShapeChangeTeam?.("A", s)}
+                  fullWidth
                 />
               )}
             </div>
-            <div className="flex items-center justify-between gap-1">
-              <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
-                <span className="w-2 h-2 rounded-full bg-red-500" />B팀{" "}
-                <span className="text-xs text-suaza-ink-muted font-normal">
-                  {teamBCards.length}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between gap-1">
+                <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
+                  {teamBName}{" "}
+                  <span className="text-xs text-suaza-ink-muted font-normal">
+                    {teamBCards.length}
+                  </span>
                 </span>
-              </span>
-              {!readonly && (
-                <TeamMiniActions
-                  onReset={() => onResetTeam?.("B")}
-                  onAutoPlace={() => onAutoPlaceTeam?.("B")}
+                {!readonly && (
+                  <TeamMiniActions
+                    onReset={() => onResetTeam?.("B")}
+                    onAutoPlace={() => onAutoPlaceTeam?.("B")}
+                  />
+                )}
+              </div>
+              <p className="text-[11px] text-suaza-ink-muted">
+                출전 {teamBStats.played}명 · 평균 {teamBStats.avg}쿼터
+              </p>
+              {shapeB && (
+                <FormationDropdown
+                  currentShape={shapeB}
+                  onChange={(s) => onShapeChangeTeam?.("B", s)}
+                  fullWidth
                 />
               )}
             </div>
@@ -2178,6 +2511,7 @@ function PlayerRosterMobile({
           <div className="grid grid-cols-2 gap-2">{sorted.map(renderCard)}</div>
         </>
       )}
+      </div>
     </div>
   );
 }
@@ -2245,19 +2579,20 @@ function PlayerRowMobile({
       } ${disabled ? "opacity-50" : !hasPlayed && !placed ? "opacity-80" : ""}`}
     >
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <ConditionArrow
+            level={conditionLevel}
+            interactive={isMe}
+            onCycle={onCycleCondition}
+          />
           <PlayerName
             name={m.name}
             className="text-sm font-semibold text-suaza-ink"
             allowDropSurname={false}
           />
           <FootBadge foot={m.preferred_foot} />
-        </div>
-        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
           {memberPositions.length === 0 ? (
-            <span className="text-[10px] text-suaza-ink-faint">
-              포지션 미설정
-            </span>
+            <span className="text-[10px] text-suaza-ink-faint">미설정</span>
           ) : (
             memberPositions.map((pos) => (
               <span
@@ -2274,16 +2609,6 @@ function PlayerRowMobile({
             ))
           )}
         </div>
-      </div>
-
-      <div className="flex items-center gap-0.5 shrink-0">
-        {participation.byQuarter.map((pos, i) => (
-          <span
-            key={i}
-            className={`w-2 h-6 rounded-sm ${pos ? "" : "bg-gray-200"}`}
-            style={pos ? { backgroundColor: POSITION_COLOR[pos] } : undefined}
-          />
-        ))}
       </div>
 
       <span
@@ -2310,6 +2635,8 @@ function PlayerRosterDesktop({
   onDragEnd,
   teamLabel,
   teamColor,
+  currentShape,
+  onShapeChange,
   onReset,
   onAutoPlace,
   myUserId,
@@ -2329,6 +2656,8 @@ function PlayerRosterDesktop({
   onDragEnd?: () => void;
   teamLabel?: string;
   teamColor?: string;
+  currentShape?: string;
+  onShapeChange?: (shape: string) => void;
   onReset?: () => void;
   onAutoPlace?: () => void;
   myUserId: string;
@@ -2341,6 +2670,13 @@ function PlayerRosterDesktop({
     () => computeParticipations(members, quarters),
     [members, quarters],
   );
+  // 자기 팀(또는 상대전 전체) 기준 출전/평균 쿼터
+  const teamStats = useMemo(() => {
+    const played = participations.filter((p) => p.totalPlayed > 0).length;
+    const sumQ = participations.reduce((s, p) => s + p.totalPlayed, 0);
+    const avg = played > 0 ? (sumQ / played).toFixed(1) : "0.0";
+    return { played, avg };
+  }, [participations]);
   const posCounts = useMemo(() => {
     const c: Record<Filter, number> = {
       ALL: members.length,
@@ -2372,13 +2708,10 @@ function PlayerRosterDesktop({
 
   return (
     <>
+      {/* 1줄: 팀이름 + 전체 선수 인원 + 초기화/자동 */}
       <div className="flex items-center gap-2">
         {teamLabel ? (
-          <h2 className="shrink-0 inline-flex items-center gap-1.5 text-base font-bold text-suaza-ink">
-            <span
-              className="w-2.5 h-2.5 rounded-full"
-              style={{ backgroundColor: teamColor }}
-            />
+          <h2 className="shrink-0 text-base font-bold text-suaza-ink">
             {teamLabel}
           </h2>
         ) : (
@@ -2415,6 +2748,29 @@ function PlayerRosterDesktop({
           </div>
         )}
       </div>
+      {/* 2줄: 출전 / 평균 쿼터 */}
+      {members.length > 0 && (
+        <p className="text-xs text-suaza-ink-muted">
+          출전 {teamStats.played}명 · 평균 {teamStats.avg}쿼터
+        </p>
+      )}
+      {/* 3줄: 포메이션 드롭다운 — 한 줄 가득 */}
+      {currentShape && (
+        <div className="flex items-center">
+          {onShapeChange && !readonly ? (
+            <FormationDropdown
+              currentShape={currentShape}
+              onChange={onShapeChange}
+              fullWidth
+            />
+          ) : (
+            <span className="shrink-0 text-sm font-semibold text-suaza-ink">
+              포메이션{" "}
+              <span className="text-suaza-button">{currentShape}</span>
+            </span>
+          )}
+        </div>
+      )}
       <FilterTabsWithCounts
         value={filter}
         onChange={setFilter}
@@ -2526,22 +2882,31 @@ function DesktopPlayerCard({
         </span>
       )}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap">
+          <ConditionArrow
+            level={conditionLevel}
+            interactive={isMe}
+            onCycle={onCycleCondition}
+          />
           <PlayerName
             name={m.name}
             className="text-xs font-semibold text-suaza-ink"
           />
           <FootBadge foot={m.preferred_foot} />
+          {(m.positions ?? []).map((pos) => (
+            <span
+              key={pos}
+              className="inline-flex items-center gap-0.5 text-[10px] font-semibold"
+              style={{ color: POSITION_COLOR[pos] }}
+            >
+              <span
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: POSITION_COLOR[pos] }}
+              />
+              {pos}
+            </span>
+          ))}
         </div>
-      </div>
-      <div className="flex gap-0.5 shrink-0">
-        {participation.byQuarter.map((pos, i) => (
-          <span
-            key={i}
-            className={`w-2 h-5 rounded-sm ${pos ? "" : "bg-gray-200"}`}
-            style={pos ? { backgroundColor: POSITION_COLOR[pos] } : undefined}
-          />
-        ))}
       </div>
     </div>
   );
