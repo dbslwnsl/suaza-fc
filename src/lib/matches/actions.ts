@@ -501,6 +501,255 @@ export async function updateParticipant(
 }
 
 /**
+ * 자체전 승리팀 토글. 회장·감독·매니저만 가능.
+ *   nextWinner: "A" | "B" | null (=무승부).
+ * 부수효과: 해당 경기의 모든 match_participations.custom_stats.win_points 를
+ *   승리팀(=A or B) 선수만 1, 그 외(무승부 포함)는 0 으로 일괄 갱신.
+ *   participation row 가 없는 출석 선수에게는 영향 없음 — 명단 표시 계산은
+ *   embed.tsx 에서 winningTeam + match_attendances 기준으로 처리.
+ */
+export async function setIntraWinner(
+  matchId: string,
+  nextWinner: "A" | "B" | null,
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role, title")
+    .eq("id", user.id)
+    .single();
+  const isFullStaff =
+    me?.role === "manager" ||
+    me?.title === "president" ||
+    me?.title === "head_coach";
+  if (!isFullStaff) {
+    return { error: "권한이 없습니다" };
+  }
+
+  // 1. matches.intra_winner 갱신
+  const { error: updErr } = await supabase
+    .from("matches")
+    .update({ intra_winner: nextWinner })
+    .eq("id", matchId);
+  if (updErr) return { error: updErr.message };
+
+  // 2. 출석한 player_id → team 매핑
+  const { data: atts } = await supabase
+    .from("match_attendances")
+    .select("player_id, team")
+    .eq("match_id", matchId)
+    .eq("status", "attending");
+  const teamByPlayer = new Map<string, "A" | "B" | null>();
+  for (const a of (atts ?? []) as {
+    player_id: string;
+    team: "A" | "B" | null;
+  }[]) {
+    teamByPlayer.set(a.player_id, a.team);
+  }
+
+  // 3. 해당 경기 모든 participation 의 win_points 재계산
+  const { data: parts } = await supabase
+    .from("match_participations")
+    .select("id, player_id, custom_stats")
+    .eq("match_id", matchId)
+    .is("archived_at", null);
+  for (const p of (parts ?? []) as {
+    id: string;
+    player_id: string;
+    custom_stats: Record<string, number> | null;
+  }[]) {
+    const team = teamByPlayer.get(p.player_id) ?? null;
+    const shouldWin = nextWinner != null && team === nextWinner;
+    const cs: Record<string, number> = {
+      ...((p.custom_stats as Record<string, number> | null) ?? {}),
+    };
+    const cur = cs.win_points ?? 0;
+    const next = shouldWin ? 1 : 0;
+    if (cur === next) continue;
+    cs.win_points = next;
+    await supabase
+      .from("match_participations")
+      .update({ custom_stats: cs })
+      .eq("id", p.id);
+  }
+
+  revalidatePath(`/matches/${matchId}`);
+  revalidatePath(`/matches/${matchId}/formation`);
+  return { ok: true };
+}
+
+/**
+ * MOM 토글. 회장·감독·매니저만 사용 가능.
+ *   active=true 면 custom_stats.mom=1, false 면 0.
+ * 한 경기에 여러 명이 MOM 일 수 있어 단일 선택은 아님.
+ */
+export async function setMomForPlayer(
+  matchId: string,
+  playerId: string,
+  active: boolean,
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role, title")
+    .eq("id", user.id)
+    .single();
+  const isFullStaff =
+    me?.role === "manager" ||
+    me?.title === "president" ||
+    me?.title === "head_coach";
+  if (!isFullStaff) return { error: "권한이 없습니다" };
+
+  const { data: existing } = await supabase
+    .from("match_participations")
+    .select("id, custom_stats")
+    .eq("match_id", matchId)
+    .eq("player_id", playerId)
+    .maybeSingle();
+
+  const next = active ? 1 : 0;
+  const cs: Record<string, number> = {
+    ...((existing?.custom_stats as Record<string, number> | null) ?? {}),
+    attendance: 1,
+    mom: next,
+  };
+
+  if (!existing) {
+    // 새 row 생성 시 승리팀이면 win_points 도 함께 부여
+    const [{ data: m }, { data: att }] = await Promise.all([
+      supabase
+        .from("matches")
+        .select("opponent, intra_winner")
+        .eq("id", matchId)
+        .single(),
+      supabase
+        .from("match_attendances")
+        .select("team")
+        .eq("match_id", matchId)
+        .eq("player_id", playerId)
+        .maybeSingle(),
+    ]);
+    const isIntra = m?.opponent === "자체전";
+    const winner =
+      (m as { intra_winner?: "A" | "B" | null } | null)?.intra_winner ?? null;
+    const playerTeam =
+      (att as { team?: "A" | "B" | null } | null)?.team ?? null;
+    if (isIntra && winner && playerTeam === winner) cs.win_points = 1;
+
+    await supabase.from("match_participations").insert({
+      match_id: matchId,
+      player_id: playerId,
+      goals: 0,
+      assists: 0,
+      custom_stats: cs,
+    });
+  } else {
+    await supabase
+      .from("match_participations")
+      .update({ archived_at: null, custom_stats: cs })
+      .eq("id", existing.id);
+  }
+
+  revalidatePath(`/matches/${matchId}`);
+  return { ok: true };
+}
+
+/**
+ * 포메이션 임베드(명단 카드)에서 사용 — playerId 기준으로 단일 stat 을 증감한다.
+ * - 기존 match_participations row 가 없으면 자동 생성하고(출석=1pt 자동),
+ *   있으면 archived 상태를 풀고 increment 적용.
+ * - 권한: requireStaff (매니저/감독·회장/코치).
+ */
+export async function incrementStatForPlayer(
+  matchId: string,
+  playerId: string,
+  key: "goals" | "assists" | "clean_sheets" | "referee_count" | "mom" | "win_points",
+  delta: number,
+) {
+  const { supabase } = await requireStaff();
+
+  const { data: existing } = await supabase
+    .from("match_participations")
+    .select("id, goals, assists, custom_stats, archived_at")
+    .eq("match_id", matchId)
+    .eq("player_id", playerId)
+    .maybeSingle();
+
+  let id = existing?.id as string | undefined;
+  let goals = existing?.goals ?? 0;
+  let assists = existing?.assists ?? 0;
+  const custom_stats: Record<string, number> = {
+    ...((existing?.custom_stats as Record<string, number> | null) ?? {}),
+    attendance: 1,
+  };
+
+  // row 가 없으면(새로 생성하는 경우) 승리팀 자동 부여:
+  // 자체전 종료 + matches.intra_winner === 본인 team 이면 win_points=1.
+  if (!existing) {
+    const [{ data: m }, { data: att }] = await Promise.all([
+      supabase
+        .from("matches")
+        .select("opponent, intra_winner")
+        .eq("id", matchId)
+        .single(),
+      supabase
+        .from("match_attendances")
+        .select("team")
+        .eq("match_id", matchId)
+        .eq("player_id", playerId)
+        .maybeSingle(),
+    ]);
+    const isIntra = m?.opponent === "자체전";
+    const winner = (m as { intra_winner?: "A" | "B" | null } | null)
+      ?.intra_winner ?? null;
+    const playerTeam = (att as { team?: "A" | "B" | null } | null)?.team ?? null;
+    if (isIntra && winner && playerTeam === winner) {
+      custom_stats.win_points = 1;
+    }
+  }
+
+  if (key === "goals") goals = Math.max(0, goals + delta);
+  else if (key === "assists") assists = Math.max(0, assists + delta);
+  else custom_stats[key] = Math.max(0, (custom_stats[key] ?? 0) + delta);
+
+  if (!id) {
+    const { data: inserted, error } = await supabase
+      .from("match_participations")
+      .insert({
+        match_id: matchId,
+        player_id: playerId,
+        goals,
+        assists,
+        custom_stats,
+      })
+      .select("id")
+      .single();
+    if (error) return;
+    id = inserted?.id;
+  } else {
+    await supabase
+      .from("match_participations")
+      .update({
+        archived_at: null,
+        goals,
+        assists,
+        custom_stats,
+      })
+      .eq("id", id);
+  }
+
+  revalidatePath(`/matches/${matchId}`);
+}
+
+/**
  * 단일 stat 키를 delta 만큼 증감. 실시간 자동 저장용.
  * - goals/assists 는 컬럼, 그 외(clean_sheets/referee_count 등)는 custom_stats jsonb 의 키.
  */

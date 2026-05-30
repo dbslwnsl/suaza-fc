@@ -17,9 +17,7 @@ import NewMatchForm from "@/app/matches/new/new-match-form";
 import ScoreControl from "./score-control";
 import TeamRecapCard from "./team-recap-card";
 import TeamBuilder from "./team-builder";
-import ParticipationBoard, {
-  type ParticipationData,
-} from "./participation-board";
+import FormationEmbed from "./formation/embed";
 import MatchCommentSection, { type MatchComment } from "./match-comments";
 import {
   DEFAULT_TEAM_COLOR,
@@ -32,21 +30,6 @@ import {
   type Match,
 } from "@/lib/matches/helpers";
 import { fetchWeatherDebug, failureMessage } from "@/lib/weather";
-type Participation = {
-  id: string;
-  match_id: string;
-  player_id: string;
-  goals: number;
-  assists: number;
-  custom_stats: Record<string, number> | null;
-  player: {
-    id: string;
-    name: string;
-    jersey_number: number | null;
-    positions: string[] | null;
-    title: string | null;
-  } | null;
-};
 
 export default async function MatchDetailPage({
   params,
@@ -70,12 +53,10 @@ export default async function MatchDetailPage({
   const [
     { data: match },
     { data: me },
-    { data: participationsRaw },
     { data: allMembers },
     { data: attendancesRaw },
     { data: myAttendance },
     { data: commentsRaw },
-    { data: statDefsRaw },
   ] = await Promise.all([
     supabase.from("matches").select("*").eq("id", id).single(),
     supabase
@@ -83,13 +64,6 @@ export default async function MatchDetailPage({
       .select("role, name, avatar_url, is_injured, condition")
       .eq("id", user.id)
       .single(),
-    supabase
-      .from("match_participations")
-      .select(
-        "id, match_id, player_id, goals, assists, custom_stats, player:profiles(id, name, jersey_number, positions, title)",
-      )
-      .eq("match_id", id)
-      .is("archived_at", null),
     supabase
       .from("profiles")
       .select("id, name, jersey_number, positions, title, is_injured")
@@ -114,16 +88,9 @@ export default async function MatchDetailPage({
       )
       .eq("match_id", id)
       .order("created_at", { ascending: true }),
-    supabase.from("stat_definitions").select("key, point_value"),
   ]);
 
   const comments = (commentsRaw ?? []) as unknown as MatchComment[];
-  const pointValues = ((statDefsRaw ?? []) as { key: string; point_value: number | null }[]).reduce<
-    Record<string, number>
-  >((acc, d) => {
-    acc[d.key] = d.point_value ?? 0;
-    return acc;
-  }, {});
 
   type VotePlayer = {
     id: string;
@@ -216,13 +183,6 @@ export default async function MatchDetailPage({
   const editing = edit === "1" && isStaff;
   const totalMembers = (allMembers ?? []).length;
 
-  const participations = ((participationsRaw ?? []) as unknown as Participation[])
-    .slice()
-    .sort((a, b) =>
-      (a.player?.name ?? "").localeCompare(b.player?.name ?? "", "ko"),
-    );
-
-  const participatedIds = new Set(participations.map((p) => p.player_id));
 
   // D-day 계산 — 단말/서버 타임존과 무관하게 서울(Asia/Seoul) 달력 기준
   const matchYMD = kstParts(m.match_date);
@@ -437,25 +397,26 @@ export default async function MatchDetailPage({
                   />
                 </div>
               )}
-              {/* 선수별 기록: 전체 폭 하단 — 예정된 경기에선 숨김 */}
-              {m.status !== "scheduled" && (
-                <div className="order-3 desktop:col-span-2">
-                  <ParticipationBoard
-                    matchId={m.id}
-                    isStaff={isStaff}
-                    isManager={me?.role === "manager"}
-                    isStarted={isStarted}
-                    pointValues={pointValues}
-                    matchDate={m.match_date}
-                    participations={
-                      participations as unknown as ParticipationData[]
-                    }
-                    attendingMembers={
-                      byStatus.attending.filter(
-                        (a) => !participatedIds.has(a.id),
-                      ) as unknown as ParticipationData["player"][]
-                    }
-                  />
+              {/* 종료된 경기: 포메이션 전체 임베드 — 팀 편성 결과 ↔ 선수별 기록 사이.
+                  모바일은 카드 wrapper(흰 배경/테두리/padding) 없이 운동장이 페이지 배경
+                  위에 풀폭으로 표시되도록, 데스크탑에서만 카드 스타일 적용.
+                  데스크탑은 운동장 비율이 컨테이너 높이를 기준으로 잡혀 폭주할 수 있어
+                  명시적인 높이(80vh)를 부여한다. */}
+              {(m.status === "done" || m.status === "canceled") && (
+                <div className="order-[2.5] desktop:col-span-2">
+                  <section className="flex flex-col gap-4 desktop:bg-white desktop:rounded-2xl desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] desktop:p-8">
+                    <div className="desktop:h-[80vh] desktop:min-h-0 flex flex-col min-h-0">
+                      <Suspense
+                        fallback={
+                          <p className="text-sm text-suaza-ink-muted py-6 text-center">
+                            포메이션을 불러오는 중...
+                          </p>
+                        }
+                      >
+                        <FormationEmbed matchId={m.id} />
+                      </Suspense>
+                    </div>
+                  </section>
                 </div>
               )}
 
@@ -670,12 +631,22 @@ function VSCard({
             경기 정보 수정 ›
           </Link>
         )}
-        <Link
-          href={`/matches/${m.id}/formation`}
-          className="text-sm font-medium text-suaza-ink bg-gray-100 hover:bg-gray-200 transition px-4 py-1.5 rounded-lg"
-        >
-          포메이션 ›
-        </Link>
+        {m.status === "done" || m.status === "canceled" ? (
+          <span
+            aria-disabled="true"
+            title="종료된 경기는 포메이션을 변경할 수 없습니다"
+            className="text-sm font-medium text-suaza-ink-faint bg-gray-100 px-4 py-1.5 rounded-lg cursor-not-allowed select-none"
+          >
+            포메이션 ›
+          </span>
+        ) : (
+          <Link
+            href={`/matches/${m.id}/formation`}
+            className="text-sm font-medium text-suaza-ink bg-gray-100 hover:bg-gray-200 transition px-4 py-1.5 rounded-lg"
+          >
+            포메이션 ›
+          </Link>
+        )}
       </div>
     </section>
   );

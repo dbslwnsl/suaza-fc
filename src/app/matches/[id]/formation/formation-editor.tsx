@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { saveFormation } from "@/lib/formations/actions";
-import { setMyCondition } from "@/lib/matches/actions";
+import {
+  incrementStatForPlayer,
+  setIntraWinner,
+  setMomForPlayer,
+  setMyCondition,
+} from "@/lib/matches/actions";
 import {
   FORMATIONS,
   buildSlots,
@@ -21,7 +26,7 @@ import {
   type MemberTitle,
   type PreferredFoot,
 } from "@/lib/members/positions";
-import type { EditorMember, GameQuarter } from "./page";
+import type { EditorMember, GameQuarter, PlayerStat } from "./embed";
 
 // 선수가 특정 전체-쿼터(globalIndex, 1-based)에 참여하는지.
 // attending_quarters 가 null 이면 전체 참여로 간주.
@@ -222,6 +227,10 @@ export default function FormationEditor({
   editableTeam,
   captainIds = [],
   matchLocked = false,
+  statByPlayer = {},
+  canEditStats = false,
+  winningTeam = null,
+  canEditWinner = false,
 }: {
   matchId: string;
   myUserId: string;
@@ -241,6 +250,14 @@ export default function FormationEditor({
   captainIds?: string[];
   // 경기가 종료/취소된 상태 — 실수 방지 위해 초기화·자동 버튼 비활성화
   matchLocked?: boolean;
+  // 종료 경기 임베드 전용 — 선수별 통계(이번 경기 골/어시/CS/심판/MOM/포인트)
+  statByPlayer?: Record<string, PlayerStat>;
+  // 매니저·감독·회장만 기록 입력 UI 활성화
+  canEditStats?: boolean;
+  // 승리팀 (자체전 종료 시 "A" | "B", 상대전·미확정은 null)
+  winningTeam?: "A" | "B" | null;
+  // 운동장 위 승/무/패 토글 권한 (회장·감독 + 자체전 종료 경기에서만 true)
+  canEditWinner?: boolean;
 }) {
   // 전혀 편집할 수 없으면 readonly. 감독/회장은 양 팀, 주장은 자기 팀만 편집 가능.
   const readonly = editableTeam == null;
@@ -299,6 +316,24 @@ export default function FormationEditor({
     return next;
   });
   const [activeIdx, setActiveIdx] = useState(0);
+  // 종료 경기 임베드 — 리본 맨 앞 "ALL" 탭 활성 여부.
+  //   ALL 활성 시 운동장은 마지막 쿼터(또는 0번 쿼터)를 그대로 표시하지만,
+  //   기록은 이미 전체 합계라 추가 처리 불필요. 사용자가 1Q/2Q 누르면 자동 해제.
+  const [showAll, setShowAll] = useState(matchLocked);
+  // 자체전 승리팀(낙관적). 부모에서 들어온 winningTeam 을 초기값으로,
+  // 토글 클릭 시 즉시 반영해 두 버튼(A/B)이 동기화되도록 한다.
+  const [optWinningTeam, setOptWinningTeam] = useState<"A" | "B" | null>(
+    winningTeam,
+  );
+  const [, startWinnerTransition] = useTransition();
+  const onWinnerChange = (next: "A" | "B" | null) => {
+    setOptWinningTeam(next);
+    if (matchId) {
+      startWinnerTransition(() => {
+        setIntraWinner(matchId, next);
+      });
+    }
+  };
   // 자체전 + 회장·감독(fullAccess) 운동장 보기 모드.
   //   "all": 양 팀 동시 표시(기존 동작), "A"/"B": 해당 팀만 단독 표시(상대전처럼).
   //  - 데스크탑: 운동장 표기에만 적용, 양옆 명단은 그대로.
@@ -795,7 +830,7 @@ export default function FormationEditor({
             label={null}
             teamColor={null}
             currentShape={current.shape}
-            readonly={readonly}
+            readonly={readonly || matchLocked}
             onChange={(s) => changeShape("A", s)}
           />
         </div>
@@ -809,7 +844,7 @@ export default function FormationEditor({
       )}
 
       {/* 메인 영역 — 데스크탑: 자체전 3열(A명단|경기장|B명단), 상대전 2열(경기장|명단) */}
-      <div className="desktop:flex desktop:gap-3 desktop:flex-1 desktop:min-h-0">
+      <div className="desktop:flex desktop:gap-6 desktop:flex-1 desktop:min-h-0">
         {/* 자체전 A팀 명단 (데스크탑 좌측) — 양 팀을 모두 보는 매니저 전용.
             일반회원(restrictedView)은 본인 팀이 A든 B든 우측 명단으로 통일. */}
         {isIntra && showTeamA && !restrictedView && (
@@ -820,7 +855,13 @@ export default function FormationEditor({
               label: gameQuarters[i]?.label ?? q.id,
             }))}
             activeRibbonIdx={activeIdx}
-            onRibbonChange={setActiveIdx}
+            onRibbonChange={(i) => {
+              setActiveIdx(i);
+              setShowAll(false);
+            }}
+            includeAllTab={matchLocked}
+            isAllActive={matchLocked && showAll}
+            onAllClick={() => setShowAll(true)}
           >
             <PlayerRosterDesktop
               members={teamAMembers}
@@ -848,21 +889,43 @@ export default function FormationEditor({
               onReset={() => resetTeam("A")}
               onAutoPlace={() => autoPlaceTeam("A")}
               matchLocked={matchLocked}
+              statByPlayer={statByPlayer}
+              canEditStats={canEditStats}
+              matchId={matchId}
+              winningTeam={optWinningTeam}
+              rosterTeam="A"
             />
           </DesktopRosterPane>
         )}
 
         {/* 경기장 */}
-        <div className="relative desktop:flex-1 desktop:flex desktop:flex-col desktop:items-center desktop:justify-center">
-          {/* 자체전 + 회장·감독: 운동장 위 보기 모드 리본 (A팀 / 전체 / B팀) */}
+        <div className="relative min-w-0 desktop:shrink-0 desktop:flex desktop:flex-col desktop:items-center desktop:justify-center">
+          {/* 자체전 + 회장·감독: 운동장 위 보기 모드 리본 (A팀 / 전체 / B팀).
+              종료 경기에서는 좌·우 양 끝에 승/무/패 토글이 함께 노출됨. */}
           {fullAccess && isIntra && current.teamB && (
-            <div className="flex justify-center pb-2 desktop:pb-3">
+            <div className="flex items-center justify-center gap-2 pb-2 desktop:pb-3">
+              {matchLocked && (
+                <WinnerToggle
+                  team="A"
+                  winningTeam={optWinningTeam}
+                  onChange={onWinnerChange}
+                  canEdit={canEditWinner}
+                />
+              )}
               <PitchViewToggle
                 value={pitchView}
                 onChange={setPitchView}
                 teamAName={teamAName}
                 teamBName={teamBName}
               />
+              {matchLocked && (
+                <WinnerToggle
+                  team="B"
+                  winningTeam={optWinningTeam}
+                  onChange={onWinnerChange}
+                  canEdit={canEditWinner}
+                />
+              )}
             </div>
           )}
           {(() => {
@@ -989,7 +1052,13 @@ export default function FormationEditor({
                   label: gameQuarters[i]?.label ?? q.id,
                 }))}
                 activeRibbonIdx={activeIdx}
-                onRibbonChange={setActiveIdx}
+                onRibbonChange={(i) => {
+                  setActiveIdx(i);
+                  setShowAll(false);
+                }}
+                includeAllTab={matchLocked}
+                isAllActive={matchLocked && showAll}
+                onAllClick={() => setShowAll(true)}
               >
                 <PlayerRosterDesktop
                   members={rightMembers}
@@ -1019,6 +1088,11 @@ export default function FormationEditor({
                     autoPlaceTeam(isIntra ? rightTeam : "A")
                   }
                   matchLocked={matchLocked}
+                  statByPlayer={statByPlayer}
+                  canEditStats={canEditStats}
+                  matchId={matchId}
+                  winningTeam={optWinningTeam}
+                  rosterTeam={isIntra ? rightTeam : null}
                 />
               </DesktopRosterPane>
             );
@@ -1073,7 +1147,13 @@ export default function FormationEditor({
           label: gameQuarters[i]?.label ?? q.id,
         }))}
         activeQuarterIdx={activeIdx}
-        onQuarterChange={setActiveIdx}
+        onQuarterChange={(i) => {
+          setActiveIdx(i);
+          setShowAll(false);
+        }}
+        includeAllTab={matchLocked}
+        isAllActive={matchLocked && showAll}
+        onAllClick={() => setShowAll(true)}
         matchLocked={matchLocked}
         onTap={(id: string, placed: boolean) => {
           if (readonly) return;
@@ -1323,7 +1403,7 @@ function Pitch({
       ref={pitchRef}
       className={`relative w-full [container-type:size] ${
         isIntra ? "aspect-[3/5]" : "aspect-[3/4]"
-      } desktop:w-auto desktop:h-full bg-gradient-to-b from-emerald-600 to-emerald-700 rounded-2xl overflow-hidden shadow-lg`}
+      } desktop:w-auto desktop:h-full desktop:max-w-[420px] bg-gradient-to-b from-emerald-600 to-emerald-700 rounded-2xl overflow-hidden shadow-lg`}
     >
       {/* 잔디 줄무늬 */}
       <div className="absolute inset-0 opacity-20">
@@ -2138,6 +2218,67 @@ function TeamMiniActions({
   );
 }
 
+// 운동장 위 팀 라벨 옆 — 승/무/패 토글. 회장·감독·매니저만 사용 가능.
+// 비활성(canEdit=false) 시에도 현재 결과(승/무/패)는 작은 칩으로 표시.
+function WinnerToggle({
+  team,
+  winningTeam,
+  onChange,
+  canEdit,
+}: {
+  team: "A" | "B";
+  winningTeam: "A" | "B" | null;
+  onChange: (next: "A" | "B" | null) => void;
+  canEdit: boolean;
+}) {
+  // 이 팀 입장에서의 결과 — 승/무/패
+  const myResult: "W" | "D" | "L" =
+    winningTeam == null ? "D" : winningTeam === team ? "W" : "L";
+  const order: ("W" | "D" | "L")[] = ["D", "W", "L"];
+  const cycle = () => {
+    if (!canEdit) return;
+    const idx = order.indexOf(myResult);
+    const nextResult = order[(idx + 1) % order.length];
+    const nextWinner: "A" | "B" | null =
+      nextResult === "W"
+        ? team
+        : nextResult === "L"
+          ? team === "A"
+            ? "B"
+            : "A"
+          : null;
+    onChange(nextWinner);
+  };
+  const styleByResult: Record<
+    "W" | "D" | "L",
+    { bg: string; fg: string; label: string }
+  > = {
+    W: { bg: "#22C55E", fg: "#FFFFFF", label: "승" },
+    D: { bg: "#9CA3AF", fg: "#FFFFFF", label: "무" },
+    L: { bg: "#EF4444", fg: "#FFFFFF", label: "패" },
+  };
+  const s = styleByResult[myResult];
+  return (
+    <button
+      type="button"
+      disabled={!canEdit}
+      onClick={cycle}
+      className={`inline-flex items-center justify-center w-7 h-5 rounded-md text-[11px] font-bold leading-none shadow-sm transition ${
+        canEdit ? "hover:opacity-90 cursor-pointer" : "cursor-default"
+      }`}
+      style={{ backgroundColor: s.bg, color: s.fg }}
+      title={
+        canEdit
+          ? `${s.label} — 클릭으로 무 → 승 → 패 순환`
+          : `결과: ${s.label}`
+      }
+      aria-label={`${team}팀 결과 ${s.label}`}
+    >
+      {s.label}
+    </button>
+  );
+}
+
 // 회장·감독 자체전 전용 — 운동장 보기 모드 토글(A팀 / 전체 / B팀)
 function PitchViewToggle({
   value,
@@ -2179,26 +2320,48 @@ function PitchViewToggle({
 }
 
 // 데스크탑 명단 카드 wrapper — 상단에 쿼터 탭 리본을 붙일 수 있다.
+//   includeAllTab=true 면 맨 앞에 "ALL" 탭이 추가됨 (종료 경기 임베드 전용).
+//   isAllActive 가 true 면 ALL 강조, 그 외는 activeRibbonIdx 로 활성 쿼터 강조.
 function DesktopRosterPane({
   showRibbon,
   ribbonTabs,
   activeRibbonIdx,
   onRibbonChange,
+  includeAllTab = false,
+  isAllActive = false,
+  onAllClick,
   children,
 }: {
   showRibbon: boolean;
   ribbonTabs: { id: string; label: string }[];
   activeRibbonIdx: number;
   onRibbonChange: (idx: number) => void;
+  includeAllTab?: boolean;
+  isAllActive?: boolean;
+  onAllClick?: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <div className="hidden desktop:flex desktop:w-[280px] flex-col min-h-0">
+    <div className="hidden desktop:flex desktop:flex-1 desktop:min-w-[280px] flex-col min-h-0">
       {showRibbon && ribbonTabs.length > 0 && (
         <div className="overflow-x-auto -mb-px">
           <div className="flex gap-1 px-3 w-max">
+            {includeAllTab && (
+              <button
+                key="ALL"
+                type="button"
+                onClick={() => onAllClick?.()}
+                className={`shrink-0 min-w-[48px] h-8 px-3 rounded-t-lg text-xs font-bold transition border-x border-t ${
+                  isAllActive
+                    ? "bg-white border-suaza-border text-suaza-button"
+                    : "bg-suaza-bg border-transparent text-suaza-ink-muted hover:text-suaza-ink"
+                }`}
+              >
+                ALL
+              </button>
+            )}
             {ribbonTabs.map((q, i) => {
-              const active = i === activeRibbonIdx;
+              const active = !isAllActive && i === activeRibbonIdx;
               return (
                 <button
                   key={q.id}
@@ -2253,6 +2416,9 @@ function PlayerRosterMobile({
   quarterTabs,
   activeQuarterIdx,
   onQuarterChange,
+  includeAllTab = false,
+  isAllActive = false,
+  onAllClick,
   matchLocked = false,
 }: {
   members: EditorMember[];
@@ -2291,6 +2457,10 @@ function PlayerRosterMobile({
   quarterTabs?: { id: string; label: string }[];
   activeQuarterIdx?: number;
   onQuarterChange?: (idx: number) => void;
+  /** 종료 경기 임베드 — 맨 앞 "ALL" 탭 추가 */
+  includeAllTab?: boolean;
+  isAllActive?: boolean;
+  onAllClick?: () => void;
   /** 종료/취소된 경기 — 초기화·자동 비활성 */
   matchLocked?: boolean;
 }) {
@@ -2377,12 +2547,27 @@ function PlayerRosterMobile({
 
   return (
     <div className="desktop:hidden flex flex-col">
-      {/* 쿼터 탭 리본 — 카드 상단에 폴더탭처럼 붙음 (모든 사용자) */}
+      {/* 쿼터 탭 리본 — 카드 상단에 폴더탭처럼 붙음 (모든 사용자).
+          종료 경기는 맨 앞에 "ALL" 탭(전체 합계 기록 보기) 추가. */}
       {quarterTabs && quarterTabs.length > 0 && (
         <div className="overflow-x-auto -mb-px">
           <div className="flex gap-1 px-3 w-max">
+            {includeAllTab && (
+              <button
+                key="ALL"
+                type="button"
+                onClick={() => onAllClick?.()}
+                className={`shrink-0 min-w-[44px] h-7 px-3 rounded-t-lg text-xs font-bold transition border-x border-t ${
+                  isAllActive
+                    ? "bg-white border-suaza-border text-suaza-button"
+                    : "bg-suaza-bg border-transparent text-suaza-ink-muted hover:text-suaza-ink"
+                }`}
+              >
+                ALL
+              </button>
+            )}
             {quarterTabs.map((q, i) => {
-              const active = i === activeQuarterIdx;
+              const active = !isAllActive && i === activeQuarterIdx;
               return (
                 <button
                   key={q.id}
@@ -2422,27 +2607,31 @@ function PlayerRosterMobile({
                   {(showOnlyTeam === "A" ? teamACards : teamBCards).length}
                 </span>
               </span>
-              {!readonly && (
+              {!readonly && !matchLocked && (
                 <TeamMiniActions
                   onReset={() => onResetTeam?.(showOnlyTeam)}
                   onAutoPlace={() => onAutoPlaceTeam?.(showOnlyTeam)}
-                  disabled={matchLocked}
-                  disabledTitle="종료된 경기는 변경할 수 없습니다"
                 />
               )}
             </div>
-            {/* 포메이션 드롭다운 — 한 줄 가득 */}
-            {(showOnlyTeam === "A" ? shapeA : shapeB) && (
-              <FormationDropdown
-                currentShape={
-                  (showOnlyTeam === "A" ? shapeA : shapeB) as string
-                }
-                onChange={(s) =>
-                  onShapeChangeTeam?.(showOnlyTeam, s)
-                }
-                fullWidth
-              />
-            )}
+            {/* 포메이션 드롭다운 — 한 줄 가득 (종료된 경기는 텍스트만) */}
+            {(showOnlyTeam === "A" ? shapeA : shapeB) &&
+              (matchLocked ? (
+                <span className="text-sm font-semibold text-suaza-ink">
+                  포메이션{" "}
+                  <span className="text-suaza-button">
+                    {showOnlyTeam === "A" ? shapeA : shapeB}
+                  </span>
+                </span>
+              ) : (
+                <FormationDropdown
+                  currentShape={
+                    (showOnlyTeam === "A" ? shapeA : shapeB) as string
+                  }
+                  onChange={(s) => onShapeChangeTeam?.(showOnlyTeam, s)}
+                  fullWidth
+                />
+              ))}
             {(showOnlyTeam === "A" ? teamACards : teamBCards).map(renderCard)}
           </div>
         ) : (
@@ -2458,25 +2647,28 @@ function PlayerRosterMobile({
                     {teamACards.length}
                   </span>
                 </span>
-                {!readonly && (
+                {!readonly && !matchLocked && (
                   <TeamMiniActions
                     onReset={() => onResetTeam?.("A")}
                     onAutoPlace={() => onAutoPlaceTeam?.("A")}
-                    disabled={matchLocked}
-                    disabledTitle="종료된 경기는 변경할 수 없습니다"
                   />
                 )}
               </div>
               <p className="text-[11px] text-suaza-ink-muted">
                 출전 {teamAStats.played}명 · 평균 {teamAStats.avg}쿼터
               </p>
-              {shapeA && (
-                <FormationDropdown
-                  currentShape={shapeA}
-                  onChange={(s) => onShapeChangeTeam?.("A", s)}
-                  fullWidth
-                />
-              )}
+              {shapeA &&
+                (matchLocked ? (
+                  <span className="text-sm font-semibold text-suaza-ink">
+                    포메이션 <span className="text-suaza-button">{shapeA}</span>
+                  </span>
+                ) : (
+                  <FormationDropdown
+                    currentShape={shapeA}
+                    onChange={(s) => onShapeChangeTeam?.("A", s)}
+                    fullWidth
+                  />
+                ))}
             </div>
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between gap-1">
@@ -2486,25 +2678,28 @@ function PlayerRosterMobile({
                     {teamBCards.length}
                   </span>
                 </span>
-                {!readonly && (
+                {!readonly && !matchLocked && (
                   <TeamMiniActions
                     onReset={() => onResetTeam?.("B")}
                     onAutoPlace={() => onAutoPlaceTeam?.("B")}
-                    disabled={matchLocked}
-                    disabledTitle="종료된 경기는 변경할 수 없습니다"
                   />
                 )}
               </div>
               <p className="text-[11px] text-suaza-ink-muted">
                 출전 {teamBStats.played}명 · 평균 {teamBStats.avg}쿼터
               </p>
-              {shapeB && (
-                <FormationDropdown
-                  currentShape={shapeB}
-                  onChange={(s) => onShapeChangeTeam?.("B", s)}
-                  fullWidth
-                />
-              )}
+              {shapeB &&
+                (matchLocked ? (
+                  <span className="text-sm font-semibold text-suaza-ink">
+                    포메이션 <span className="text-suaza-button">{shapeB}</span>
+                  </span>
+                ) : (
+                  <FormationDropdown
+                    currentShape={shapeB}
+                    onChange={(s) => onShapeChangeTeam?.("B", s)}
+                    fullWidth
+                  />
+                ))}
             </div>
             {/* zip: 행 i 의 두 셀 = (A[i], B[i]). 한쪽이 짧으면 빈 칸으로 채움 */}
             {Array.from({
@@ -2525,13 +2720,11 @@ function PlayerRosterMobile({
         )
       ) : (
         <>
-          {!readonly && (
+          {!readonly && !matchLocked && (
             <div className="flex items-center justify-end">
               <TeamMiniActions
                 onReset={() => onResetTeam?.("A")}
                 onAutoPlace={() => onAutoPlaceTeam?.("A")}
-                disabled={matchLocked}
-                disabledTitle="종료된 경기는 변경할 수 없습니다"
               />
             </div>
           )}
@@ -2555,6 +2748,10 @@ function PlayerRowMobile({
   isMe,
   conditionLevel,
   onCycleCondition,
+  stat,
+  canEditStats = false,
+  matchId,
+  winningTeam = null,
 }: {
   participation: PlayerParticipation;
   placed: boolean;
@@ -2567,6 +2764,11 @@ function PlayerRowMobile({
   isMe: boolean;
   conditionLevel: number;
   onCycleCondition: () => void;
+  /** 종료 경기 임베드 — 이번 경기 기록(있으면 포인트 + 입력 UI 노출) */
+  stat?: PlayerStat;
+  canEditStats?: boolean;
+  matchId?: string;
+  winningTeam?: "A" | "B" | null;
 }) {
   const m = participation.member;
   const memberPositions = m.positions ?? [];
@@ -2584,12 +2786,30 @@ function PlayerRowMobile({
         : { borderColor: "#22C55E", backgroundColor: "rgba(34,197,94,0.06)" }
     : undefined;
 
-  return (
+  // MOM 활성 여부 — 낙관적 (서버 응답 전 즉시 반영). stat 변경 시 동기화.
+  const [momActive, setMomActive] = useState((stat?.mom ?? 0) > 0);
+  const [, startMomTransition] = useTransition();
+  useEffect(() => {
+    setMomActive((stat?.mom ?? 0) > 0);
+  }, [stat?.mom]);
+
+  // 카드 본체(이름 줄) — 종료 경기 임베드에서는 클릭/드래그가 의미 없으므로 비활성.
+  // stat 이 있으면 wrapper 가 테두리/배경을 담당하므로 본체는 border-0/투명.
+  const lockedForRecord = !!stat;
+  const cardBody = (
     <div
-      style={{ touchAction: "manipulation", ...highlight }}
-      draggable={!readonly && !disabled}
+      style={{
+        touchAction: "manipulation",
+        ...(stat
+          ? // 임베드 — 본체는 wrapper 안쪽이라 색만 살짝, 테두리 없음
+            placed && highlight
+            ? { backgroundColor: highlight.backgroundColor }
+            : undefined
+          : highlight),
+      }}
+      draggable={!readonly && !disabled && !lockedForRecord}
       onDragStart={(e) => {
-        if (disabled) {
+        if (disabled || lockedForRecord) {
           e.preventDefault();
           return;
         }
@@ -2598,11 +2818,17 @@ function PlayerRowMobile({
         onDragStart?.(m.id);
       }}
       onDragEnd={() => onDragEnd?.()}
-      onClick={() => !readonly && !disabled && onTap(m.id, placed)}
-      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-white select-none transition border-2 ${
-        placed ? "" : "border-suaza-border"
+      onClick={() =>
+        !readonly && !disabled && !lockedForRecord && onTap(m.id, placed)
+      }
+      className={`flex items-center gap-2.5 px-3 py-2.5 select-none transition ${
+        stat
+          ? "rounded-t-xl bg-white/0"
+          : `rounded-xl bg-white border-2 ${placed ? "" : "border-suaza-border"}`
       } ${
-        readonly || disabled ? "cursor-default" : "cursor-pointer"
+        readonly || disabled || lockedForRecord
+          ? "cursor-default"
+          : "cursor-pointer"
       } ${disabled ? "opacity-50" : !hasPlayed && !placed ? "opacity-80" : ""}`}
     >
       <div className="flex-1 min-w-0">
@@ -2635,15 +2861,263 @@ function PlayerRowMobile({
               </span>
             ))
           )}
+          {/* 종료 경기 임베드 — 포지션 옆 출석/승리/MOM 배지.
+              · 출석: 명단에 표시되는 선수는 모두 출석 → 항상 활성(초록)
+              · 승리: winningTeam 과 본인 team 이 같을 때만 활성(주황)
+              · MOM:  stat.mom > 0 이면 활성(노랑). 회장·감독·매니저만 토글 가능 */}
+          {stat && (
+            <span className="inline-flex items-center gap-1 ml-auto">
+              <StatusPill label="출" tone="success" active />
+              <StatusPill
+                label="승"
+                tone="win"
+                active={!!team && winningTeam === team}
+              />
+              <StatusPill
+                label="M"
+                tone="mom"
+                active={momActive}
+                disabled={!canEditStats}
+                onClick={
+                  canEditStats && matchId
+                    ? () => {
+                        const next = !momActive;
+                        setMomActive(next);
+                        startMomTransition(() => {
+                          setMomForPlayer(matchId, m.id, next);
+                        });
+                      }
+                    : undefined
+                }
+              />
+            </span>
+          )}
         </div>
       </div>
 
-      <span
-        className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold text-white"
-        style={{ backgroundColor: tierColor }}
+      {stat ? (
+        <span
+          className="shrink-0 px-2.5 py-0.5 rounded-full text-[11px] font-bold text-white bg-suaza-accent"
+          title="이번 경기 획득 포인트"
+        >
+          {stat.points}P
+        </span>
+      ) : (
+        <span
+          className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold text-white"
+          style={{ backgroundColor: tierColor }}
+        >
+          {participation.totalPlayed}/{participation.byQuarter.length}
+        </span>
+      )}
+    </div>
+  );
+
+  if (!stat) return cardBody;
+
+  // 종료 경기 임베드 — wrapper 가 전체 카드 테두리/색을 담당해 placed 강조선이
+  // 카드 끝까지 끊김 없이 둘리도록 한다.
+  const wrapperStyle = placed && highlight ? { borderColor: highlight.borderColor } : undefined;
+  return (
+    <div
+      className={`flex flex-col rounded-xl bg-white overflow-hidden border-2 ${
+        placed ? "" : "border-suaza-border"
+      }`}
+      style={wrapperStyle}
+    >
+      {cardBody}
+      <PlayerStatRow
+        matchId={matchId!}
+        playerId={m.id}
+        stat={stat}
+        canEdit={canEditStats}
+      />
+    </div>
+  );
+}
+
+// 출석/승리/MOM 미니 상태 배지 — 카드 이름 줄 우측에 표기.
+// onClick 이 있으면 버튼으로 렌더, 없으면 span(읽기 전용).
+function StatusPill({
+  label,
+  tone,
+  active,
+  disabled = false,
+  onClick,
+}: {
+  label: string;
+  tone: "success" | "win" | "mom";
+  active: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+}) {
+  const palette: Record<"success" | "win" | "mom", { bg: string; fg: string }> =
+    {
+      success: { bg: "#22C55E", fg: "#FFFFFF" },
+      win: { bg: "#F97316", fg: "#FFFFFF" },
+      mom: { bg: "#EAB308", fg: "#FFFFFF" },
+    };
+  const p = palette[tone];
+  const muted = !active || disabled;
+  const cls = `inline-flex items-center justify-center w-4 h-4 rounded text-[9px] font-bold leading-none ${
+    muted ? "bg-gray-200 text-gray-400" : ""
+  } ${onClick && !disabled ? "cursor-pointer hover:opacity-80" : ""}`;
+  const styleProp = muted
+    ? undefined
+    : { backgroundColor: p.bg, color: p.fg };
+  const titleText =
+    tone === "success" ? "출석" : tone === "win" ? "승리" : "MOM";
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+        className={cls}
+        style={styleProp}
+        title={titleText}
+        aria-pressed={active}
       >
-        {participation.totalPlayed}/{participation.byQuarter.length}
-      </span>
+        {label}
+      </button>
+    );
+  }
+  return (
+    <span
+      className={cls}
+      style={styleProp}
+      title={titleText}
+      aria-disabled={disabled}
+    >
+      {label}
+    </span>
+  );
+}
+
+// 종료 경기 — 선수 카드 아래 붙는 기록 입력/표시 행.
+//   상단: 5개 기록 항목(골/어시/CS/심판/MOM) — 클릭 시 선택(편집 대상으로 지정)
+//   하단: 선택된 항목의 −값+ 컨트롤 (하나만 노출)
+function PlayerStatRow({
+  matchId,
+  playerId,
+  stat,
+  canEdit,
+}: {
+  matchId: string;
+  playerId: string;
+  stat: PlayerStat;
+  canEdit: boolean;
+}) {
+  const [, startTransition] = useTransition();
+  // 낙관적 표시값
+  const [optimistic, setOptimistic] = useState({
+    goals: stat.goals,
+    assists: stat.assists,
+    cleanSheets: stat.cleanSheets,
+    refereeCount: stat.refereeCount,
+  });
+  type ItemKey = "goals" | "assists" | "clean_sheets" | "referee_count";
+  const items: {
+    key: ItemKey;
+    label: string;
+    icon: string;
+    color: string;
+    bg: string;
+    value: number;
+    setValue: (n: number) => void;
+  }[] = [
+    {
+      key: "goals",
+      label: "골",
+      icon: "⚽",
+      color: "#22C55E",
+      bg: "rgba(34,197,94,0.10)",
+      value: optimistic.goals,
+      setValue: (n) => setOptimistic((s) => ({ ...s, goals: n })),
+    },
+    {
+      key: "assists",
+      label: "어시",
+      icon: "🅰",
+      color: "#A855F7",
+      bg: "rgba(168,85,247,0.10)",
+      value: optimistic.assists,
+      setValue: (n) => setOptimistic((s) => ({ ...s, assists: n })),
+    },
+    {
+      key: "clean_sheets",
+      label: "CS",
+      icon: "🛡️",
+      color: "#338CF2",
+      bg: "rgba(51,140,242,0.10)",
+      value: optimistic.cleanSheets,
+      setValue: (n) => setOptimistic((s) => ({ ...s, cleanSheets: n })),
+    },
+    {
+      key: "referee_count",
+      label: "심판",
+      icon: "🟨",
+      color: "#F59E0B",
+      bg: "rgba(245,158,11,0.10)",
+      value: optimistic.refereeCount,
+      setValue: (n) => setOptimistic((s) => ({ ...s, refereeCount: n })),
+    },
+  ];
+  const change = (
+    key: ItemKey,
+    delta: number,
+    cur: number,
+    setVal: (n: number) => void,
+  ) => {
+    if (!canEdit) return;
+    const next = Math.max(0, cur + delta);
+    if (next === cur) return;
+    setVal(next);
+    startTransition(() => {
+      incrementStatForPlayer(matchId, playerId, key, delta);
+    });
+  };
+
+  return (
+    <div className="grid grid-cols-4 gap-1 px-2 py-2 bg-suaza-bg/40">
+      {/* 항목 4개 — 클릭하면 +1, 우클릭/길게누르면 -1 */}
+      {items.map((it) => (
+        <button
+          key={it.key}
+          type="button"
+          disabled={!canEdit}
+          onClick={() => change(it.key, 1, it.value, it.setValue)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            change(it.key, -1, it.value, it.setValue);
+          }}
+          className={`flex items-center justify-center gap-1 py-1.5 rounded-md transition ${
+            canEdit ? "hover:bg-white" : "cursor-default opacity-60"
+          }`}
+          style={{ backgroundColor: it.bg }}
+          title={
+            canEdit
+              ? `${it.label} (+1, 우클릭 -1)`
+              : it.label
+          }
+        >
+          <span className="text-[10px] font-medium text-suaza-ink-muted leading-none">
+            <span aria-hidden className="mr-0.5">
+              {it.icon}
+            </span>
+            {it.label}
+          </span>
+          <span
+            className="text-sm font-bold tabular-nums leading-none"
+            style={{ color: it.color }}
+          >
+            {it.value}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -2670,6 +3144,11 @@ function PlayerRosterDesktop({
   myCondition,
   onCycleCondition,
   matchLocked = false,
+  statByPlayer,
+  canEditStats = false,
+  matchId,
+  winningTeam = null,
+  rosterTeam = null,
 }: {
   members: EditorMember[];
   quarters: QuarterWithTeams[];
@@ -2682,6 +3161,12 @@ function PlayerRosterDesktop({
   onTap: (id: string, placed: boolean) => void;
   onDragStart?: (id: string) => void;
   onDragEnd?: () => void;
+  statByPlayer?: Record<string, PlayerStat>;
+  canEditStats?: boolean;
+  matchId?: string;
+  winningTeam?: "A" | "B" | null;
+  /** 이 명단 카드가 어느 팀(A/B) 인지. 자체전에서 카드별 승 배지 판정에 사용 */
+  rosterTeam?: "A" | "B" | null;
   teamLabel?: string;
   teamColor?: string;
   currentShape?: string;
@@ -2754,17 +3239,13 @@ function PlayerRosterDesktop({
           counts={posCounts}
           keys={["ALL"]}
         />
-        {!readonly && (onReset || onAutoPlace) && (
+        {!readonly && !matchLocked && (onReset || onAutoPlace) && (
           <div className="ml-auto flex items-center gap-1.5 shrink-0">
             {onReset && (
               <button
                 type="button"
                 onClick={onReset}
-                disabled={matchLocked}
-                title={
-                  matchLocked ? "종료된 경기는 변경할 수 없습니다" : undefined
-                }
-                className="h-7 px-2.5 rounded-md border border-suaza-border text-[11px] font-medium text-suaza-ink bg-white hover:bg-suaza-bg disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+                className="h-7 px-2.5 rounded-md border border-suaza-border text-[11px] font-medium text-suaza-ink bg-white hover:bg-suaza-bg"
               >
                 초기화
               </button>
@@ -2773,11 +3254,7 @@ function PlayerRosterDesktop({
               <button
                 type="button"
                 onClick={onAutoPlace}
-                disabled={matchLocked}
-                title={
-                  matchLocked ? "종료된 경기는 변경할 수 없습니다" : undefined
-                }
-                className="h-7 px-2.5 rounded-md bg-suaza-button text-white text-[11px] font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:opacity-40"
+                className="h-7 px-2.5 rounded-md bg-suaza-button text-white text-[11px] font-medium hover:opacity-90"
               >
                 자동
               </button>
@@ -2785,14 +3262,14 @@ function PlayerRosterDesktop({
           </div>
         )}
       </div>
-      {/* 2줄: 출전 / 평균 쿼터 */}
-      {members.length > 0 && (
+      {/* 2줄: 출전 / 평균 쿼터 — 종료 경기 임베드에서는 숨김 */}
+      {members.length > 0 && !matchLocked && (
         <p className="text-xs text-suaza-ink-muted">
           출전 {teamStats.played}명 · 평균 {teamStats.avg}쿼터
         </p>
       )}
-      {/* 3줄: 포메이션 드롭다운 — 한 줄 가득 */}
-      {currentShape && (
+      {/* 3줄: 포메이션 드롭다운 — 한 줄 가득. 종료 경기 임베드에서는 숨김 */}
+      {currentShape && !matchLocked && (
         <div className="flex items-center">
           {onShapeChange && !readonly ? (
             <FormationDropdown
@@ -2829,7 +3306,11 @@ function PlayerRosterDesktop({
                 participation={p}
                 placed={placedSet.has(p.member.id)}
                 available={availableIds.has(p.member.id)}
-                team={isIntra ? teamOfPlayer.get(p.member.id) : undefined}
+                team={
+                  isIntra
+                    ? rosterTeam ?? teamOfPlayer.get(p.member.id)
+                    : undefined
+                }
                 readonly={readonly}
                 onTap={onTap}
                 onDragStart={onDragStart}
@@ -2841,6 +3322,10 @@ function PlayerRosterDesktop({
                     : p.member.condition ?? 3
                 }
                 onCycleCondition={onCycleCondition}
+                stat={statByPlayer?.[p.member.id]}
+                canEditStats={canEditStats}
+                matchId={matchId}
+                winningTeam={winningTeam}
               />
             ))}
           </div>
