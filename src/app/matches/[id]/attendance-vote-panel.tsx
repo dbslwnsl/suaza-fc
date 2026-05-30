@@ -1,12 +1,71 @@
 "use client";
 
-import { useMemo, useOptimistic, useTransition } from "react";
+import { useMemo, useOptimistic, useState, useTransition } from "react";
 import {
   setMyAttendingQuarters,
+  setMyCondition,
   voteAttendance,
 } from "@/lib/matches/actions";
 import { quarterShortLabel } from "@/lib/matches/helpers";
 import AttendanceManagerBoard from "@/components/attendance-manager-board";
+
+// 컨디션 1~5단계. 1=최상(빨강·12시) → 5=최하(파랑·6시).
+const CONDITION_COLOR = [
+  "#EF4444", // 1 빨강
+  "#EAB308", // 2 노랑
+  "#22C55E", // 3 초록 (기본)
+  "#06B6D4", // 4 청록
+  "#3B82F6", // 5 파랑
+];
+const CONDITION_DEG = [-90, -45, 0, 45, 90];
+const CONDITION_LABEL = ["최상", "좋음", "보통", "나쁨", "최하"];
+
+function ConditionChip({
+  level,
+  onCycle,
+}: {
+  level: number;
+  onCycle: () => void;
+}) {
+  const idx = Math.min(5, Math.max(1, level)) - 1;
+  const color = CONDITION_COLOR[idx];
+  const deg = CONDITION_DEG[idx];
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onCycle();
+      }}
+      title={`컨디션 ${CONDITION_LABEL[idx]} (눌러서 변경)`}
+      aria-label={`내 컨디션 ${level}단계 (눌러서 변경)`}
+      className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-white hover:scale-[1.02] active:scale-95 transition"
+      style={{ borderColor: color, color }}
+    >
+      <span
+        className="inline-flex items-center justify-center w-4 h-4 rounded-full"
+        style={{ backgroundColor: `${color}26` }}
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          style={{ transform: `rotate(${deg}deg)` }}
+        >
+          <path
+            d="M4 12 H17 M12 7 L18 12 L12 17"
+            fill="none"
+            stroke={color}
+            strokeWidth="2.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+      <span>컨디션</span>
+    </button>
+  );
+}
 
 export type VotePlayer = {
   id: string;
@@ -298,6 +357,7 @@ export function AttendanceCardVote({
   myName,
   myStatus,
   myAttendingQuarters,
+  myCondition,
   byStatus,
   nonVoters,
   isManager,
@@ -311,6 +371,7 @@ export function AttendanceCardVote({
   myName: string | null;
   myStatus: string | null;
   myAttendingQuarters: number[] | null;
+  myCondition?: number;
   byStatus: Groups;
   nonVoters: VotePlayer[];
   isManager: boolean;
@@ -336,6 +397,17 @@ export function AttendanceCardVote({
     nonVoters,
   );
 
+  // 본인 컨디션 — 클릭으로 1→2→…→5→1 순환 (낙관적 반영 + 서버 저장)
+  const [condition, setCondition] = useState<number>(myCondition ?? 3);
+  const [, startConditionTransition] = useTransition();
+  const cycleCondition = () => {
+    const next = condition >= 5 ? 1 : condition + 1;
+    setCondition(next);
+    startConditionTransition(() => {
+      setMyCondition(matchId, next);
+    });
+  };
+
   const showBoard = isManager;
 
   return (
@@ -353,7 +425,7 @@ export function AttendanceCardVote({
             <span className="w-7 h-7 rounded-full bg-suaza-accent text-white text-xs font-bold flex items-center justify-center shrink-0">
               {myName?.charAt(0) ?? "?"}
             </span>
-            <span className="text-sm font-medium text-suaza-ink">
+            <span className="text-sm font-medium text-suaza-ink min-w-0 truncate">
               <span className="desktop:hidden">내 응답을 알려주세요</span>
               <span className="hidden desktop:inline">
                 {myName
@@ -361,6 +433,7 @@ export function AttendanceCardVote({
                   : "응답을 알려주세요"}
               </span>
             </span>
+            <ConditionChip level={condition} onCycle={cycleCondition} />
           </div>
           <VoteButtons status={optimisticStatus} onVote={vote} />
           {optimisticStatus === "attending" && (

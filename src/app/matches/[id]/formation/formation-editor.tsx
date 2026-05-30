@@ -1763,6 +1763,8 @@ function PlayerList({
                 >
                   {m.name}
                 </span>
+                <FootBadge foot={m.preferred_foot} />
+                <ConditionArrow level={m.condition ?? 3} />
               </div>
               <div className="flex items-center gap-1 mt-0.5">
                 {(m.positions ?? []).slice(0, 3).map((p) => (

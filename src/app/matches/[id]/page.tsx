@@ -80,7 +80,7 @@ export default async function MatchDetailPage({
     supabase.from("matches").select("*").eq("id", id).single(),
     supabase
       .from("profiles")
-      .select("role, name, avatar_url, is_injured")
+      .select("role, name, avatar_url, is_injured, condition")
       .eq("id", user.id)
       .single(),
     supabase
@@ -375,6 +375,9 @@ export default async function MatchDetailPage({
                     myStatus={myStatus}
                     myAttendingQuarters={myAttendingQuarters}
                     myInjured={injuredLock}
+                    myCondition={
+                      (me as { condition?: number | null } | null)?.condition ?? 3
+                    }
                     byStatus={byStatus}
                     nonVoters={nonVoters}
                     isManager={isStaff}
@@ -827,6 +830,7 @@ function AttendanceCard({
   myStatus,
   myAttendingQuarters,
   myInjured,
+  myCondition,
   byStatus,
   nonVoters,
   isManager,
@@ -844,6 +848,7 @@ function AttendanceCard({
   myStatus: string | null;
   myAttendingQuarters: number[] | null;
   myInjured?: boolean;
+  myCondition?: number;
   byStatus: {
     attending: AttendancePlayer[];
     absent: AttendancePlayer[];
@@ -899,6 +904,7 @@ function AttendanceCard({
         me={{ id: meId, name: myName ?? "", is_injured: myInjured }}
         myName={myName}
         myStatus={myStatus}
+        myCondition={myCondition}
         myAttendingQuarters={myAttendingQuarters}
         byStatus={byStatus}
         nonVoters={nonVoters}
