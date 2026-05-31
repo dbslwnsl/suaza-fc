@@ -35,6 +35,11 @@ export type RosterMember = {
   assists: number;
   cleanSheets: number;
   points: number;
+  /** 시즌 카테고리 1위 (공동 1위 포함) */
+  isGoalKing?: boolean;
+  isAssistKing?: boolean;
+  isCleanSheetKing?: boolean;
+  isRefereeKing?: boolean;
 };
 
 type Filter = "ALL" | Position;
@@ -261,6 +266,10 @@ function MemberCard({
   const { titleBadges, awardBadges } = getMemberBadges({
     title: m.title,
     role: m.role,
+    isGoalKing: m.isGoalKing,
+    isAssistKing: m.isAssistKing,
+    isCleanSheetKing: m.isCleanSheetKing,
+    isRefereeKing: m.isRefereeKing,
   });
   const age = calcAge(m.birthDate);
   const [lightbox, setLightbox] = useState(false);
@@ -312,6 +321,7 @@ function MemberCard({
               titleBadges={titleBadges}
               awardBadges={awardBadges}
               size="xs"
+              titlePlacement="bottom-center"
             />
           </div>
           {m.jerseyNumber != null && (

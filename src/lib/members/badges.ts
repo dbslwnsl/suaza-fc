@@ -26,6 +26,11 @@ const TITLE_BADGE_TITLES: MemberTitle[] = [
 export type MemberBadgeInput = {
   title?: MemberTitle | null;
   role?: string | null;
+  /** 시즌 카테고리별 1위(공동 1위 포함) */
+  isGoalKing?: boolean;
+  isAssistKing?: boolean;
+  isCleanSheetKing?: boolean;
+  isRefereeKing?: boolean;
 };
 
 /**
@@ -48,12 +53,32 @@ export function getMemberBadges(input: MemberBadgeInput): {
     });
   }
 
-  // ── 우선(임시): 회장에게만 득점왕 데모 ──
-  // TODO: 시즌 최다 득점 자동 산출로 대체
-  if (input.title === "president") {
+  // 시즌 1위 수상 뱃지 (공동 1위면 여러 명에게 모두 부여)
+  if (input.isGoalKing) {
     awardBadges.push({
-      key: "top-scorer",
+      key: "goal-king",
       label: "득점왕",
+      className: AWARD_BADGE_CLASS,
+    });
+  }
+  if (input.isAssistKing) {
+    awardBadges.push({
+      key: "assist-king",
+      label: "어시왕",
+      className: AWARD_BADGE_CLASS,
+    });
+  }
+  if (input.isCleanSheetKing) {
+    awardBadges.push({
+      key: "cs-king",
+      label: "CS왕",
+      className: AWARD_BADGE_CLASS,
+    });
+  }
+  if (input.isRefereeKing) {
+    awardBadges.push({
+      key: "referee-king",
+      label: "심판왕",
       className: AWARD_BADGE_CLASS,
     });
   }

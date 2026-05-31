@@ -110,6 +110,25 @@ export default async function RosterView({ year }: { year: number }) {
     );
   }
 
+  // 시즌 카테고리별 1위(공동 1위 포함). 값이 0이면 왕 없음.
+  function pickKings(getter: (s: PlayerSeasonStat) => number): Set<string> {
+    let max = 0;
+    for (const s of statsMap.values()) {
+      const v = getter(s);
+      if (v > max) max = v;
+    }
+    if (max <= 0) return new Set();
+    const out = new Set<string>();
+    for (const s of statsMap.values()) {
+      if (getter(s) === max) out.add(s.player_id);
+    }
+    return out;
+  }
+  const goalKings = pickKings((s) => s.goals ?? 0);
+  const assistKings = pickKings((s) => s.assists ?? 0);
+  const cleanSheetKings = pickKings((s) => s.custom.clean_sheets ?? 0);
+  const refereeKings = pickKings((s) => s.custom.referee_count ?? 0);
+
   const list: RosterMember[] = sorted.map((m) => {
     const stat = statsMap.get(m.id);
     return {
@@ -132,6 +151,10 @@ export default async function RosterView({ year }: { year: number }) {
       assists: stat?.assists ?? 0,
       cleanSheets: stat?.custom.clean_sheets ?? 0,
       points: pointsByPlayer.get(m.id) ?? 0,
+      isGoalKing: goalKings.has(m.id),
+      isAssistKing: assistKings.has(m.id),
+      isCleanSheetKing: cleanSheetKings.has(m.id),
+      isRefereeKing: refereeKings.has(m.id),
     };
   });
 
