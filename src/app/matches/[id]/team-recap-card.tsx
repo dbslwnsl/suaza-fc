@@ -15,6 +15,7 @@ export default function TeamRecapCard({
   teamBCaptain = null,
   matchId,
   editable = false,
+  lockCaptain = false,
 }: {
   attendees: RecapMember[];
   teamAName: string;
@@ -24,6 +25,8 @@ export default function TeamRecapCard({
   /** 편집(드래그앤드롭) 활성화 시 필수 */
   matchId?: string;
   editable?: boolean;
+  /** 주장 변경 잠금 (예: 경기 종료) — editable 이어도 주장은 못 바꿈 */
+  lockCaptain?: boolean;
 }) {
   const [optimistic, applyOptimistic] = useOptimistic<
     RecapMember[],
@@ -37,7 +40,7 @@ export default function TeamRecapCard({
   const [dragging, setDragging] = useState(false);
 
   const setCaptain = (team: "A" | "B", playerId: string | null) => {
-    if (!editable || !matchId) return;
+    if (!editable || lockCaptain || !matchId) return;
     startTransition(() => {
       applyCaptains(
         team === "A"
@@ -88,6 +91,7 @@ export default function TeamRecapCard({
           members={teamA}
           captainId={optCaptains.a}
           editable={editable}
+          lockCaptain={lockCaptain}
           dragging={dragging}
           onDragStateChange={setDragging}
           onDropTo={moveTo}
@@ -105,6 +109,7 @@ export default function TeamRecapCard({
           members={teamB}
           captainId={optCaptains.b}
           editable={editable}
+          lockCaptain={lockCaptain}
           dragging={dragging}
           onDragStateChange={setDragging}
           onDropTo={moveTo}
@@ -158,6 +163,7 @@ function TeamColumn({
   members,
   captainId,
   editable,
+  lockCaptain = false,
   dragging,
   onDragStateChange,
   onDropTo,
@@ -170,6 +176,7 @@ function TeamColumn({
   members: RecapMember[];
   captainId: string | null;
   editable: boolean;
+  lockCaptain?: boolean;
   dragging: boolean;
   onDragStateChange: (b: boolean) => void;
   onDropTo: (playerId: string, team: "A" | "B" | null) => void;
@@ -192,6 +199,7 @@ function TeamColumn({
           members={members}
           captainId={captainId}
           editable={editable}
+          locked={lockCaptain}
           onChange={onCaptainChange}
         />
       </div>

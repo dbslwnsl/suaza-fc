@@ -2441,7 +2441,7 @@ function DesktopRosterPane({
                 key="ALL"
                 type="button"
                 onClick={() => onAllClick?.()}
-                className={`shrink-0 min-w-[48px] h-8 px-3 rounded-t-lg text-xs font-bold transition border-x border-t ${
+                className={`shrink-0 min-w-[36px] h-8 px-2 rounded-t-lg text-xs font-bold transition border-x border-t ${
                   isAllActive
                     ? "bg-white border-suaza-border text-suaza-button"
                     : "bg-suaza-bg border-transparent text-suaza-ink-muted hover:text-suaza-ink"
@@ -2457,7 +2457,7 @@ function DesktopRosterPane({
                   key={q.id}
                   type="button"
                   onClick={() => onRibbonChange(i)}
-                  className={`shrink-0 min-w-[48px] h-8 px-3 rounded-t-lg text-xs font-bold transition border-x border-t ${
+                  className={`shrink-0 min-w-[36px] h-8 px-2 rounded-t-lg text-xs font-bold transition border-x border-t ${
                     active
                       ? "bg-white border-suaza-border text-suaza-button"
                       : "bg-suaza-bg border-transparent text-suaza-ink-muted hover:text-suaza-ink"
@@ -2660,7 +2660,7 @@ function PlayerRosterMobile({
                 key="ALL"
                 type="button"
                 onClick={() => onAllClick?.()}
-                className={`shrink-0 min-w-[44px] h-7 px-3 rounded-t-lg text-xs font-bold transition border-x border-t ${
+                className={`shrink-0 min-w-[32px] h-7 px-2 rounded-t-lg text-xs font-bold transition border-x border-t ${
                   isAllActive
                     ? "bg-white border-suaza-border text-suaza-button"
                     : "bg-suaza-bg border-transparent text-suaza-ink-muted hover:text-suaza-ink"
@@ -2676,7 +2676,7 @@ function PlayerRosterMobile({
                   key={q.id}
                   type="button"
                   onClick={() => onQuarterChange?.(i)}
-                  className={`shrink-0 min-w-[44px] h-7 px-3 rounded-t-lg text-xs font-bold transition border-x border-t ${
+                  className={`shrink-0 min-w-[32px] h-7 px-2 rounded-t-lg text-xs font-bold transition border-x border-t ${
                     active
                       ? "bg-white border-suaza-border text-suaza-button"
                       : "bg-suaza-bg border-transparent text-suaza-ink-muted hover:text-suaza-ink"

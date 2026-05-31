@@ -335,8 +335,8 @@ export default async function MatchDetailPage({
         />
 
             <div className="grid grid-cols-1 desktop:grid-cols-2 gap-4 desktop:items-stretch">
-              {/* 출석투표: 좌측 상단 — 지난(완료)·취소 경기엔 숨김 */}
-              {m.status !== "canceled" && m.status !== "done" && (
+              {/* 출석투표: 좌측 상단 — 취소 경기엔 숨김 (완료 경기는 조회용으로 노출) */}
+              {m.status !== "canceled" && (
                 <div className="order-1 desktop:h-full">
                   <AttendanceCard
                     matchId={m.id}
@@ -394,7 +394,7 @@ export default async function MatchDetailPage({
                 </div>
               )}
               {isIntra && m.status === "done" && (
-                <div className="order-2 desktop:col-span-2">
+                <div className="order-2 desktop:h-full">
                   <TeamRecapCard
                     matchId={m.id}
                     attendees={teamMembers}
@@ -403,6 +403,7 @@ export default async function MatchDetailPage({
                     teamACaptain={m.team_a_captain}
                     teamBCaptain={m.team_b_captain}
                     editable={isStaff}
+                    lockCaptain
                   />
                 </div>
               )}

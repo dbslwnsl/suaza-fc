@@ -18,17 +18,20 @@ export default function CaptainPicker({
   members,
   captainId,
   editable,
+  locked = false,
   onChange,
 }: {
   members: CaptainMember[];
   captainId: string | null;
   editable: boolean;
+  /** 편집 권한이 있어도 변경 불가 (예: 경기 종료) — 읽기 전용 표시만 */
+  locked?: boolean;
   onChange: (playerId: string | null) => void;
 }) {
   const captain =
     captainId != null ? members.find((m) => m.id === captainId) ?? null : null;
 
-  if (!editable) {
+  if (!editable || locked) {
     // 회원에게는 이름을 따로 적지 않고, 주장색 "주장" 칩으로 범례처럼 표시.
     // (실제 주장은 명단의 주장색 칩으로 구분됨)
     if (!captain) return null;
