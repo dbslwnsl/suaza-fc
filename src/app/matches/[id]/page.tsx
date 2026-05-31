@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { computeSeasonKings } from "@/lib/stats/kings";
 import { closeAttendanceVote, deleteMatch } from "@/lib/matches/actions";
 import { WeatherInlineClient } from "@/components/weather-client";
 import {
@@ -103,6 +104,10 @@ export default async function MatchDetailPage({
     voted_at?: string | null;
     is_injured?: boolean | null;
     on_leave?: boolean | null;
+    isGoalKing?: boolean;
+    isAssistKing?: boolean;
+    isCleanSheetKing?: boolean;
+    isRefereeKing?: boolean;
   };
   const byStatus: {
     attending: VotePlayer[];
@@ -121,6 +126,17 @@ export default async function MatchDetailPage({
   // 예정·진행 중 경기에서는 삭제 회원을 명단에서 제외.
   const matchStatus = (match as Match | null)?.status ?? null;
   const isPastMatch = matchStatus === "done" || matchStatus === "canceled";
+  // 이 경기 일자가 속한 연도의 시즌 카테고리 1위 산출 (공동 1위 포함).
+  // 출석 명단에서 득점왕/어시왕/CS왕/심판왕 딱지 표기에 사용.
+  const matchYear = new Date((match as Match).match_date).getFullYear();
+  const seasonKings = await computeSeasonKings(supabase, matchYear);
+  const withKings = (p: VotePlayer): VotePlayer => ({
+    ...p,
+    isGoalKing: seasonKings.goal.has(p.id),
+    isAssistKing: seasonKings.assist.has(p.id),
+    isCleanSheetKing: seasonKings.cleanSheet.has(p.id),
+    isRefereeKing: seasonKings.referee.has(p.id),
+  });
   for (const row of (attendancesRaw ?? []) as unknown as {
     status: keyof typeof byStatus;
     team: "A" | "B" | null;
@@ -131,11 +147,11 @@ export default async function MatchDetailPage({
     // 소프트 삭제된 회원: 예정·진행 경기에서만 제외 (지난 경기는 기록 보존)
     if (!isPastMatch && row.player?.deleted_at) continue;
     if (row.player && row.status in byStatus) {
-      const enriched: VotePlayer = {
+      const enriched: VotePlayer = withKings({
         ...row.player,
         attending_quarters: row.attending_quarters,
         voted_at: row.updated_at,
-      };
+      });
       // 부상자는 실제 투표와 무관하게 불참으로 강제 이동 (지난 경기는 기록 보존)
       const injuredNow = !isPastMatch && !!row.player.is_injured;
       const onLeaveNow = !isPastMatch && !!row.player.on_leave;
@@ -153,9 +169,9 @@ export default async function MatchDetailPage({
       }
     }
   }
-  const rawNonVoters = ((allMembers ?? []) as VotePlayer[]).filter(
-    (m) => !votedIds.has(m.id),
-  );
+  const rawNonVoters = ((allMembers ?? []) as VotePlayer[])
+    .filter((m) => !votedIds.has(m.id))
+    .map(withKings);
   // 부상 미투표자도 불참으로 이동 (지난 경기는 그대로 둔다)
   const nonVoters = isPastMatch
     ? rawNonVoters

@@ -87,7 +87,7 @@ const STAT_META: {
   {
     key: "referee_count",
     label: "심판",
-    icon: "🟨",
+    icon: "🏁",
     color: "#F59E0B",
     bg: "rgba(245,158,11,0.10)",
     weight: 1,

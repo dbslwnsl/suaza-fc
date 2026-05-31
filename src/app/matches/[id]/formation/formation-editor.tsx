@@ -2413,6 +2413,43 @@ function WinnerToggle({
   );
 }
 
+// 부심 깃발 — 깃대(검정) + 깃발(노랑 + 빨강 격자 4칸). 심판 항목/시즌왕 배지에 사용.
+function LinesmanFlag({
+  size = 12,
+  className = "",
+}: {
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      className={`inline-block align-middle ${className}`}
+      aria-hidden
+    >
+      {/* 깃대 */}
+      <rect x="3" y="2" width="1.6" height="20" rx="0.5" fill="#1F2937" />
+      {/* 깃발 — 노/빨 2x2 격자 */}
+      <rect x="4.6" y="3" width="7" height="6" fill="#FACC15" />
+      <rect x="11.6" y="3" width="7" height="6" fill="#EF4444" />
+      <rect x="4.6" y="9" width="7" height="6" fill="#EF4444" />
+      <rect x="11.6" y="9" width="7" height="6" fill="#FACC15" />
+      {/* 깃발 테두리 */}
+      <rect
+        x="4.6"
+        y="3"
+        width="14"
+        height="12"
+        fill="none"
+        stroke="rgba(0,0,0,0.25)"
+        strokeWidth="0.4"
+      />
+    </svg>
+  );
+}
+
 // 회장·감독 자체전 전용 — 운동장 보기 모드 토글(A팀 / 전체 / B팀)
 function PitchViewToggle({
   value,
@@ -3180,7 +3217,7 @@ function PlayerStatRow({
   const items: {
     key: ItemKey;
     label: string;
-    icon: string;
+    icon: React.ReactNode;
     color: string;
     bg: string;
     value: number;
@@ -3216,7 +3253,7 @@ function PlayerStatRow({
     {
       key: "referee_count",
       label: "심판",
-      icon: "🟨",
+      icon: <LinesmanFlag size={10} />,
       color: "#F59E0B",
       bg: "rgba(245,158,11,0.10)",
       value: optimistic.refereeCount,
