@@ -10,6 +10,7 @@ export type Member = {
   jersey_number?: number | null;
   attending_quarters?: number[] | null;
   is_injured?: boolean | null;
+  on_leave?: boolean | null;
 };
 
 type Status = "attending" | "absent" | "undecided" | null;
@@ -311,6 +312,7 @@ function Chip({
     >
       {member.name}
       {member.is_injured && <InjuryBadge />}
+      {member.on_leave && <OnLeaveBadge />}
     </span>
   );
 }
@@ -326,6 +328,22 @@ function InjuryBadge() {
     >
       <svg viewBox="0 0 24 24" className="w-2 h-2" fill="currentColor" aria-hidden>
         <path d="M9 2h6v7h7v6h-7v7H9v-7H2V9h7z" />
+      </svg>
+    </span>
+  );
+}
+
+// 장기불참 표기용 회색 ― 배지
+function OnLeaveBadge() {
+  return (
+    <span
+      className="shrink-0 inline-flex items-center justify-center w-3.5 h-3.5 rounded-[3px] bg-suaza-ink-muted text-white"
+      role="img"
+      aria-label="장기불참"
+      title="장기불참"
+    >
+      <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="currentColor" aria-hidden>
+        <rect x="3" y="10" width="18" height="4" rx="1" />
       </svg>
     </span>
   );

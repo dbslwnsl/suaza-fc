@@ -62,18 +62,18 @@ export default async function MatchDetailPage({
     supabase.from("matches").select("*").eq("id", id).single(),
     supabase
       .from("profiles")
-      .select("role, name, avatar_url, is_injured, condition")
+      .select("role, name, avatar_url, is_injured, on_leave, condition")
       .eq("id", user.id)
       .single(),
     supabase
       .from("profiles")
-      .select("id, name, jersey_number, positions, title, is_injured")
+      .select("id, name, jersey_number, positions, title, is_injured, on_leave")
       .is("deleted_at", null)
       .order("name", { ascending: true }),
     supabase
       .from("match_attendances")
       .select(
-        "status, team, attending_quarters, updated_at, player:profiles(id, name, jersey_number, positions, title, deleted_at, is_injured)",
+        "status, team, attending_quarters, updated_at, player:profiles(id, name, jersey_number, positions, title, deleted_at, is_injured, on_leave)",
       )
       .eq("match_id", id),
     supabase
@@ -102,6 +102,7 @@ export default async function MatchDetailPage({
     attending_quarters?: number[] | null;
     voted_at?: string | null;
     is_injured?: boolean | null;
+    on_leave?: boolean | null;
   };
   const byStatus: {
     attending: VotePlayer[];
@@ -137,7 +138,9 @@ export default async function MatchDetailPage({
       };
       // 부상자는 실제 투표와 무관하게 불참으로 강제 이동 (지난 경기는 기록 보존)
       const injuredNow = !isPastMatch && !!row.player.is_injured;
-      const effectiveStatus = injuredNow ? "absent" : row.status;
+      const onLeaveNow = !isPastMatch && !!row.player.on_leave;
+      const effectiveStatus =
+        injuredNow || onLeaveNow ? "absent" : row.status;
       byStatus[effectiveStatus].push(enriched);
       votedIds.add(row.player.id);
       if (effectiveStatus === "attending") {
@@ -156,10 +159,10 @@ export default async function MatchDetailPage({
   // 부상 미투표자도 불참으로 이동 (지난 경기는 그대로 둔다)
   const nonVoters = isPastMatch
     ? rawNonVoters
-    : rawNonVoters.filter((m) => !m.is_injured);
+    : rawNonVoters.filter((m) => !m.is_injured && !m.on_leave);
   if (!isPastMatch) {
     for (const m of rawNonVoters) {
-      if (m.is_injured) byStatus.absent.push(m);
+      if (m.is_injured || m.on_leave) byStatus.absent.push(m);
     }
   }
   for (const key of ["attending", "absent", "undecided"] as const) {
@@ -170,10 +173,13 @@ export default async function MatchDetailPage({
     | null;
   // 부상자는 본인 응답도 불참으로 고정하고 투표 UI 를 잠근다 (지난 경기는 제외).
   const myInjured = !!(me as { is_injured?: boolean | null } | null)?.is_injured;
+  const myOnLeave = !!(me as { on_leave?: boolean | null } | null)?.on_leave;
   const matchIsPast = matchStatus === "done" || matchStatus === "canceled";
   const injuredLock = myInjured && !matchIsPast;
-  const myStatus = injuredLock ? "absent" : myAtt?.status ?? null;
-  const myAttendingQuarters = injuredLock
+  const onLeaveLock = myOnLeave && !matchIsPast;
+  const forcedAbsent = injuredLock || onLeaveLock;
+  const myStatus = forcedAbsent ? "absent" : myAtt?.status ?? null;
+  const myAttendingQuarters = forcedAbsent
     ? null
     : myAtt?.attending_quarters ?? null;
 
@@ -354,6 +360,7 @@ export default async function MatchDetailPage({
                     myStatus={myStatus}
                     myAttendingQuarters={myAttendingQuarters}
                     myInjured={injuredLock}
+                    myOnLeave={onLeaveLock}
                     myCondition={
                       (me as { condition?: number | null } | null)?.condition ?? 3
                     }
@@ -367,14 +374,16 @@ export default async function MatchDetailPage({
                     deadlineStr={deadlineStr}
                     voteClosed={voteClosed}
                     locked={
-                      injuredLock ||
+                      forcedAbsent ||
                       isStarted ||
                       ((deadlinePassed || voteClosed) && !isStaff)
                     }
                     lockedMessage={
                       injuredLock
                         ? "🚑 부상 상태로 자동 불참 처리되었습니다 (프로필에서 부상 해제 시 투표 가능)"
-                        : isStarted
+                        : onLeaveLock
+                          ? "📴 장기불참 상태로 자동 불참 처리되었습니다 (프로필에서 장기불참 해제 시 투표 가능)"
+                          : isStarted
                           ? "🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다"
                           : voteClosed
                             ? "🔒 출석 투표가 종료되었습니다"
@@ -837,6 +846,7 @@ type AttendancePlayer = {
   attending_quarters?: number[] | null;
   voted_at?: string | null;
   is_injured?: boolean | null;
+  on_leave?: boolean | null;
 };
 
 function AttendanceCard({
@@ -845,6 +855,7 @@ function AttendanceCard({
   myStatus,
   myAttendingQuarters,
   myInjured,
+  myOnLeave,
   myCondition,
   byStatus,
   nonVoters,
@@ -863,6 +874,7 @@ function AttendanceCard({
   myStatus: string | null;
   myAttendingQuarters: number[] | null;
   myInjured?: boolean;
+  myOnLeave?: boolean;
   myCondition?: number;
   byStatus: {
     attending: AttendancePlayer[];
@@ -916,7 +928,12 @@ function AttendanceCard({
 
       <AttendanceCardVote
         matchId={matchId}
-        me={{ id: meId, name: myName ?? "", is_injured: myInjured }}
+        me={{
+          id: meId,
+          name: myName ?? "",
+          is_injured: myInjured,
+          on_leave: myOnLeave,
+        }}
         myName={myName}
         myStatus={myStatus}
         myCondition={myCondition}

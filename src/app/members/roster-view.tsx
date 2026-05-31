@@ -28,6 +28,7 @@ type MemberRow = {
   birth_date: string | null;
   preferred_foot: PreferredFoot | null;
   is_injured: boolean | null;
+  on_leave: boolean | null;
 };
 
 export default async function RosterView({ year }: { year: number }) {
@@ -42,7 +43,7 @@ export default async function RosterView({ year }: { year: number }) {
   const { data: members } = await supabase
     .from("profiles")
     .select(
-      "id, name, nickname, title, role, positions, jersey_number, avatar_url, birth_date, preferred_foot, is_injured",
+      "id, name, nickname, title, role, positions, jersey_number, avatar_url, birth_date, preferred_foot, is_injured, on_leave",
     )
     .is("deleted_at", null)
     .order("name", { ascending: true });
@@ -125,6 +126,7 @@ export default async function RosterView({ year }: { year: number }) {
       birthDate: m.birth_date,
       preferredFoot: m.preferred_foot,
       isInjured: m.is_injured ?? false,
+      onLeave: m.on_leave ?? false,
       appearances: stat?.appearances ?? 0,
       goals: stat?.goals ?? 0,
       assists: stat?.assists ?? 0,

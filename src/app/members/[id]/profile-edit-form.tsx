@@ -23,6 +23,7 @@ type Initial = {
   birth_date: string | null;
   preferred_foot: PreferredFoot | null;
   is_injured: boolean;
+  on_leave: boolean;
   title: MemberTitle;
 };
 
@@ -61,6 +62,7 @@ export default function ProfileEditForm({
     initial.preferred_foot,
   );
   const [injured, setInjured] = useState(initial.is_injured);
+  const [onLeave, setOnLeave] = useState(initial.on_leave);
 
   const isDirty = useMemo(() => {
     if (name.trim() !== initial.name) return true;
@@ -69,12 +71,13 @@ export default function ProfileEditForm({
     if (birth.trim() !== (initial.birth_date ?? "")) return true;
     if (foot !== initial.preferred_foot) return true;
     if (injured !== initial.is_injured) return true;
+    if (onLeave !== initial.on_leave) return true;
     // 순서(주/부)가 의미를 가지므로 정렬 없이 비교
     if (positions.length !== initial.positions.length) return true;
     if (positions.some((p, i) => p !== initial.positions[i])) return true;
     if (isManager && title !== initial.title) return true;
     return false;
-  }, [name, nickname, jersey, birth, foot, injured, positions, title, isManager, initial]);
+  }, [name, nickname, jersey, birth, foot, injured, onLeave, positions, title, isManager, initial]);
 
   // 필수: 이름, 등번호, 생년월일, 주포지션, 주발
   const requiredValid =
@@ -96,6 +99,7 @@ export default function ProfileEditForm({
     setTitle(initial.title);
     setFoot(initial.preferred_foot);
     setInjured(initial.is_injured);
+    setOnLeave(initial.on_leave);
   };
 
   // 카드 클릭 → 현재 단계(주/부)에 배정. 같은 칸 재선택 시 해제.
@@ -130,6 +134,7 @@ export default function ProfileEditForm({
       {isManager && <input type="hidden" name="title" value={title} />}
       {foot && <input type="hidden" name="preferred_foot" value={foot} />}
       <input type="hidden" name="is_injured" value={injured ? "1" : "0"} />
+      <input type="hidden" name="on_leave" value={onLeave ? "1" : "0"} />
 
       {/* 이름 / 별명 */}
       <div className="grid grid-cols-2 gap-3">
@@ -137,28 +142,52 @@ export default function ProfileEditForm({
           label="이름"
           required
           action={
-            <button
-              type="button"
-              role="switch"
-              aria-checked={injured}
-              onClick={() => setInjured((v) => !v)}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition ${
-                injured
-                  ? "text-suaza-accent"
-                  : "text-suaza-ink-muted hover:text-suaza-ink"
-              }`}
-            >
-              부상
-              <span
-                className={`inline-flex items-center justify-center w-3.5 h-3.5 rounded-[4px] border text-white text-[9px] leading-none ${
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={injured}
+                onClick={() => setInjured((v) => !v)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition ${
                   injured
-                    ? "bg-suaza-accent border-suaza-accent"
-                    : "bg-white border-suaza-border"
+                    ? "text-suaza-accent"
+                    : "text-suaza-ink-muted hover:text-suaza-ink"
                 }`}
               >
-                {injured ? "✓" : ""}
-              </span>
-            </button>
+                부상
+                <span
+                  className={`inline-flex items-center justify-center w-3.5 h-3.5 rounded-[4px] border text-white text-[9px] leading-none ${
+                    injured
+                      ? "bg-suaza-accent border-suaza-accent"
+                      : "bg-white border-suaza-border"
+                  }`}
+                >
+                  {injured ? "✓" : ""}
+                </span>
+              </button>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={onLeave}
+                onClick={() => setOnLeave((v) => !v)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition ${
+                  onLeave
+                    ? "text-suaza-ink"
+                    : "text-suaza-ink-muted hover:text-suaza-ink"
+                }`}
+              >
+                장기불참
+                <span
+                  className={`inline-flex items-center justify-center w-3.5 h-3.5 rounded-[4px] border text-white text-[9px] leading-none ${
+                    onLeave
+                      ? "bg-suaza-ink border-suaza-ink"
+                      : "bg-white border-suaza-border"
+                  }`}
+                >
+                  {onLeave ? "✓" : ""}
+                </span>
+              </button>
+            </div>
           }
         >
           <input

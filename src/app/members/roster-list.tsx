@@ -29,6 +29,7 @@ export type RosterMember = {
   birthDate: string | null;
   preferredFoot: PreferredFoot | null;
   isInjured: boolean;
+  onLeave: boolean;
   appearances: number;
   goals: number;
   assists: number;
@@ -351,6 +352,18 @@ function MemberCard({
                 >
                   <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="currentColor" aria-hidden>
                     <path d="M9 2h6v7h7v6h-7v7H9v-7H2V9h7z" />
+                  </svg>
+                </span>
+              )}
+              {m.onLeave && (
+                <span
+                  className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-[4px] bg-suaza-ink-muted text-white font-bold leading-none"
+                  role="img"
+                  aria-label="장기불참"
+                  title="장기불참"
+                >
+                  <svg viewBox="0 0 24 24" className="w-3 h-3" fill="currentColor" aria-hidden>
+                    <rect x="3" y="10" width="18" height="4" rx="1" />
                   </svg>
                 </span>
               )}

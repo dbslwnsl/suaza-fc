@@ -75,7 +75,7 @@ export default async function MemberDetailPage({
     supabase
       .from("profiles")
       .select(
-        "id, name, nickname, role, title, positions, jersey_number, birth_date, avatar_url, preferred_foot, is_injured",
+        "id, name, nickname, role, title, positions, jersey_number, birth_date, avatar_url, preferred_foot, is_injured, on_leave",
       )
       .eq("id", id)
       .is("deleted_at", null)
@@ -269,6 +269,7 @@ export default async function MemberDetailPage({
               birth_date: profile.birth_date ?? null,
               preferred_foot: (profile.preferred_foot ?? null) as PreferredFoot | null,
               is_injured: profile.is_injured ?? false,
+              on_leave: profile.on_leave ?? false,
               title,
             }}
           />

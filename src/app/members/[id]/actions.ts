@@ -20,6 +20,7 @@ type UpdateInput = {
   birth_date: string | null;
   preferred_foot: PreferredFoot | null;
   is_injured: boolean;
+  on_leave: boolean;
   title?: MemberTitle;
   profile_completed: boolean;
 };
@@ -72,6 +73,7 @@ export async function updateProfile(profileId: string, formData: FormData) {
     profile_completed: true,
     preferred_foot,
     is_injured: String(formData.get("is_injured") ?? "") === "1",
+    on_leave: String(formData.get("on_leave") ?? "") === "1",
   };
 
   if (!update.name) {
