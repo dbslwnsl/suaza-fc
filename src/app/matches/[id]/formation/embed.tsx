@@ -274,10 +274,14 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
       editableTeam={editableTeam}
       captainIds={captainIds}
       matchLocked={matchLocked}
-      statByPlayer={statByPlayer}
-      canEditStats={isFullStaff}
-      winningTeam={intraWinner}
-      canEditWinner={matchLocked && isIntra && isFullStaff}
+      {...(matchLocked
+        ? {
+            statByPlayer,
+            canEditStats: isFullStaff,
+            winningTeam: intraWinner,
+            canEditWinner: isIntra && isFullStaff,
+          }
+        : {})}
     />
   );
 }

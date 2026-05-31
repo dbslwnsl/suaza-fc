@@ -8,6 +8,14 @@
   }
 }
 
+/* desktop-lg: 포메이션 데스크탑 3열 레이아웃이 안전하게 들어가는 폭(>= 1024px).
+   더 좁으면 운동장이 양옆 명단을 침범하므로 모바일 레이아웃으로 강제. */
+@custom-variant desktop-lg {
+  @media (width >= 64rem) and (pointer: fine) {
+    @slot;
+  }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

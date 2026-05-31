@@ -545,6 +545,14 @@ export default function FormationEditor({
       setOpenSlot(null);
       return;
     }
+    // 자체전: 본인 편성팀과 다른 팀 슬롯에는 배치 불가
+    if (playerId && isIntra) {
+      const playerTeam = teamByPlayer[playerId] ?? null;
+      if (playerTeam && playerTeam !== team) {
+        setOpenSlot(null);
+        return;
+      }
+    }
     patchQuarter(activeIdx, (q) => {
       const aAssigns = [...q.assignments];
       const bAssigns = q.teamB ? [...q.teamB.assignments] : null;
@@ -588,6 +596,11 @@ export default function FormationEditor({
   ) {
     if (!canEditTeam(sourceTeam) || !canEditTeam(targetTeam)) return;
     if (sourceTeam === targetTeam && sourceIdx === targetIdx) return;
+    // 자체전: 다른 팀 슬롯 간 스왑은 본인 편성팀과 어긋날 수 있으므로 차단
+    if (isIntra && sourceTeam !== targetTeam) {
+      setOpenSlot(null);
+      return;
+    }
     patchQuarter(activeIdx, (q) => {
       const aAssigns = [...q.assignments];
       const bAssigns = q.teamB ? [...q.teamB.assignments] : null;
@@ -819,22 +832,11 @@ export default function FormationEditor({
         </div>
       )}
 
-      {/* 쿼터 탭은 모든 사용자에게 선수명단 카드 위 리본으로 표시
-          (PlayerRosterMobile / DesktopRosterPane 내부). 운동장 위 탭은 없음. */}
+      {/* 쿼터 탭은 명단 카드 위 리본으로만 표시 (PlayerRoster* 내부). 운동장 위 탭 없음. */}
 
-      {/* 포메이션 칩 — 모바일 상대전 전용 (자체전은 PlayerRosterMobile 헤더로,
-          데스크탑은 PlayerRosterDesktop 헤더로 이동) */}
-      {!isIntra && showTeamA && (
-        <div className="desktop:hidden">
-          <FormationChipRow
-            label={null}
-            teamColor={null}
-            currentShape={current.shape}
-            readonly={readonly || matchLocked}
-            onChange={(s) => changeShape("A", s)}
-          />
-        </div>
-      )}
+      {/* 포메이션 칩 — 진행 중/예정 경기에서 상단 노출(개편 전 UI).
+          종료 경기는 명단 카드 헤더로 이동되어 여기선 숨김. */}
+      {/* 포메이션 드롭다운은 모바일/데스크탑 모두 명단 카드 내부로 이동됨. */}
 
       {/* 저장 상태 — 떠 있는 토스트 (레이아웃 공간 차지 안 함) */}
       {saveStatus !== "idle" && (
@@ -843,13 +845,21 @@ export default function FormationEditor({
         </div>
       )}
 
-      {/* 메인 영역 — 데스크탑: 자체전 3열(A명단|경기장|B명단), 상대전 2열(경기장|명단) */}
-      <div className="desktop:flex desktop:gap-6 desktop:flex-1 desktop:min-h-0">
+      {/* 메인 영역 — 데스크탑: 자체전 3열(A명단|경기장|B명단), 상대전 2열(경기장|명단).
+          종료 경기 임베드는 양옆 명단을 넓게 쓰기 위해 gap-6, 진행 중은 기존 gap-3. */}
+      <div
+        className={`desktop-lg:flex ${
+          matchLocked ? "desktop-lg:gap-6" : "desktop-lg:gap-3"
+        } desktop-lg:flex-1 desktop-lg:min-h-0 ${
+          matchLocked ? "" : "desktop-lg:min-w-max"
+        }`}
+      >
         {/* 자체전 A팀 명단 (데스크탑 좌측) — 양 팀을 모두 보는 매니저 전용.
             일반회원(restrictedView)은 본인 팀이 A든 B든 우측 명단으로 통일. */}
         {isIntra && showTeamA && !restrictedView && (
           <DesktopRosterPane
             showRibbon
+            wideMode={matchLocked}
             ribbonTabs={quarters.map((q, i) => ({
               id: q.id,
               label: gameQuarters[i]?.label ?? q.id,
@@ -899,7 +909,7 @@ export default function FormationEditor({
         )}
 
         {/* 경기장 */}
-        <div className="relative min-w-0 desktop:shrink-0 desktop:flex desktop:flex-col desktop:items-center desktop:justify-center">
+        <div className="relative min-w-0 desktop-lg:shrink-0 desktop-lg:flex desktop-lg:flex-col desktop-lg:items-center desktop-lg:justify-center">
           {/* 자체전 + 회장·감독: 운동장 위 보기 모드 리본 (A팀 / 전체 / B팀).
               종료 경기에서는 좌·우 양 끝에 승/무/패 토글이 함께 노출됨. */}
           {fullAccess && isIntra && current.teamB && (
@@ -995,6 +1005,7 @@ export default function FormationEditor({
               <Pitch
                 teams={teams}
                 isIntra={pitchIntra}
+                tallContainer={isIntra}
                 byId={byId}
                 captainSet={captainSet}
                 myUserId={myUserId}
@@ -1002,6 +1013,9 @@ export default function FormationEditor({
                 readonly={readonly}
                 teamAName={teamAName}
                 teamBName={teamBName}
+                compactWidth
+                teamByPlayer={teamByPlayer}
+                isIntraMatch={isIntra}
                 draggingId={draggingId}
                 onSlotClick={(team, i) => {
                   if (canEditTeam(team)) setOpenSlot({ team, idx: i });
@@ -1047,6 +1061,7 @@ export default function FormationEditor({
             return (
               <DesktopRosterPane
                 showRibbon
+            wideMode={matchLocked}
                 ribbonTabs={quarters.map((q, i) => ({
                   id: q.id,
                   label: gameQuarters[i]?.label ?? q.id,
@@ -1100,7 +1115,7 @@ export default function FormationEditor({
 
         {/* 자체전 + 일반 회원 + 팀 미배정: 안내 (운동장은 위에 그대로 표시) */}
         {noTeamView && (
-          <aside className="hidden desktop:flex desktop:w-[280px] flex-col items-center justify-center text-center bg-white rounded-2xl border border-suaza-border p-6 gap-2">
+          <aside className="hidden desktop-lg:flex desktop:w-[280px] flex-col items-center justify-center text-center bg-white rounded-2xl border border-suaza-border p-6 gap-2">
             <span className="text-3xl">⏳</span>
             <h3 className="text-sm font-bold text-suaza-ink">
               팀 배정 대기 중
@@ -1206,6 +1221,7 @@ type PitchTeam = {
 function Pitch({
   teams,
   isIntra,
+  tallContainer,
   byId,
   captainSet,
   myUserId,
@@ -1213,7 +1229,10 @@ function Pitch({
   readonly,
   teamAName = "A팀",
   teamBName = "B팀",
+  compactWidth = false,
   draggingId,
+  teamByPlayer = {},
+  isIntraMatch = false,
   onSlotClick,
   onSlotDrop,
   onDragStart,
@@ -1222,7 +1241,11 @@ function Pitch({
   onUnassignSlot,
 }: {
   teams: PitchTeam[];
+  /** 현재 표시 모드 — 두 팀 동시 표시(true) / 단일 팀(false). 라벨/중앙선 등에 사용. */
   isIntra: boolean;
+  /** 컨테이너 가로:세로 비율을 자체전 모드(3:5)로 강제. 단일 팀 표시 시에도
+   *  운동장 크기를 일정하게 유지하기 위한 prop. 생략 시 isIntra 를 따른다. */
+  tallContainer?: boolean;
   byId: Map<string, EditorMember>;
   captainSet: Set<string>;
   myUserId: string;
@@ -1230,7 +1253,13 @@ function Pitch({
   readonly: boolean;
   teamAName?: string;
   teamBName?: string;
+  /** 데스크탑 임베드 — 양옆 명단이 넓어지도록 운동장 max-width 제한 */
+  compactWidth?: boolean;
   draggingId: string | null;
+  /** 자체전 편성팀 매핑 — 다른 팀 슬롯 hover 시 ✕ 표시 판정 */
+  teamByPlayer?: Record<string, "A" | "B" | null>;
+  /** 매치 자체가 자체전인지(현재 표시 모드와 별개) */
+  isIntraMatch?: boolean;
   onSlotClick: (team: "A" | "B", i: number) => void;
   onSlotDrop: (
     targetTeam: "A" | "B",
@@ -1402,8 +1431,14 @@ function Pitch({
     <div
       ref={pitchRef}
       className={`relative w-full [container-type:size] ${
-        isIntra ? "aspect-[3/5]" : "aspect-[3/4]"
-      } desktop:w-auto desktop:h-full desktop:max-w-[420px] bg-gradient-to-b from-emerald-600 to-emerald-700 rounded-2xl overflow-hidden shadow-lg`}
+        (tallContainer ?? isIntra) ? "aspect-[3/5]" : "aspect-[3/4]"
+      } desktop-lg:w-auto desktop-lg:h-full ${
+        compactWidth
+          ? (tallContainer ?? isIntra)
+            ? "desktop-lg:max-w-[480px]"
+            : "desktop-lg:max-w-[560px]"
+          : ""
+      } bg-gradient-to-b from-emerald-600 to-emerald-700 rounded-2xl overflow-hidden shadow-lg`}
     >
       {/* 잔디 줄무늬 */}
       <div className="absolute inset-0 opacity-20">
@@ -1461,7 +1496,20 @@ function Pitch({
             isDragTarget ||
             (hoverSlot?.team === tf.team && hoverSlot?.idx === i);
           const isEmpty = !player;
-          const showDropHint = isDropMode && isEmpty;
+          // 자체전 — 드래그 중인 선수의 편성팀이 이 슬롯 팀과 다르면 배치 불가
+          const draggedTeam =
+            isIntraMatch && draggingId
+              ? teamByPlayer[draggingId] ?? null
+              : null;
+          const pitchDraggedTeam =
+            isIntraMatch && pitchDrag
+              ? teamByPlayer[pitchDrag.playerId] ?? null
+              : null;
+          const invalidHover =
+            isHover &&
+            ((draggedTeam != null && draggedTeam !== tf.team) ||
+              (pitchDraggedTeam != null && pitchDraggedTeam !== tf.team));
+          const showDropHint = isDropMode && isEmpty && !invalidHover;
           const canDrag = !readonly && !!pid;
           return (
             <div
@@ -1516,6 +1564,11 @@ function Pitch({
                 setHoverSlot(null);
                 const id = e.dataTransfer.getData("text/plain") || draggingId;
                 if (!id) return;
+                // 자체전 — 다른 팀 슬롯엔 drop 불가 (시각 ✕ 표시와 함께 차단)
+                if (isIntraMatch) {
+                  const pt = teamByPlayer[id] ?? null;
+                  if (pt && pt !== tf.team) return;
+                }
                 const sourceStr = e.dataTransfer.getData(
                   "application/x-source-slot",
                 );
@@ -1540,14 +1593,34 @@ function Pitch({
                   readonly ? "cursor-default" : "cursor-pointer"
                 } ${canDrag ? "cursor-grab active:cursor-grabbing" : ""}`}
               >
-                <PlayerCircle
-                  player={player}
-                  role={s.role}
-                  label={s.label}
-                  hovered={isHover}
-                  hint={showDropHint}
-                  compact={compact}
-                />
+                <span className="relative">
+                  <PlayerCircle
+                    player={player}
+                    role={s.role}
+                    label={s.label}
+                    hovered={isHover && !invalidHover}
+                    hint={showDropHint}
+                    compact={compact}
+                  />
+                  {invalidHover && (
+                    <span
+                      className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                      aria-hidden
+                    >
+                      <span className="absolute inset-0 rounded-full bg-red-500/30 ring-2 ring-red-500" />
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="relative w-3/4 h-3/4 drop-shadow"
+                        fill="none"
+                        stroke="#EF4444"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                      >
+                        <path d="M6 6 L18 18 M18 6 L6 18" />
+                      </svg>
+                    </span>
+                  )}
+                </span>
                 <span
                   className={`${
                     compact ? "text-[9px]" : "text-[11px] sm:text-xs"
@@ -2330,6 +2403,7 @@ function DesktopRosterPane({
   includeAllTab = false,
   isAllActive = false,
   onAllClick,
+  wideMode = false,
   children,
 }: {
   showRibbon: boolean;
@@ -2339,10 +2413,18 @@ function DesktopRosterPane({
   includeAllTab?: boolean;
   isAllActive?: boolean;
   onAllClick?: () => void;
+  /** 임베드 — 양옆 명단을 잔여 폭만큼 넓힘. 진행 중 경기는 기존 280px 고정 */
+  wideMode?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <div className="hidden desktop:flex desktop:flex-1 desktop:min-w-[280px] flex-col min-h-0">
+    <div
+      className={`hidden desktop-lg:flex flex-col min-h-0 ${
+        wideMode
+          ? "desktop:flex-1 desktop:min-w-[280px]"
+          : "desktop:w-[280px] desktop:shrink-0"
+      }`}
+    >
       {showRibbon && ribbonTabs.length > 0 && (
         <div className="overflow-x-auto -mb-px">
           <div className="flex gap-1 px-3 w-max">
@@ -2487,7 +2569,7 @@ function PlayerRosterMobile({
 
   if (unassignedNotice) {
     return (
-      <div className="desktop:hidden flex flex-col items-center justify-center text-center rounded-2xl border border-dashed border-suaza-border p-6 gap-2">
+      <div className="desktop-lg:hidden flex flex-col items-center justify-center text-center rounded-2xl border border-dashed border-suaza-border p-6 gap-2">
         <span className="text-3xl">⏳</span>
         <h3 className="text-sm font-bold text-suaza-ink">팀 배정 대기 중</h3>
         <p className="text-xs text-suaza-ink-muted leading-relaxed">
@@ -2501,7 +2583,7 @@ function PlayerRosterMobile({
 
   if (members.length === 0) {
     return (
-      <div className="desktop:hidden rounded-2xl border border-dashed border-suaza-border p-5 text-center text-sm text-suaza-ink-muted">
+      <div className="desktop-lg:hidden rounded-2xl border border-dashed border-suaza-border p-5 text-center text-sm text-suaza-ink-muted">
         참석으로 표시된 선수가 없습니다
       </div>
     );
@@ -2546,7 +2628,7 @@ function PlayerRosterMobile({
         : null;
 
   return (
-    <div className="desktop:hidden flex flex-col">
+    <div className="desktop-lg:hidden flex flex-col">
       {/* 쿼터 탭 리본 — 카드 상단에 폴더탭처럼 붙음 (모든 사용자).
           종료 경기는 맨 앞에 "ALL" 탭(전체 합계 기록 보기) 추가. */}
       {quarterTabs && quarterTabs.length > 0 && (
@@ -2589,7 +2671,7 @@ function PlayerRosterMobile({
       <div className="flex flex-col gap-3 rounded-2xl bg-white border border-suaza-border p-4">
         <div>
         <h3 className="text-base font-bold text-suaza-ink">선수명단</h3>
-        {summaryStats && (
+        {summaryStats && matchLocked && (
           <p className="text-xs text-suaza-ink-muted mt-0.5">
             총 {summaryStats.total}명 · 출전 {summaryStats.played}명 · 평균{" "}
             {summaryStats.avg}쿼터
@@ -2614,7 +2696,7 @@ function PlayerRosterMobile({
                 />
               )}
             </div>
-            {/* 포메이션 드롭다운 — 한 줄 가득 (종료된 경기는 텍스트만) */}
+            {/* 포메이션 — 진행 중은 드롭다운, 종료는 텍스트 */}
             {(showOnlyTeam === "A" ? shapeA : shapeB) &&
               (matchLocked ? (
                 <span className="text-sm font-semibold text-suaza-ink">
@@ -2624,13 +2706,17 @@ function PlayerRosterMobile({
                   </span>
                 </span>
               ) : (
-                <FormationDropdown
-                  currentShape={
-                    (showOnlyTeam === "A" ? shapeA : shapeB) as string
-                  }
-                  onChange={(s) => onShapeChangeTeam?.(showOnlyTeam, s)}
-                  fullWidth
-                />
+                !readonly && (
+                  <FormationDropdown
+                    currentShape={
+                      (showOnlyTeam === "A" ? shapeA : shapeB) as string
+                    }
+                    onChange={(s) =>
+                      onShapeChangeTeam?.(showOnlyTeam, s)
+                    }
+                    fullWidth
+                  />
+                )
               ))}
             {(showOnlyTeam === "A" ? teamACards : teamBCards).map(renderCard)}
           </div>
@@ -2654,20 +2740,24 @@ function PlayerRosterMobile({
                   />
                 )}
               </div>
-              <p className="text-[11px] text-suaza-ink-muted">
-                출전 {teamAStats.played}명 · 평균 {teamAStats.avg}쿼터
-              </p>
+              {matchLocked && (
+                <p className="text-[11px] text-suaza-ink-muted">
+                  출전 {teamAStats.played}명 · 평균 {teamAStats.avg}쿼터
+                </p>
+              )}
               {shapeA &&
                 (matchLocked ? (
                   <span className="text-sm font-semibold text-suaza-ink">
                     포메이션 <span className="text-suaza-button">{shapeA}</span>
                   </span>
                 ) : (
-                  <FormationDropdown
-                    currentShape={shapeA}
-                    onChange={(s) => onShapeChangeTeam?.("A", s)}
-                    fullWidth
-                  />
+                  !readonly && (
+                    <FormationDropdown
+                      currentShape={shapeA}
+                      onChange={(s) => onShapeChangeTeam?.("A", s)}
+                      fullWidth
+                    />
+                  )
                 ))}
             </div>
             <div className="flex flex-col gap-1">
@@ -2685,20 +2775,24 @@ function PlayerRosterMobile({
                   />
                 )}
               </div>
-              <p className="text-[11px] text-suaza-ink-muted">
-                출전 {teamBStats.played}명 · 평균 {teamBStats.avg}쿼터
-              </p>
+              {matchLocked && (
+                <p className="text-[11px] text-suaza-ink-muted">
+                  출전 {teamBStats.played}명 · 평균 {teamBStats.avg}쿼터
+                </p>
+              )}
               {shapeB &&
                 (matchLocked ? (
                   <span className="text-sm font-semibold text-suaza-ink">
                     포메이션 <span className="text-suaza-button">{shapeB}</span>
                   </span>
                 ) : (
-                  <FormationDropdown
-                    currentShape={shapeB}
-                    onChange={(s) => onShapeChangeTeam?.("B", s)}
-                    fullWidth
-                  />
+                  !readonly && (
+                    <FormationDropdown
+                      currentShape={shapeB}
+                      onChange={(s) => onShapeChangeTeam?.("B", s)}
+                      fullWidth
+                    />
+                  )
                 ))}
             </div>
             {/* zip: 행 i 의 두 셀 = (A[i], B[i]). 한쪽이 짧으면 빈 칸으로 채움 */}
@@ -2720,14 +2814,31 @@ function PlayerRosterMobile({
         )
       ) : (
         <>
-          {!readonly && !matchLocked && (
-            <div className="flex items-center justify-end">
-              <TeamMiniActions
-                onReset={() => onResetTeam?.("A")}
-                onAutoPlace={() => onAutoPlaceTeam?.("A")}
-              />
-            </div>
-          )}
+          {/* 상대전 — 헤더: 초기화/자동 + 포메이션 드롭다운 */}
+          <div className="flex flex-col gap-2">
+            {!readonly && !matchLocked && (
+              <div className="flex items-center justify-end">
+                <TeamMiniActions
+                  onReset={() => onResetTeam?.("A")}
+                  onAutoPlace={() => onAutoPlaceTeam?.("A")}
+                />
+              </div>
+            )}
+            {shapeA &&
+              (matchLocked ? (
+                <span className="text-sm font-semibold text-suaza-ink">
+                  포메이션 <span className="text-suaza-button">{shapeA}</span>
+                </span>
+              ) : (
+                !readonly && (
+                  <FormationDropdown
+                    currentShape={shapeA}
+                    onChange={(s) => onShapeChangeTeam?.("A", s)}
+                    fullWidth
+                  />
+                )
+              ))}
+          </div>
           <div className="grid grid-cols-2 gap-2">{sorted.map(renderCard)}</div>
         </>
       )}
@@ -2833,17 +2944,20 @@ function PlayerRowMobile({
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <ConditionArrow
-            level={conditionLevel}
-            interactive={isMe}
-            onCycle={onCycleCondition}
-          />
+          {/* 종료 경기 임베드(stat 있음)에서는 컨디션·주발 숨김 */}
+          {!stat && (
+            <ConditionArrow
+              level={conditionLevel}
+              interactive={isMe}
+              onCycle={onCycleCondition}
+            />
+          )}
           <PlayerName
             name={m.name}
             className="text-sm font-semibold text-suaza-ink"
             allowDropSurname={false}
           />
-          <FootBadge foot={m.preferred_foot} />
+          {!stat && <FootBadge foot={m.preferred_foot} />}
           {memberPositions.length === 0 ? (
             <span className="text-[10px] text-suaza-ink-faint">미설정</span>
           ) : (
@@ -3262,16 +3376,17 @@ function PlayerRosterDesktop({
           </div>
         )}
       </div>
-      {/* 2줄: 출전 / 평균 쿼터 — 종료 경기 임베드에서는 숨김 */}
-      {members.length > 0 && !matchLocked && (
+      {/* 2줄: 출전 / 평균 쿼터 — 종료 경기 임베드 전용 (진행 중 경기는 상단 UI 사용) */}
+      {members.length > 0 && matchLocked && (
         <p className="text-xs text-suaza-ink-muted">
           출전 {teamStats.played}명 · 평균 {teamStats.avg}쿼터
         </p>
       )}
-      {/* 3줄: 포메이션 드롭다운 — 한 줄 가득. 종료 경기 임베드에서는 숨김 */}
-      {currentShape && !matchLocked && (
+      {/* 3줄: 포메이션 드롭다운 — 데스크탑에서는 항상 카드 헤더 안에 노출
+          (모바일은 상단 FormationChipRow 사용). 종료 경기는 텍스트 폴백. */}
+      {currentShape && (
         <div className="flex items-center">
-          {onShapeChange && !readonly ? (
+          {onShapeChange && !readonly && !matchLocked ? (
             <FormationDropdown
               currentShape={currentShape}
               onChange={onShapeChange}

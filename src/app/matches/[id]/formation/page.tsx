@@ -32,8 +32,8 @@ export default async function FormationPage({
   if (!match) notFound();
 
   return (
-    <main className="flex-1 bg-white sm:bg-suaza-bg desktop:overflow-hidden">
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-8 py-6 sm:py-10 desktop:pb-0 flex flex-col gap-5 sm:gap-6 desktop:h-[calc(100dvh-64px)] desktop:min-h-0">
+    <main className="flex-1 bg-white sm:bg-suaza-bg desktop-lg:overflow-x-auto desktop-lg:overflow-y-hidden">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-8 py-6 sm:py-10 desktop-lg:pb-0 flex flex-col gap-5 sm:gap-6 desktop-lg:h-[calc(100dvh-64px)] desktop-lg:min-h-0">
         <header className="flex items-center gap-3">
           <Link
             href={`/matches/${id}`}

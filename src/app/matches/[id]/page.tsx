@@ -414,7 +414,7 @@ export default async function MatchDetailPage({
               {(m.status === "done" || m.status === "canceled") && (
                 <div className="order-[2.5] desktop:col-span-2">
                   <section className="flex flex-col gap-4 desktop:bg-white desktop:rounded-2xl desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] desktop:p-8">
-                    <div className="desktop:h-[80vh] desktop:min-h-0 flex flex-col min-h-0">
+                    <div className="desktop:h-[80vh] desktop:min-h-0 flex flex-col min-h-0 desktop-lg:overflow-x-auto">
                       <Suspense
                         fallback={
                           <p className="text-sm text-suaza-ink-muted py-6 text-center">
