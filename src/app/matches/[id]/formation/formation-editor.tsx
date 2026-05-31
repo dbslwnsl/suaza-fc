@@ -496,7 +496,9 @@ export default function FormationEditor({
   // 본인의 자체전 팀 ("A" | "B" | null)
   const myTeam: "A" | "B" | null = teamByPlayer[myUserId] ?? null;
   // 자체전에서 양 팀을 모두 보는 건 감독/회장(fullAccess)뿐. 주장·일반 회원은 본인 팀만.
-  const restrictedView = isIntra && !fullAccess;
+  // 자체전이면서 회장·감독이 아닌 회원은 본인 팀만 보이는 제한 뷰.
+  // 단, 종료된 경기(matchLocked)에서는 모든 회원이 양 팀 명단/운동장을 볼 수 있도록 제한 해제.
+  const restrictedView = isIntra && !fullAccess && !matchLocked;
   const showTeamA = !restrictedView || myTeam === "A";
   const showTeamB = !restrictedView || myTeam === "B";
   // 자체전 일반 회원이지만 아직 팀 미배정 → 명단은 숨기고 안내만, 운동장은 양 팀 그대로
