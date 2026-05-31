@@ -235,20 +235,30 @@ export default async function MatchDetailPage({
       <main className="flex-1 bg-white desktop:bg-suaza-bg px-6 desktop:px-8 py-8 desktop:py-12">
         <div className="max-w-[600px] mx-auto bg-white desktop:rounded-2xl desktop:p-12 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
           <header className="flex flex-col gap-2">
-            <div className="flex items-center gap-3">
+            {m.status === "done" || m.status === "canceled" ? (
               <Link
-                href="/"
-                aria-label="홈으로"
-                className="relative w-9 h-9 rounded-full overflow-hidden block hover:opacity-80 transition shrink-0"
+                href={`/matches/${m.id}`}
+                className="inline-flex items-center gap-1 text-sm text-suaza-ink-muted hover:underline w-fit"
               >
-                <Image
-                  src="/suaza-emblem.png"
-                  alt="홈"
-                  fill
-                  sizes="36px"
-                  className="object-cover"
-                />
+                <span aria-hidden>←</span> 경기 상세
               </Link>
+            ) : null}
+            <div className="flex items-center gap-3">
+              {m.status !== "done" && m.status !== "canceled" && (
+                <Link
+                  href="/"
+                  aria-label="홈으로"
+                  className="relative w-9 h-9 rounded-full overflow-hidden block hover:opacity-80 transition shrink-0"
+                >
+                  <Image
+                    src="/suaza-emblem.png"
+                    alt="홈"
+                    fill
+                    sizes="36px"
+                    className="object-cover"
+                  />
+                </Link>
+              )}
               <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
                 {m.status === "done" || m.status === "canceled"
                   ? "경기 정보 조회"
