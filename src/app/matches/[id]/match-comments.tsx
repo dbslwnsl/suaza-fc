@@ -69,6 +69,7 @@ export default function MatchCommentSection({
   myName,
   myAvatarUrl,
   isManager,
+  scrollableOnDesktop = false,
 }: {
   matchId: string;
   comments: MatchComment[];
@@ -76,6 +77,8 @@ export default function MatchCommentSection({
   myName: string | null;
   myAvatarUrl: string | null;
   isManager: boolean;
+  /** 데스크탑에서 컨테이너 전체 높이를 채우고 댓글 목록만 독립 세로 스크롤 */
+  scrollableOnDesktop?: boolean;
 }) {
   const [optimistic, dispatch] = useOptimistic(comments, reduce);
   const [, startTransition] = useTransition();
@@ -127,18 +130,32 @@ export default function MatchCommentSection({
   };
 
   return (
-    <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4">
+    <section
+      className={`bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4 ${
+        scrollableOnDesktop ? "desktop:h-full desktop:min-h-0" : ""
+      }`}
+    >
       <div className="flex items-baseline gap-2">
         <h2 className="font-bold text-suaza-ink text-lg">댓글</h2>
         <span className="text-xs text-suaza-ink-muted">{totalCount}</span>
       </div>
 
       {tree.length === 0 ? (
-        <p className="text-sm text-suaza-ink-muted py-2 text-center">
+        <p
+          className={`text-sm text-suaza-ink-muted py-2 text-center ${
+            scrollableOnDesktop ? "desktop:flex-1 desktop:min-h-0" : ""
+          }`}
+        >
           첫 댓글을 남겨보세요
         </p>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul
+          className={`flex flex-col gap-3 ${
+            scrollableOnDesktop
+              ? "desktop:flex-1 desktop:min-h-0 desktop:overflow-y-auto desktop:-mx-2 desktop:px-2"
+              : ""
+          }`}
+        >
           {tree.map((c) => (
             <li key={c.id}>
               <CommentThread

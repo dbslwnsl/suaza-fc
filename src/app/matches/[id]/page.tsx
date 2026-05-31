@@ -442,20 +442,40 @@ export default async function MatchDetailPage({
                 </div>
               )}
 
-              {/* 댓글: 데스크탑 — 출석/팀편성 아래 전체 폭. 모바일 — 가장 아래 */}
-              <div className="order-4 desktop:col-span-2">
-                <MatchCommentSection
-                  matchId={m.id}
-                  comments={comments}
-                  myUserId={user.id}
-                  myName={me?.name ?? null}
-                  myAvatarUrl={
-                    (me as { avatar_url?: string | null } | null)?.avatar_url ??
-                    null
-                  }
-                  isManager={me?.role === "manager"}
-                />
-              </div>
+              {/* 댓글:
+                  - 상대전(자체전 아님) + 우측이 비어있을 때(=진행 전/중) →
+                    데스크탑에선 출석투표 옆 우측 컬럼으로 올림 + 출석 카드 높이에 맞춘 독립 세로 스크롤.
+                  - 자체전 또는 종료(=포메이션 임베드가 전체 폭 차지) → 기존처럼 전체 폭 하단. */}
+              {!isIntra && m.status !== "done" && m.status !== "canceled" ? (
+                <div className="order-2 desktop:h-full desktop:min-h-0">
+                  <MatchCommentSection
+                    matchId={m.id}
+                    comments={comments}
+                    myUserId={user.id}
+                    myName={me?.name ?? null}
+                    myAvatarUrl={
+                      (me as { avatar_url?: string | null } | null)
+                        ?.avatar_url ?? null
+                    }
+                    isManager={me?.role === "manager"}
+                    scrollableOnDesktop
+                  />
+                </div>
+              ) : (
+                <div className="order-4 desktop:col-span-2">
+                  <MatchCommentSection
+                    matchId={m.id}
+                    comments={comments}
+                    myUserId={user.id}
+                    myName={me?.name ?? null}
+                    myAvatarUrl={
+                      (me as { avatar_url?: string | null } | null)
+                        ?.avatar_url ?? null
+                    }
+                    isManager={me?.role === "manager"}
+                  />
+                </div>
+              )}
             </div>
 
             {isStaff && (
