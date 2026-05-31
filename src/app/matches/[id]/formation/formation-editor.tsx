@@ -539,6 +539,7 @@ export default function FormationEditor({
     slotIndex: number,
     playerId: string | null,
   ) {
+    if (matchLocked) return;
     if (!canEditTeam(team)) return;
     // 현재 쿼터에 참여하지 않는 선수는 배치 불가
     if (playerId && !isAvailable(playerId)) {
@@ -594,6 +595,7 @@ export default function FormationEditor({
     targetTeam: "A" | "B",
     targetIdx: number,
   ) {
+    if (matchLocked) return;
     if (!canEditTeam(sourceTeam) || !canEditTeam(targetTeam)) return;
     if (sourceTeam === targetTeam && sourceIdx === targetIdx) return;
     // 자체전: 다른 팀 슬롯 간 스왑은 본인 편성팀과 어긋날 수 있으므로 차단
@@ -641,6 +643,7 @@ export default function FormationEditor({
   }
 
   function unassignPlayer(playerId: string) {
+    if (matchLocked) return;
     // 편집 가능한 팀에서만 제거 (주장은 자기 팀 슬롯만)
     patchQuarter(activeIdx, (q) => ({
       ...q,
@@ -1010,7 +1013,7 @@ export default function FormationEditor({
                 captainSet={captainSet}
                 myUserId={myUserId}
                 myCondition={myCondition}
-                readonly={readonly}
+                readonly={readonly || matchLocked}
                 teamAName={teamAName}
                 teamBName={teamBName}
                 compactWidth
@@ -1018,6 +1021,7 @@ export default function FormationEditor({
                 isIntraMatch={isIntra}
                 draggingId={draggingId}
                 onSlotClick={(team, i) => {
+                  if (matchLocked) return;
                   if (canEditTeam(team)) setOpenSlot({ team, idx: i });
                 }}
                 onSlotDrop={handleSlotDrop}
@@ -1170,6 +1174,10 @@ export default function FormationEditor({
         isAllActive={matchLocked && showAll}
         onAllClick={() => setShowAll(true)}
         matchLocked={matchLocked}
+        statByPlayer={statByPlayer}
+        canEditStats={canEditStats}
+        matchId={matchId}
+        winningTeam={optWinningTeam}
         onTap={(id: string, placed: boolean) => {
           if (readonly) return;
           if (placed) unassignPlayer(id);
@@ -2502,6 +2510,10 @@ function PlayerRosterMobile({
   isAllActive = false,
   onAllClick,
   matchLocked = false,
+  statByPlayer,
+  canEditStats = false,
+  matchId,
+  winningTeam = null,
 }: {
   members: EditorMember[];
   quarters: QuarterWithTeams[];
@@ -2545,6 +2557,11 @@ function PlayerRosterMobile({
   onAllClick?: () => void;
   /** 종료/취소된 경기 — 초기화·자동 비활성 */
   matchLocked?: boolean;
+  /** 종료 경기 임베드 — 카드별 통계/포인트/기록 입력 */
+  statByPlayer?: Record<string, PlayerStat>;
+  canEditStats?: boolean;
+  matchId?: string;
+  winningTeam?: "A" | "B" | null;
 }) {
   const participations = useMemo(
     () => computeParticipations(members, quarters),
@@ -2609,6 +2626,10 @@ function PlayerRosterMobile({
         p.member.id === myUserId ? myCondition : p.member.condition ?? 3
       }
       onCycleCondition={onCycleCondition}
+      stat={statByPlayer?.[p.member.id]}
+      canEditStats={canEditStats}
+      matchId={matchId}
+      winningTeam={winningTeam}
     />
   );
 
@@ -3195,34 +3216,71 @@ function PlayerStatRow({
     });
   };
 
+  // 모바일 long-press(>=500ms) 로 -1, 짧은 탭은 +1
+  const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lpFired = useRef(false);
+  const startLp = (
+    key: (typeof items)[number]["key"],
+    cur: number,
+    setVal: (n: number) => void,
+  ) => {
+    if (!canEdit) return;
+    lpFired.current = false;
+    if (lpTimer.current) clearTimeout(lpTimer.current);
+    lpTimer.current = setTimeout(() => {
+      lpFired.current = true;
+      change(key, -1, cur, setVal);
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        try {
+          navigator.vibrate(30);
+        } catch {}
+      }
+    }, 500);
+  };
+  const cancelLp = () => {
+    if (lpTimer.current) {
+      clearTimeout(lpTimer.current);
+      lpTimer.current = null;
+    }
+  };
   return (
     <div className="grid grid-cols-4 gap-1 px-2 py-2 bg-suaza-bg/40">
-      {/* 항목 4개 — 클릭하면 +1, 우클릭/길게누르면 -1 */}
+      {/* 항목 4개 — 탭: +1 / 길게 누르기·우클릭: -1 */}
       {items.map((it) => (
         <button
           key={it.key}
           type="button"
           disabled={!canEdit}
-          onClick={() => change(it.key, 1, it.value, it.setValue)}
+          onClick={() => {
+            if (lpFired.current) {
+              lpFired.current = false;
+              return;
+            }
+            change(it.key, 1, it.value, it.setValue);
+          }}
           onContextMenu={(e) => {
             e.preventDefault();
             change(it.key, -1, it.value, it.setValue);
           }}
-          className={`flex items-center justify-center gap-1 py-1.5 rounded-md transition ${
-            canEdit ? "hover:bg-white" : "cursor-default opacity-60"
+          onPointerDown={() => startLp(it.key, it.value, it.setValue)}
+          onPointerUp={cancelLp}
+          onPointerLeave={cancelLp}
+          onPointerCancel={cancelLp}
+          className={`flex items-center justify-center gap-1 py-1.5 rounded-md transition select-none ${
+            canEdit ? "hover:bg-white active:bg-white" : "cursor-default opacity-60"
           }`}
           style={{ backgroundColor: it.bg }}
           title={
             canEdit
-              ? `${it.label} (+1, 우클릭 -1)`
+              ? `${it.label} — 탭: +1, 길게 누르기: -1`
               : it.label
           }
         >
           <span className="text-[10px] font-medium text-suaza-ink-muted leading-none">
-            <span aria-hidden className="mr-0.5">
+            <span aria-hidden className="desktop:mr-0.5">
               {it.icon}
             </span>
-            {it.label}
+            <span className="hidden desktop:inline">{it.label}</span>
           </span>
           <span
             className="text-sm font-bold tabular-nums leading-none"
@@ -3462,6 +3520,10 @@ function DesktopPlayerCard({
   isMe,
   conditionLevel,
   onCycleCondition,
+  stat,
+  canEditStats = false,
+  matchId,
+  winningTeam = null,
 }: {
   participation: PlayerParticipation;
   placed: boolean;
@@ -3474,6 +3536,11 @@ function DesktopPlayerCard({
   isMe: boolean;
   conditionLevel: number;
   onCycleCondition: () => void;
+  /** 종료 경기 임베드 — 이번 경기 기록(있으면 포인트 + 입력 UI 노출) */
+  stat?: PlayerStat;
+  canEditStats?: boolean;
+  matchId?: string;
+  winningTeam?: "A" | "B" | null;
 }) {
   const m = participation.member;
   const teamBg = team === "A" ? "#3B82F6" : team === "B" ? "#EF4444" : null;
@@ -3487,11 +3554,30 @@ function DesktopPlayerCard({
         ? { borderColor: "#EF4444", backgroundColor: "rgba(239,68,68,0.06)" }
         : { borderColor: "#22C55E", backgroundColor: "rgba(34,197,94,0.06)" }
     : undefined;
-  return (
+
+  // MOM 활성 (낙관적 — stat 변경 시 동기화)
+  const [momActive, setMomActive] = useState((stat?.mom ?? 0) > 0);
+  const [, startMomTransition] = useTransition();
+  useEffect(() => {
+    setMomActive((stat?.mom ?? 0) > 0);
+  }, [stat?.mom]);
+
+  // 종료 임베드(stat 있음) — 카드 본체에서 배치/드래그/클릭 비활성
+  const lockedForRecord = !!stat;
+  const momToggle = canEditStats && matchId
+    ? () => {
+        const next = !momActive;
+        setMomActive(next);
+        startMomTransition(() => {
+          setMomForPlayer(matchId, m.id, next);
+        });
+      }
+    : undefined;
+  const cardBody = (
     <div
-      draggable={!readonly && !disabled}
+      draggable={!readonly && !disabled && !lockedForRecord}
       onDragStart={(e) => {
-        if (disabled) {
+        if (disabled || lockedForRecord) {
           e.preventDefault();
           return;
         }
@@ -3500,17 +3586,27 @@ function DesktopPlayerCard({
         onDragStart?.(m.id);
       }}
       onDragEnd={() => onDragEnd?.()}
-      onClick={() => !readonly && !disabled && onTap(m.id, placed)}
-      style={highlight}
-      className={`relative flex items-center gap-2 p-2.5 rounded-xl bg-white select-none transition ${
-        placed ? "border-2" : "border border-suaza-border"
+      onClick={() =>
+        !readonly && !disabled && !lockedForRecord && onTap(m.id, placed)
+      }
+      style={
+        stat
+          ? placed && highlight
+            ? { backgroundColor: highlight.backgroundColor }
+            : undefined
+          : highlight
+      }
+      className={`relative ${stat ? "flex flex-col gap-1.5" : "flex items-center gap-2"} p-2.5 select-none transition ${
+        stat
+          ? "rounded-t-xl"
+          : `rounded-xl bg-white border ${placed ? "border-2" : "border-suaza-border"}`
       } ${
-        readonly || disabled
+        readonly || disabled || lockedForRecord
           ? "cursor-default"
           : "cursor-pointer hover:bg-suaza-bg"
       } ${disabled ? "opacity-50" : ""}`}
     >
-      {team && (
+      {team && !stat && (
         <span
           className="absolute -top-1.5 -left-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-white shadow-sm"
           style={{ backgroundColor: teamBg ?? undefined }}
@@ -3518,33 +3614,104 @@ function DesktopPlayerCard({
           {team}
         </span>
       )}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1 flex-wrap">
-          <ConditionArrow
-            level={conditionLevel}
-            interactive={isMe}
-            onCycle={onCycleCondition}
-          />
-          <PlayerName
-            name={m.name}
-            className="text-xs font-semibold text-suaza-ink"
-          />
-          <FootBadge foot={m.preferred_foot} />
-          {(m.positions ?? []).map((pos) => (
-            <span
-              key={pos}
-              className="inline-flex items-center gap-0.5 text-[10px] font-semibold"
-              style={{ color: POSITION_COLOR[pos] }}
-            >
+      {stat ? (
+        // 종료 임베드 모바일 — 3줄 구조: 이름+포지션 / 출·승·M·포인트 / (PlayerStatRow는 wrapper 에서)
+        <>
+          {/* 1줄: 이름 + 포지션 */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <PlayerName
+              name={m.name}
+              className="text-sm font-semibold text-suaza-ink"
+            />
+            {(m.positions ?? []).map((pos) => (
               <span
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ backgroundColor: POSITION_COLOR[pos] }}
-              />
-              {pos}
+                key={pos}
+                className="inline-flex items-center gap-0.5 text-[10px] font-semibold"
+                style={{ color: POSITION_COLOR[pos] }}
+              >
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: POSITION_COLOR[pos] }}
+                />
+                {pos}
+              </span>
+            ))}
+          </div>
+          {/* 2줄: 출 / 승 / M / 포인트 */}
+          <div className="flex items-center gap-1.5">
+            <StatusPill label="출" tone="success" active />
+            <StatusPill
+              label="승"
+              tone="win"
+              active={!!team && winningTeam === team}
+            />
+            <StatusPill
+              label="M"
+              tone="mom"
+              active={momActive}
+              disabled={!canEditStats}
+              onClick={momToggle}
+            />
+            <span
+              className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-suaza-accent"
+              title="이번 경기 획득 포인트"
+            >
+              {stat.points}P
             </span>
-          ))}
+          </div>
+        </>
+      ) : (
+        // 진행 중 카드 — 기존 한 줄
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1 flex-wrap">
+            <ConditionArrow
+              level={conditionLevel}
+              interactive={isMe}
+              onCycle={onCycleCondition}
+            />
+            <PlayerName
+              name={m.name}
+              className="text-xs font-semibold text-suaza-ink"
+            />
+            <FootBadge foot={m.preferred_foot} />
+            {(m.positions ?? []).map((pos) => (
+              <span
+                key={pos}
+                className="inline-flex items-center gap-0.5 text-[10px] font-semibold"
+                style={{ color: POSITION_COLOR[pos] }}
+              >
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: POSITION_COLOR[pos] }}
+                />
+                {pos}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+    </div>
+  );
+
+  if (!stat) return cardBody;
+
+  // 종료 임베드 — wrapper 가 전체 카드 테두리/색을 담당해 placed 강조선이 끊김 없이 둘림
+  const wrapperStyle =
+    placed && highlight ? { borderColor: highlight.borderColor } : undefined;
+  return (
+    <div
+      className={`flex flex-col rounded-xl bg-white overflow-hidden border ${
+        placed ? "border-2" : "border-suaza-border"
+      }`}
+      style={wrapperStyle}
+    >
+      {cardBody}
+      <PlayerStatRow
+        matchId={matchId!}
+        playerId={m.id}
+        stat={stat}
+        canEdit={canEditStats}
+      />
     </div>
   );
 }
