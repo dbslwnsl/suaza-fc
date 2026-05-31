@@ -314,10 +314,10 @@ function Chip({
         muted ? "opacity-80" : ""
       }`}
     >
-      {member.name}
       {member.is_injured && <InjuryBadge />}
       {member.on_leave && <OnLeaveBadge />}
       <KingBadges member={member} />
+      {member.name}
     </span>
   );
 }
@@ -361,7 +361,7 @@ function KingBadges({ member }: { member: Member }) {
       {items.map((it) => (
         <span
           key={it.key}
-          className="shrink-0 inline-flex items-center justify-center w-4 h-4 text-[11px] leading-none"
+          className="shrink-0 inline-flex items-center justify-center w-4 h-4 text-[14px] leading-none"
           role="img"
           aria-label={it.title}
           title={it.title}

@@ -126,7 +126,7 @@ function KingBadges({ p }: { p: VotePlayer }) {
       {items.map((it) => (
         <span
           key={it.key}
-          className="shrink-0 inline-flex items-center justify-center w-4 h-4 text-[11px] leading-none align-middle"
+          className="shrink-0 inline-flex items-center justify-center w-4 h-4 text-[14px] leading-none align-middle"
           role="img"
           aria-label={it.title}
           title={it.title}
@@ -885,10 +885,10 @@ function MemberGroup({
               }`}
               style={{ borderColor: muted ? "#E5E7EB" : color }}
             >
-              {m.name}
               {m.is_injured && <InjuryBadge />}
               {m.on_leave && <OnLeaveBadge />}
               <KingBadges p={m} />
+              {m.name}
             </span>
           ))
         )}
@@ -919,10 +919,10 @@ function AttendanceRow({
         {members.length > 0
           ? members.map((m, i) => (
               <span key={m.id} className="inline-flex items-center gap-0.5">
-                {m.name}
                 {m.is_injured && <InjuryBadge />}
-              {m.on_leave && <OnLeaveBadge />}
-              <KingBadges p={m} />
+                {m.on_leave && <OnLeaveBadge />}
+                <KingBadges p={m} />
+                {m.name}
                 {i < members.length - 1 ? <span>,&nbsp;</span> : null}
               </span>
             ))
