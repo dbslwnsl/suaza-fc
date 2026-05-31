@@ -3,9 +3,49 @@
 import { useOptimistic, useState, useTransition } from "react";
 import { setMatchCaptain, setMatchTeam } from "@/lib/matches/actions";
 import { displayMemberName } from "@/lib/members/name";
+import {
+  POSITION_COLOR,
+  POSITIONS,
+  type Position,
+} from "@/lib/members/positions";
+import { DEFAULT_TEAM_COLOR } from "@/lib/matches/helpers";
 import CaptainPicker, { CAPTAIN_CHIP_CLASS } from "./captain-picker";
 
-type RecapMember = { id: string; name: string; team: "A" | "B" | null };
+type RecapMember = {
+  id: string;
+  name: string;
+  team: "A" | "B" | null;
+  positions?: string[] | null;
+};
+
+// 주포지션(positions[0]) 기준으로 FW → MF → DF → GK 순으로 묶음
+const POSITION_ORDER: Position[] = ["FW", "MF", "DF", "GK"];
+function groupByPosition(members: RecapMember[]): {
+  pos: Position | null;
+  list: RecapMember[];
+}[] {
+  const buckets: Record<Position | "ETC", RecapMember[]> = {
+    GK: [],
+    DF: [],
+    MF: [],
+    FW: [],
+    ETC: [],
+  };
+  for (const m of members) {
+    const primary = (m.positions?.[0] ?? null) as Position | null;
+    if (primary && (POSITIONS as readonly string[]).includes(primary)) {
+      buckets[primary].push(m);
+    } else {
+      buckets.ETC.push(m);
+    }
+  }
+  const out: { pos: Position | null; list: RecapMember[] }[] = [];
+  for (const p of POSITION_ORDER) {
+    if (buckets[p].length > 0) out.push({ pos: p, list: buckets[p] });
+  }
+  if (buckets.ETC.length > 0) out.push({ pos: null, list: buckets.ETC });
+  return out;
+}
 
 export default function TeamRecapCard({
   attendees,
@@ -13,6 +53,8 @@ export default function TeamRecapCard({
   teamBName,
   teamACaptain = null,
   teamBCaptain = null,
+  teamAColor,
+  teamBColor,
   matchId,
   editable = false,
   lockCaptain = false,
@@ -22,6 +64,8 @@ export default function TeamRecapCard({
   teamBName: string;
   teamACaptain?: string | null;
   teamBCaptain?: string | null;
+  teamAColor?: string | null;
+  teamBColor?: string | null;
   /** 편집(드래그앤드롭) 활성화 시 필수 */
   matchId?: string;
   editable?: boolean;
@@ -88,6 +132,7 @@ export default function TeamRecapCard({
           label={teamAName}
           dotColor="#EF3E3E"
           chipClass="bg-red-50 text-suaza-accent border-red-200"
+          uniformColor={teamAColor ?? DEFAULT_TEAM_COLOR.A}
           members={teamA}
           captainId={optCaptains.a}
           editable={editable}
@@ -106,6 +151,7 @@ export default function TeamRecapCard({
           label={teamBName}
           dotColor="#3B82F6"
           chipClass="bg-blue-50 text-blue-600 border-blue-200"
+          uniformColor={teamBColor ?? DEFAULT_TEAM_COLOR.B}
           members={teamB}
           captainId={optCaptains.b}
           editable={editable}
@@ -133,21 +179,39 @@ export default function TeamRecapCard({
                 ({unassigned.length}명)
               </span>
             </span>
-            <div className="flex flex-wrap items-start content-start gap-2 min-h-[28px]">
-              {unassigned.length === 0 ? (
+            {unassigned.length === 0 ? (
+              <div className="flex items-start min-h-[28px]">
                 <span className="text-xs text-suaza-ink-faint">—</span>
-              ) : (
-                unassigned.map((m) => (
-                  <PlayerChip
-                    key={m.id}
-                    member={m}
-                    chipClass="border-dashed border-gray-300 bg-gray-100 text-suaza-ink-muted"
-                    editable={editable}
-                    onDragStateChange={setDragging}
-                  />
-                ))
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 min-h-[28px]">
+                {groupByPosition(unassigned).map(({ pos, list }) => (
+                  <div key={pos ?? "etc"} className="flex items-start gap-2">
+                    <span
+                      className="shrink-0 mt-0.5 inline-flex items-center justify-center min-w-[26px] h-5 px-1.5 rounded-full text-[10px] font-bold text-white"
+                      style={{
+                        backgroundColor: pos
+                          ? POSITION_COLOR[pos]
+                          : "#9CA3AF",
+                      }}
+                    >
+                      {pos ?? "기타"}
+                    </span>
+                    <div className="flex flex-wrap items-start content-start gap-1.5">
+                      {list.map((m) => (
+                        <PlayerChip
+                          key={m.id}
+                          member={m}
+                          chipClass="border-dashed border-gray-300 bg-gray-100 text-suaza-ink-muted"
+                          editable={editable}
+                          onDragStateChange={setDragging}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </DropZone>
         </>
       )}
@@ -160,6 +224,7 @@ function TeamColumn({
   label,
   dotColor,
   chipClass,
+  uniformColor,
   members,
   captainId,
   editable,
@@ -173,6 +238,7 @@ function TeamColumn({
   label: string;
   dotColor: string;
   chipClass: string;
+  uniformColor: string;
   members: RecapMember[];
   captainId: string | null;
   editable: boolean;
@@ -182,6 +248,7 @@ function TeamColumn({
   onDropTo: (playerId: string, team: "A" | "B" | null) => void;
   onCaptainChange: (playerId: string | null) => void;
 }) {
+  const groups = groupByPosition(members);
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
@@ -203,29 +270,73 @@ function TeamColumn({
           onChange={onCaptainChange}
         />
       </div>
+      {/* 유니폼 색 표시 */}
+      <div className="flex items-center gap-2">
+        <JerseyIcon color={uniformColor} />
+        <span className="text-xs text-suaza-ink-muted">유니폼</span>
+      </div>
       <DropZone
         team={team}
         editable={editable}
         dragging={dragging}
         onDropTo={onDropTo}
-        className="flex flex-wrap items-start content-start gap-2 min-h-[36px] rounded-lg"
+        className="flex flex-col gap-2 min-h-[36px] rounded-lg"
       >
         {members.length === 0 ? (
           <span className="text-xs text-suaza-ink-faint">—</span>
         ) : (
-          members.map((m) => (
-            <PlayerChip
-              key={m.id}
-              member={m}
-              chipClass={`border ${chipClass}`}
-              isCaptain={m.id === captainId}
-              editable={editable}
-              onDragStateChange={onDragStateChange}
-            />
+          groups.map(({ pos, list }) => (
+            <div
+              key={pos ?? "etc"}
+              className="flex items-start gap-2"
+            >
+              <span
+                className="shrink-0 mt-0.5 inline-flex items-center justify-center min-w-[26px] h-5 px-1.5 rounded-full text-[10px] font-bold text-white"
+                style={{
+                  backgroundColor: pos
+                    ? POSITION_COLOR[pos]
+                    : "#9CA3AF",
+                }}
+              >
+                {pos ?? "기타"}
+              </span>
+              <div className="flex flex-wrap items-start content-start gap-1.5">
+                {list.map((m) => (
+                  <PlayerChip
+                    key={m.id}
+                    member={m}
+                    chipClass={`border ${chipClass}`}
+                    isCaptain={m.id === captainId}
+                    editable={editable}
+                    onDragStateChange={onDragStateChange}
+                  />
+                ))}
+              </div>
+            </div>
           ))
         )}
       </DropZone>
     </div>
+  );
+}
+
+function JerseyIcon({ color }: { color: string }) {
+  return (
+    <svg
+      width="28"
+      height="28"
+      viewBox="0 0 24 24"
+      aria-hidden
+      className="shrink-0 drop-shadow-sm"
+    >
+      <path
+        d="M8.6 3 L4 5.2 L2.2 9 L5.1 10.7 L6.5 9.5 V21 H17.5 V9.5 L18.9 10.7 L21.8 9 L20 5.2 L15.4 3 C15.4 4.5 13.9 5.4 12 5.4 C10.1 5.4 8.6 4.5 8.6 3 Z"
+        fill={color}
+        stroke="rgba(0,0,0,0.28)"
+        strokeWidth="0.9"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

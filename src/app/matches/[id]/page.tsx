@@ -412,6 +412,8 @@ export default async function MatchDetailPage({
                     teamBName={getTeamName(m, "B")}
                     teamACaptain={m.team_a_captain}
                     teamBCaptain={m.team_b_captain}
+                    teamAColor={m.team_a_color}
+                    teamBColor={m.team_b_color}
                     editable={isStaff}
                     lockCaptain
                   />
