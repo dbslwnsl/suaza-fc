@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import { saveFormation } from "@/lib/formations/actions";
 import {
@@ -9,6 +10,12 @@ import {
   setMomForPlayer,
   setMyCondition,
 } from "@/lib/matches/actions";
+import {
+  createCoachComment,
+  deleteCoachComment,
+  updateCoachComment,
+} from "@/app/members/[id]/actions";
+import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import {
   FORMATIONS,
   buildSlots,
@@ -231,6 +238,9 @@ export default function FormationEditor({
   canEditStats = false,
   winningTeam = null,
   canEditWinner = false,
+  canWriteCoachComment = false,
+  matchDate = null,
+  commentCountByPlayer = {},
 }: {
   matchId: string;
   myUserId: string;
@@ -258,6 +268,12 @@ export default function FormationEditor({
   winningTeam?: "A" | "B" | null;
   // 운동장 위 승/무/패 토글 권한 (회장·감독 + 자체전 종료 경기에서만 true)
   canEditWinner?: boolean;
+  // 감독·코치 코멘트 작성 가능 여부 — 종료 경기 임베드에서 선수 카드의 코멘트 아이콘 표시 토글
+  canWriteCoachComment?: boolean;
+  // 코멘트 모달 헤더에 표시할 경기 일자(ISO). null 이면 표시 생략.
+  matchDate?: string | null;
+  // 회원별 코멘트 개수 — 아이콘 배경(코멘트 있음 표시) 토글 + 일반 회원에게 본인 카드 아이콘 표시 분기
+  commentCountByPlayer?: Record<string, number>;
 }) {
   // 전혀 편집할 수 없으면 readonly. 감독/회장은 양 팀, 주장은 자기 팀만 편집 가능.
   const readonly = editableTeam == null;
@@ -909,6 +925,9 @@ export default function FormationEditor({
               matchId={matchId}
               winningTeam={optWinningTeam}
               rosterTeam="A"
+              canWriteCoachComment={canWriteCoachComment}
+              matchDate={matchDate}
+              commentCountByPlayer={commentCountByPlayer}
             />
           </DesktopRosterPane>
         )}
@@ -1126,6 +1145,9 @@ export default function FormationEditor({
                   matchId={matchId}
                   winningTeam={optWinningTeam}
                   rosterTeam={isIntra ? rightTeam : null}
+                  canWriteCoachComment={canWriteCoachComment}
+                  matchDate={matchDate}
+                  commentCountByPlayer={commentCountByPlayer}
                 />
               </DesktopRosterPane>
             );
@@ -1192,6 +1214,9 @@ export default function FormationEditor({
         canEditStats={canEditStats && showAll}
         matchId={matchId}
         winningTeam={optWinningTeam}
+        canWriteCoachComment={canWriteCoachComment}
+        matchDate={matchDate}
+        commentCountByPlayer={commentCountByPlayer}
         onTap={(id: string, placed: boolean) => {
           if (readonly) return;
           if (placed) unassignPlayer(id);
@@ -2604,6 +2629,9 @@ function PlayerRosterMobile({
   canEditStats = false,
   matchId,
   winningTeam = null,
+  canWriteCoachComment = false,
+  matchDate = null,
+  commentCountByPlayer = {},
 }: {
   members: EditorMember[];
   quarters: QuarterWithTeams[];
@@ -2652,6 +2680,10 @@ function PlayerRosterMobile({
   canEditStats?: boolean;
   matchId?: string;
   winningTeam?: "A" | "B" | null;
+  /** 감독·코치 코멘트 작성 권한 (title=head_coach/coach) */
+  canWriteCoachComment?: boolean;
+  matchDate?: string | null;
+  commentCountByPlayer?: Record<string, number>;
 }) {
   const participations = useMemo(
     () => computeParticipations(members, quarters),
@@ -2720,6 +2752,9 @@ function PlayerRosterMobile({
       canEditStats={canEditStats}
       matchId={matchId}
       winningTeam={winningTeam}
+      canWriteCoachComment={canWriteCoachComment}
+      matchDate={matchDate}
+      hasComment={(commentCountByPlayer[p.member.id] ?? 0) > 0}
     />
   );
 
@@ -2945,6 +2980,9 @@ function PlayerRowMobile({
   canEditStats = false,
   matchId,
   winningTeam = null,
+  canWriteCoachComment = false,
+  matchDate = null,
+  hasComment = false,
 }: {
   participation: PlayerParticipation;
   placed: boolean;
@@ -2962,6 +3000,11 @@ function PlayerRowMobile({
   canEditStats?: boolean;
   matchId?: string;
   winningTeam?: "A" | "B" | null;
+  /** 감독·코치 코멘트 작성 권한 (title=head_coach/coach) */
+  canWriteCoachComment?: boolean;
+  matchDate?: string | null;
+  /** 이 선수에 대해 (이 경기) 코멘트가 한 건이라도 있는지 */
+  hasComment?: boolean;
 }) {
   const m = participation.member;
   const memberPositions = m.positions ?? [];
@@ -3092,6 +3135,16 @@ function PlayerRowMobile({
                     : undefined
                 }
               />
+              {(canWriteCoachComment || isMe) && matchId && (
+                <CoachCommentButton
+                  memberId={m.id}
+                  memberName={m.name}
+                  matchId={matchId}
+                  matchDate={matchDate}
+                  hasComment={hasComment}
+                  readonly={!canWriteCoachComment}
+                />
+              )}
             </span>
           )}
         </div>
@@ -3205,6 +3258,389 @@ function StatusPill({
     >
       {label}
     </span>
+  );
+}
+
+// 감독·코치 코멘트 — 종료 경기에서 선수 카드 옆에 작은 말풍선 아이콘으로 노출.
+// 모달은 같은 (회원, 경기) 에 모든 코치가 남긴 코멘트를 댓글처럼 누적해 표기.
+// 새 코멘트는 항상 INSERT — 본인이 또 달거나 다른 코치가 추가해도 누적된다.
+// 경기일은 현재 match_id 로 자동 연결.
+type CoachCommentRow = {
+  id: string;
+  content: string;
+  created_at: string;
+  author_id: string;
+  author: { name: string | null; title: MemberTitle | null } | null;
+};
+
+async function fetchCoachComments(
+  memberId: string,
+  matchId: string,
+): Promise<CoachCommentRow[]> {
+  const supabase = createBrowserSupabase();
+  const { data } = await supabase
+    .from("coach_comments")
+    .select(
+      "id, content, created_at, author_id, author:profiles!coach_comments_author_id_fkey(name, title)",
+    )
+    .eq("match_id", matchId)
+    .eq("member_id", memberId)
+    .order("created_at", { ascending: true });
+  return (data ?? []) as unknown as CoachCommentRow[];
+}
+
+function formatCommentTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+}
+
+function CoachCommentButton({
+  memberId,
+  memberName,
+  matchId,
+  matchDate,
+  hasComment = false,
+  readonly = false,
+}: {
+  memberId: string;
+  memberName: string;
+  matchId: string;
+  matchDate: string | null;
+  /** 이 선수에 (이 경기) 코멘트가 한 건이라도 있으면 아이콘에 배경색 표시 */
+  hasComment?: boolean;
+  /** 읽기 전용 모드 — 일반 회원이 본인 카드에서 자기 코멘트 열람할 때 사용 */
+  readonly?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const baseCls =
+    "shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-md transition";
+  const stateCls = hasComment
+    ? "bg-suaza-accent text-white hover:opacity-90"
+    : "text-suaza-ink-muted hover:text-suaza-ink hover:bg-gray-100";
+  const titleText = readonly
+    ? hasComment
+      ? "감독·코치 코멘트 보기"
+      : "감독·코치 코멘트 (아직 없음)"
+    : "감독·코치 코멘트";
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
+        title={titleText}
+        aria-label={`${memberName} ${titleText}`}
+        className={`${baseCls} ${stateCls}`}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+      </button>
+      <CoachCommentModal
+        open={open}
+        onClose={() => setOpen(false)}
+        memberId={memberId}
+        memberName={memberName}
+        matchId={matchId}
+        matchDate={matchDate}
+        readonly={readonly}
+      />
+    </>
+  );
+}
+
+function CoachCommentModal({
+  open,
+  onClose,
+  memberId,
+  memberName,
+  matchId,
+  matchDate,
+  readonly = false,
+}: {
+  open: boolean;
+  onClose: () => void;
+  memberId: string;
+  memberName: string;
+  matchId: string;
+  matchDate: string | null;
+  /** 읽기 전용 — 입력/수정/삭제 UI 비표시. 일반 회원이 본인 카드에서 자기 코멘트 열람할 때. */
+  readonly?: boolean;
+}) {
+  const [content, setContent] = useState("");
+  const [comments, setComments] = useState<CoachCommentRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [submitting, startSubmit] = useTransition();
+  const [myUserId, setMyUserId] = useState<string | null>(null);
+  // 인라인 수정 상태 — 한번에 하나만 편집 가능
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [rowBusy, startRowTransition] = useTransition();
+  // 같은 (회원, 경기) 에 모든 감독·코치가 남긴 코멘트 목록을 모달 열릴 때마다 다시 불러옴.
+  // 새 코멘트는 항상 누적(INSERT). 저장 후엔 모달을 닫지 않고 목록을 갱신.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setContent("");
+    setComments([]);
+    setEditingId(null);
+    setEditContent("");
+    setLoading(true);
+    (async () => {
+      const supabase = createBrowserSupabase();
+      const [{ data: userRes }, list] = await Promise.all([
+        supabase.auth.getUser(),
+        fetchCoachComments(memberId, matchId),
+      ]);
+      if (cancelled) return;
+      setMyUserId(userRes.user?.id ?? null);
+      setComments(list);
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, memberId, matchId]);
+
+  const refresh = async () => {
+    const list = await fetchCoachComments(memberId, matchId);
+    setComments(list);
+  };
+  const startEdit = (c: CoachCommentRow) => {
+    setEditingId(c.id);
+    setEditContent(c.content);
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditContent("");
+  };
+  const saveEdit = () => {
+    const trimmedEdit = editContent.trim();
+    if (!trimmedEdit || !editingId || rowBusy) return;
+    startRowTransition(async () => {
+      await updateCoachComment(editingId, memberId, trimmedEdit);
+      setEditingId(null);
+      setEditContent("");
+      await refresh();
+    });
+  };
+  const removeComment = (id: string) => {
+    if (rowBusy) return;
+    if (!confirm("이 코멘트를 삭제하시겠습니까?")) return;
+    startRowTransition(async () => {
+      await deleteCoachComment(id, memberId);
+      if (editingId === id) cancelEdit();
+      await refresh();
+    });
+  };
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+  if (!open || typeof document === "undefined") return null;
+  const dateLabel = matchDate
+    ? new Intl.DateTimeFormat("ko-KR", {
+        timeZone: "Asia/Seoul",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }).format(new Date(matchDate))
+    : null;
+  const trimmed = content.trim();
+  const submit = () => {
+    if (!trimmed || submitting || loading) return;
+    startSubmit(async () => {
+      await createCoachComment(memberId, trimmed, matchId);
+      setContent("");
+      await refresh();
+    });
+  };
+  // 비활성 카드(opacity-50) 안에서 호출되어도 모달이 반투명해지지 않도록
+  // document.body 로 portal 렌더 → 부모의 opacity context 를 벗어난다.
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] bg-black/40 flex items-end sm:items-center justify-center"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white w-full sm:max-w-md mb-2 sm:mb-0 rounded-2xl shadow-xl max-h-[85vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 pt-4 pb-3 border-b border-suaza-border shrink-0">
+          <h3 className="text-base font-bold text-suaza-ink">
+            {memberName} — 감독·코치 코멘트
+          </h3>
+          <p className="text-xs text-suaza-ink-muted mt-0.5">
+            {readonly
+              ? dateLabel
+                ? `${dateLabel} 경기 — 감독·코치가 남긴 코멘트입니다.`
+                : "감독·코치가 남긴 코멘트입니다."
+              : dateLabel
+                ? `${dateLabel} 경기 — 회원 프로필의 감독·코치 코멘트 섹션에 누적됩니다.`
+                : "회원 프로필의 감독·코치 코멘트에 누적됩니다."}
+          </p>
+        </div>
+
+        {/* 기존 코멘트 목록 (다른 코치 + 본인 모두 시간순) */}
+        <div className="px-5 py-3 flex-1 min-h-0 overflow-y-auto">
+          {loading ? (
+            <p className="text-xs text-suaza-ink-muted text-center py-4">
+              코멘트 불러오는 중...
+            </p>
+          ) : comments.length === 0 ? (
+            <p className="text-xs text-suaza-ink-faint text-center py-4">
+              아직 등록된 코멘트가 없습니다. 첫 코멘트를 남겨주세요.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {comments.map((c) => {
+                const isMine = !!myUserId && c.author_id === myUserId;
+                const isEditing = editingId === c.id;
+                const authorLabel =
+                  (c.author?.title && c.author.title !== "player"
+                    ? `${TITLE_SHORT[c.author.title]} `
+                    : "") + (c.author?.name ?? "—");
+                return (
+                  <li
+                    key={c.id}
+                    className="rounded-xl bg-suaza-bg/60 px-3 py-2 flex flex-col gap-1"
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-xs font-bold text-suaza-ink">
+                        {authorLabel}
+                      </span>
+                      <span className="text-[10px] text-suaza-ink-faint shrink-0">
+                        {formatCommentTime(c.created_at)}
+                      </span>
+                    </div>
+                    {isEditing ? (
+                      <>
+                        <textarea
+                          value={editContent}
+                          onChange={(e) => setEditContent(e.target.value)}
+                          rows={3}
+                          autoFocus
+                          disabled={rowBusy}
+                          className="w-full px-2 py-1.5 rounded-lg border border-suaza-border text-sm text-suaza-ink focus:outline-none focus:border-suaza-button resize-none disabled:bg-gray-50"
+                        />
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={cancelEdit}
+                            disabled={rowBusy}
+                            className="text-[11px] px-2 py-0.5 rounded-md border border-suaza-border text-suaza-ink-muted hover:bg-white disabled:opacity-50"
+                          >
+                            취소
+                          </button>
+                          <button
+                            type="button"
+                            onClick={saveEdit}
+                            disabled={!editContent.trim() || rowBusy}
+                            className="text-[11px] px-2 py-0.5 rounded-md bg-suaza-accent text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {rowBusy ? "저장 중..." : "저장"}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm text-suaza-ink whitespace-pre-wrap break-words">
+                          {c.content}
+                        </p>
+                        {isMine && (
+                          <div className="flex justify-end gap-1.5 -mt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => startEdit(c)}
+                              disabled={rowBusy}
+                              className="text-[11px] px-2 py-0.5 rounded-md text-suaza-ink-muted hover:bg-white hover:text-suaza-ink disabled:opacity-50"
+                            >
+                              수정
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeComment(c.id)}
+                              disabled={rowBusy}
+                              className="text-[11px] px-2 py-0.5 rounded-md text-suaza-accent hover:bg-red-50 disabled:opacity-50"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* 새 코멘트 입력 — 감독·코치만 노출 (일반 회원 readonly 일 땐 숨김) */}
+        {!readonly && (
+          <div className="px-5 pt-3 pb-3 border-t border-suaza-border shrink-0">
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              rows={3}
+              placeholder="코멘트를 입력해 추가하세요"
+              disabled={loading || submitting}
+              className="w-full px-3 py-2 rounded-lg border border-suaza-border text-sm text-suaza-ink placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button resize-none disabled:bg-gray-50"
+            />
+          </div>
+        )}
+        <div className="flex gap-2 px-5 pb-5 pt-3 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 py-3 rounded-lg border border-suaza-border text-suaza-ink-muted font-medium hover:bg-gray-50 disabled:opacity-50"
+          >
+            닫기
+          </button>
+          {!readonly && (
+            <button
+              type="button"
+              onClick={submit}
+              disabled={!trimmed || submitting || loading}
+              className="flex-1 py-3 rounded-lg bg-suaza-accent text-white font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {submitting ? "등록 중..." : "등록"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -3397,6 +3833,9 @@ function PlayerRosterDesktop({
   matchId,
   winningTeam = null,
   rosterTeam = null,
+  canWriteCoachComment = false,
+  matchDate = null,
+  commentCountByPlayer = {},
 }: {
   members: EditorMember[];
   quarters: QuarterWithTeams[];
@@ -3425,6 +3864,9 @@ function PlayerRosterDesktop({
   myCondition: number;
   onCycleCondition: () => void;
   matchLocked?: boolean;
+  canWriteCoachComment?: boolean;
+  matchDate?: string | null;
+  commentCountByPlayer?: Record<string, number>;
 }) {
   const [filter, setFilter] = useState<Filter>("ALL");
 
@@ -3567,6 +4009,9 @@ function PlayerRosterDesktop({
                 canEditStats={canEditStats}
                 matchId={matchId}
                 winningTeam={winningTeam}
+                canWriteCoachComment={canWriteCoachComment}
+                matchDate={matchDate}
+                hasComment={(commentCountByPlayer[p.member.id] ?? 0) > 0}
               />
             ))}
           </div>
@@ -3592,6 +4037,9 @@ function DesktopPlayerCard({
   canEditStats = false,
   matchId,
   winningTeam = null,
+  canWriteCoachComment = false,
+  matchDate = null,
+  hasComment = false,
 }: {
   participation: PlayerParticipation;
   placed: boolean;
@@ -3609,6 +4057,11 @@ function DesktopPlayerCard({
   canEditStats?: boolean;
   matchId?: string;
   winningTeam?: "A" | "B" | null;
+  /** 감독·코치 코멘트 작성 권한 (title=head_coach/coach) */
+  canWriteCoachComment?: boolean;
+  matchDate?: string | null;
+  /** 이 선수에 대해 (이 경기) 코멘트가 한 건이라도 있는지 */
+  hasComment?: boolean;
 }) {
   const m = participation.member;
   const teamBg = team === "A" ? "#3B82F6" : team === "B" ? "#EF4444" : null;
@@ -3685,7 +4138,7 @@ function DesktopPlayerCard({
       {stat ? (
         // 종료 임베드 모바일 — 3줄 구조: 이름+포지션 / 출·승·M·포인트 / (PlayerStatRow는 wrapper 에서)
         <>
-          {/* 1줄: 이름 + 포지션 */}
+          {/* 1줄: 이름 + 포지션 + (감독·코치 코멘트 아이콘은 ml-auto 로 우측 정렬) */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <PlayerName
               name={m.name}
@@ -3704,6 +4157,18 @@ function DesktopPlayerCard({
                 {pos}
               </span>
             ))}
+            {(canWriteCoachComment || isMe) && matchId && (
+              <span className="ml-auto">
+                <CoachCommentButton
+                  memberId={m.id}
+                  memberName={m.name}
+                  matchId={matchId}
+                  matchDate={matchDate}
+                  hasComment={hasComment}
+                  readonly={!canWriteCoachComment}
+                />
+              </span>
+            )}
           </div>
           {/* 2줄: 출 / 승|패 / M / 포인트 */}
           <div className="flex items-center gap-1.5">

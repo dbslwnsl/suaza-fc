@@ -131,6 +131,7 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
     { data: attendances },
     { data: participations },
     { data: statDefs },
+    { data: coachComments },
   ] = await Promise.all([
     supabase.from("matches").select("*").eq("id", matchId).single(),
     supabase.from("profiles").select("role, title").eq("id", user.id).single(),
@@ -159,6 +160,12 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
     supabase
       .from("stat_definitions")
       .select("key, label, sort_order, point_value"),
+    // 코멘트 존재 여부 표시용 — RLS 가 본인(member_id=me) 또는 코칭스태프에게만 row 노출.
+    // 일반 회원은 자기 자신에 대한 코멘트 카운트만 보임 → 아이콘 표시 분기에도 그대로 활용.
+    supabase
+      .from("coach_comments")
+      .select("member_id")
+      .eq("match_id", matchId),
   ]);
 
   if (!match) notFound();
@@ -168,6 +175,9 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
     me?.title === "president" ||
     me?.title === "head_coach";
   const isCoach = me?.role === "coach" || me?.title === "coach";
+  // 감독·코치 코멘트 작성 가능 여부 — title 기준 head_coach/coach 만 (회장 제외)
+  const canWriteCoachComment =
+    me?.title === "head_coach" || me?.title === "coach";
   const teamACaptain = (match.team_a_captain as string | null) ?? null;
   const teamBCaptain = (match.team_b_captain as string | null) ?? null;
   const captainIds = [teamACaptain, teamBCaptain].filter(
@@ -239,6 +249,13 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
       points: pointsForParticipation(row, match.match_date, pvMap),
     };
   }
+  // 회원별 코멘트 개수 (말풍선 아이콘에 "코멘트 있음" 표시용)
+  const commentCountByPlayer: Record<string, number> = {};
+  for (const row of (coachComments ?? []) as { member_id: string }[]) {
+    commentCountByPlayer[row.member_id] =
+      (commentCountByPlayer[row.member_id] ?? 0) + 1;
+  }
+
   // 출석한 선수는 row 없어도 1pt(attendance) 기본 표시.
   // 자체전 종료 & A팀이면 win_points 가산(미리보기).
   const attendanceBase = pvMap["attendance"] ?? 1;
@@ -280,6 +297,9 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
             canEditStats: isFullStaff,
             winningTeam: intraWinner,
             canEditWinner: isIntra && isFullStaff,
+            canWriteCoachComment,
+            matchDate: match.match_date as string,
+            commentCountByPlayer,
           }
         : {})}
     />
