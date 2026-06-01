@@ -880,7 +880,7 @@ export default function FormationEditor({
         {isIntra && showTeamA && !restrictedView && (
           <DesktopRosterPane
             showRibbon
-            wideMode={matchLocked}
+            wideMode
             ribbonTabs={quarters.map((q, i) => ({
               id: q.id,
               label: gameQuarters[i]?.label ?? q.id,
@@ -1098,7 +1098,7 @@ export default function FormationEditor({
             return (
               <DesktopRosterPane
                 showRibbon
-            wideMode={matchLocked}
+            wideMode
                 ribbonTabs={quarters.map((q, i) => ({
                   id: q.id,
                   label: gameQuarters[i]?.label ?? q.id,

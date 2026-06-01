@@ -19,6 +19,7 @@ import ScoreControl from "./score-control";
 import TeamRecapCard from "./team-recap-card";
 import TeamBuilder from "./team-builder";
 import FormationEmbed from "./formation/embed";
+import FormationCollapsible from "./formation-collapsible";
 import MatchInfoReadonly from "./match-info-readonly";
 import MatchCommentSection, { type MatchComment } from "./match-comments";
 import MatchShareButton from "./match-share-button";
@@ -445,29 +446,28 @@ export default async function MatchDetailPage({
                   />
                 </div>
               )}
-              {/* 종료된 경기: 포메이션 전체 임베드 — 팀 편성 결과 ↔ 선수별 기록 사이.
+              {/* 포메이션 전체 임베드 — 취소가 아니면 항상 노출(출석투표 위).
                   모바일은 카드 wrapper(흰 배경/테두리/padding) 없이 운동장이 페이지 배경
                   위에 풀폭으로 표시되도록, 데스크탑에서만 카드 스타일 적용.
                   데스크탑은 운동장 비율이 컨테이너 높이를 기준으로 잡혀 폭주할 수 있어
                   명시적인 높이(80vh)를 부여한다. */}
-              {(m.status === "done" || m.status === "canceled") && (
-                <div className="order-[2.5] desktop:col-span-2">
-                  <section className="flex flex-col gap-4 desktop:bg-white desktop:rounded-2xl desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] desktop:p-8">
-                    {/* 좁은 데스크탑에선 운동장이 컨테이너 밖으로 흘러 아래 섹션을 침범하는
-                        문제가 있어, 데스크탑 전체 폭에서 컨테이너 안으로 overflow 를 가둔다.
-                        가로가 부족하면 이 영역 안에서만 스크롤된다. */}
-                    <div className="desktop:h-[80vh] desktop:min-h-0 flex flex-col min-h-0 desktop:overflow-auto">
-                      <Suspense
-                        fallback={
-                          <p className="text-sm text-suaza-ink-muted py-6 text-center">
-                            포메이션을 불러오는 중...
-                          </p>
-                        }
-                      >
-                        <FormationEmbed matchId={m.id} />
-                      </Suspense>
-                    </div>
-                  </section>
+              {m.status !== "canceled" && (
+                <div className="order-0 desktop:col-span-2">
+                  <FormationCollapsible
+                    defaultExpanded={
+                      m.status === "done" || m.status === "in_progress"
+                    }
+                  >
+                    <Suspense
+                      fallback={
+                        <p className="text-sm text-suaza-ink-muted py-6 text-center">
+                          포메이션을 불러오는 중...
+                        </p>
+                      }
+                    >
+                      <FormationEmbed matchId={m.id} />
+                    </Suspense>
+                  </FormationCollapsible>
                 </div>
               )}
 
@@ -698,8 +698,8 @@ function VSCard({
         )}
       </div>
 
-      <div className="flex items-center justify-center gap-2 flex-wrap">
-        {isStaff && (
+      {isStaff && (
+        <div className="flex items-center justify-center gap-2 flex-wrap">
           <Link
             href={`/matches/${m.id}?edit=1`}
             className="text-sm font-bold text-suaza-accent bg-red-50 hover:bg-red-100 transition px-4 py-1.5 rounded-lg"
@@ -708,24 +708,8 @@ function VSCard({
               ? "경기 정보 조회 ›"
               : "경기 정보 수정 ›"}
           </Link>
-        )}
-        {m.status === "done" || m.status === "canceled" ? (
-          <span
-            aria-disabled="true"
-            title="종료된 경기는 포메이션을 변경할 수 없습니다"
-            className="text-sm font-medium text-suaza-ink-faint bg-gray-100 px-4 py-1.5 rounded-lg cursor-not-allowed select-none"
-          >
-            포메이션 ›
-          </span>
-        ) : (
-          <Link
-            href={`/matches/${m.id}/formation`}
-            className="text-sm font-medium text-suaza-ink bg-gray-100 hover:bg-gray-200 transition px-4 py-1.5 rounded-lg"
-          >
-            포메이션 ›
-          </Link>
-        )}
-      </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -921,7 +905,7 @@ function AttendanceCard({
     <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4 desktop:h-full">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-baseline gap-2">
-          <h2 className="font-bold text-suaza-ink text-lg">출석 투표</h2>
+          <h2 className="font-bold text-suaza-ink text-lg">출석</h2>
           <span className="text-xs text-suaza-ink-muted">
             <span className="hidden desktop:inline">전체 </span>
             {totalMembers}명
@@ -1077,7 +1061,7 @@ export function AttendanceVote({
 }) {
   return (
     <section className="flex flex-col gap-3 p-4 border border-suaza-border rounded-lg">
-      <h2 className="font-bold text-suaza-ink">출석 투표</h2>
+      <h2 className="font-bold text-suaza-ink">출석</h2>
 
       <AttendanceCompactVote
         matchId={matchId}

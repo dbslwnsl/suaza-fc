@@ -315,7 +315,7 @@ function VoteButtons({
             key={o.value}
             type="button"
             onClick={() => onVote(o.value)}
-            className={`h-11 rounded-lg border text-sm font-medium transition flex items-center justify-center gap-1 ${
+            className={`h-7 desktop:h-9 w-full rounded-lg border text-xs desktop:text-sm font-medium transition flex items-center justify-center gap-1 ${
               active
                 ? o.activeClass
                 : "bg-white border-suaza-border text-suaza-ink hover:bg-gray-100"
@@ -382,7 +382,7 @@ function QuarterPicker({
         <button
           type="button"
           onClick={() => onChange(null)}
-          className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium border transition ${
+          className={`shrink-0 inline-flex items-center justify-center h-5 px-2 rounded-full text-xs leading-none font-medium border transition ${
             selected === null
               ? "bg-green-600 text-white border-green-600"
               : "bg-white text-suaza-ink-muted border-suaza-border hover:bg-gray-50"
@@ -405,7 +405,7 @@ function QuarterPicker({
               key={q}
               type="button"
               onClick={() => toggle(q)}
-              className={`aspect-[5/3] rounded-lg border flex items-center justify-center transition ${
+              className={`h-7 desktop:h-9 w-full rounded-lg border flex items-center justify-center transition ${
                 active
                   ? "border-transparent bg-green-500 text-white"
                   : "border-suaza-border bg-gray-50 text-suaza-ink-muted hover:bg-gray-100"
@@ -501,14 +501,16 @@ export function AttendanceCardVote({
               {myName?.charAt(0) ?? "?"}
             </span>
             <span className="text-sm font-medium text-suaza-ink min-w-0 truncate">
-              <span className="desktop:hidden">내 응답을 알려주세요</span>
+              <span className="desktop:hidden">내 응답</span>
               <span className="hidden desktop:inline">
                 {myName
                   ? `${myName} 님의 응답을 알려주세요`
                   : "응답을 알려주세요"}
               </span>
             </span>
-            <ConditionChip level={condition} onCycle={cycleCondition} />
+            <div className="ml-auto">
+              <ConditionChip level={condition} onCycle={cycleCondition} />
+            </div>
           </div>
           <VoteButtons status={optimisticStatus} onVote={vote} />
           {optimisticStatus === "attending" && (
