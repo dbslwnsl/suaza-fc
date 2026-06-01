@@ -10,7 +10,10 @@ export type MatchListEntry = {
   opponent: string;
   ourScore: number | null;
   opponentScore: number | null;
+  /** 팀 단위 결과(상대전 한정, 자체전은 null). 데스크탑 매트릭스 컬럼 헤더에서 사용. */
   result: "W" | "D" | "L" | null;
+  /** "내가 속한 팀" 기준 결과 — 자체전이면 intra_winner vs 내 팀, 상대전은 result 와 동일. 모바일 카드에서 사용. */
+  myResult: "W" | "D" | "L" | null;
   attendingCount: number;
 };
 
@@ -26,6 +29,8 @@ export type MatchCell = {
   goals: number;
   assists: number;
   cleanSheets: number;
+  refereeCount: number;
+  mom: number;
 };
 
 type StatKey = "goals" | "assists" | "cleanSheets" | "attended" | "absent";
@@ -295,7 +300,12 @@ function MatrixTable({
                     <span className="font-bold text-suaza-ink text-xs">
                       {shortDate(m.matchDate)}
                     </span>
-                    <ResultBadge match={m} small />
+                    <ResultBadge
+                      result={m.result}
+                      ourScore={m.ourScore}
+                      opponentScore={m.opponentScore}
+                      small
+                    />
                   </div>
                   <span className="text-[10px] text-suaza-ink-faint whitespace-nowrap">
                     {m.opponent}
@@ -421,12 +431,13 @@ function MobileMatchCard({
   match: MatchListEntry;
   myCell: MatchCell | null;
 }) {
+  // 좌측 사이드바 색상 — 내 팀 기준 결과(자체전 포함)에 맞춤
   const sideColor =
-    match.result === "W"
+    match.myResult === "W"
       ? "#22C55E"
-      : match.result === "D"
+      : match.myResult === "D"
         ? "#F59E0B"
-        : match.result === "L"
+        : match.myResult === "L"
           ? "#EF4444"
           : "#9CA3AF";
   return (
@@ -442,7 +453,6 @@ function MobileMatchCard({
       <div className="flex items-start gap-3 pl-2">
         <div className="flex-1 min-w-0 flex flex-col gap-1.5">
           <div className="flex items-center gap-2 flex-wrap">
-            <ResultBadge match={match} />
             <span className="text-sm font-bold text-suaza-ink">
               {shortDate(match.matchDate)}
             </span>
@@ -450,36 +460,61 @@ function MobileMatchCard({
               vs {match.opponent}
             </span>
           </div>
-          {/* 본인 기록 */}
-          {myCell ? (
-            <div className="flex items-center gap-1 flex-wrap">
-              {myCell.goals > 0 && (
-                <Chip
-                  label={`골 ${myCell.goals}`}
-                  color="#EF3E3E"
-                  bg="rgba(239,62,62,0.10)"
-                />
-              )}
-              {myCell.assists > 0 && (
-                <Chip
-                  label={`어시 ${myCell.assists}`}
-                  color="#3B82F6"
-                  bg="rgba(59,130,246,0.10)"
-                />
-              )}
-              {myCell.cleanSheets > 0 && (
-                <Chip
-                  label={`CS ${myCell.cleanSheets}`}
-                  color="#22C55E"
-                  bg="rgba(34,197,94,0.10)"
-                />
-              )}
-            </div>
-          ) : (
-            <span className="inline-flex items-center self-start text-[11px] text-suaza-ink-muted bg-gray-100 px-2 py-0.5 rounded-full">
-              미출전
-            </span>
-          )}
+          {/* 두번째 라인: 승무패(내 팀 기준) → 본인 기록 칩(있는 것만) → 미출전이면 미출전 */}
+          <div className="flex items-center gap-1 flex-wrap">
+            <ResultBadge
+              result={match.myResult}
+              ourScore={match.ourScore}
+              opponentScore={match.opponentScore}
+            />
+            {myCell ? (
+              <>
+                {myCell.goals > 0 && (
+                  <Chip
+                    label={`골 ${myCell.goals}`}
+                    color="#EF3E3E"
+                    bg="rgba(239,62,62,0.10)"
+                  />
+                )}
+                {myCell.assists > 0 && (
+                  <Chip
+                    label={`어시 ${myCell.assists}`}
+                    color="#3B82F6"
+                    bg="rgba(59,130,246,0.10)"
+                  />
+                )}
+                {myCell.cleanSheets > 0 && (
+                  <Chip
+                    label={`클린시트 ${myCell.cleanSheets}`}
+                    color="#22C55E"
+                    bg="rgba(34,197,94,0.10)"
+                  />
+                )}
+                {myCell.refereeCount > 0 && (
+                  <Chip
+                    label={
+                      myCell.refereeCount > 1
+                        ? `심판 ${myCell.refereeCount}`
+                        : "심판"
+                    }
+                    color="#B45309"
+                    bg="rgba(180,83,9,0.10)"
+                  />
+                )}
+                {myCell.mom > 0 && (
+                  <Chip
+                    label={`MOM ${myCell.mom}`}
+                    color="#8B5CF6"
+                    bg="rgba(139,92,246,0.10)"
+                  />
+                )}
+              </>
+            ) : (
+              <span className="inline-flex items-center text-[11px] text-suaza-ink-muted bg-gray-100 px-2 py-0.5 rounded-full">
+                미출전
+              </span>
+            )}
+          </div>
         </div>
         <div className="shrink-0 flex items-center gap-1.5 text-suaza-ink-muted text-sm">
           <span className="font-medium text-suaza-ink">
@@ -516,20 +551,23 @@ function Chip({
 // ───────────────────────────────────────────────────────────
 
 function ResultBadge({
-  match,
+  result,
+  ourScore,
+  opponentScore,
   small,
 }: {
-  match: MatchListEntry;
+  result: "W" | "D" | "L" | null;
+  ourScore: number | null;
+  opponentScore: number | null;
   small?: boolean;
 }) {
-  const r = match.result;
-  if (!r) return null;
+  if (!result) return null;
   const color =
-    r === "W" ? "#22C55E" : r === "D" ? "#F59E0B" : "#EF4444";
+    result === "W" ? "#22C55E" : result === "D" ? "#F59E0B" : "#EF4444";
   const bg =
-    r === "W"
+    result === "W"
       ? "rgba(34,197,94,0.12)"
-      : r === "D"
+      : result === "D"
         ? "rgba(245,158,11,0.12)"
         : "rgba(239,68,68,0.12)";
   return (
@@ -539,10 +577,10 @@ function ResultBadge({
       } rounded-full font-bold tabular-nums`}
       style={{ color, backgroundColor: bg }}
     >
-      <span>{r}</span>
-      {match.ourScore != null && match.opponentScore != null && (
+      <span>{result}</span>
+      {ourScore != null && opponentScore != null && (
         <span className="opacity-90">
-          {match.ourScore}-{match.opponentScore}
+          {ourScore}-{opponentScore}
         </span>
       )}
     </span>

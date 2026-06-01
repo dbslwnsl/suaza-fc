@@ -452,7 +452,10 @@ export default async function MatchDetailPage({
               {(m.status === "done" || m.status === "canceled") && (
                 <div className="order-[2.5] desktop:col-span-2">
                   <section className="flex flex-col gap-4 desktop:bg-white desktop:rounded-2xl desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] desktop:p-8">
-                    <div className="desktop:h-[80vh] desktop:min-h-0 flex flex-col min-h-0 desktop-lg:overflow-x-auto">
+                    {/* 좁은 데스크탑에선 운동장이 컨테이너 밖으로 흘러 아래 섹션을 침범하는
+                        문제가 있어, 데스크탑 전체 폭에서 컨테이너 안으로 overflow 를 가둔다.
+                        가로가 부족하면 이 영역 안에서만 스크롤된다. */}
+                    <div className="desktop:h-[80vh] desktop:min-h-0 flex flex-col min-h-0 desktop:overflow-auto">
                       <Suspense
                         fallback={
                           <p className="text-sm text-suaza-ink-muted py-6 text-center">
