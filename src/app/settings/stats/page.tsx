@@ -42,6 +42,9 @@ export default async function StatSettingsPage({
   const items = (defs ?? []) as StatDef[];
   // point_value 컬럼은 마이그레이션 0033 에서 추가됨. 미적용 시 쿼리가 실패한다.
   const loadError = defsError?.message ?? null;
+  // 항목 수 제한 — 기본 4개(골/어시/출석/포인트) + 추가 4개 = 최대 8개.
+  const MAX_TOTAL = 8;
+  const canAdd = items.length < MAX_TOTAL;
 
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
@@ -56,8 +59,10 @@ export default async function StatSettingsPage({
         <p className="text-sm text-suaza-ink-muted -mt-3">
           항목별 <span className="font-medium text-suaza-ink">기준점수</span>를
           정하면 회원이 그 기록을 올릴 때마다 포인트가 누적됩니다. (예: 클린시트
-          1점, 승리포인트 2점) 기본 항목(골·어시·출석) 외에 팀이 직접 추적할
-          기록도 추가하세요.
+          1점, 승리포인트 2점) 기본 항목(골·어시·출석·포인트) 외에 팀이 직접
+          추적할 기록을{" "}
+          <span className="font-medium text-suaza-ink">최대 4개</span>까지
+          추가할 수 있어요.
         </p>
 
         {error && (
@@ -100,9 +105,21 @@ export default async function StatSettingsPage({
         {/* 추가 폼 */}
         <form
           action={addStatDefinition}
-          className="flex flex-col gap-3 p-4 border border-suaza-border rounded-lg"
+          className={`flex flex-col gap-3 p-4 border border-suaza-border rounded-lg ${
+            canAdd ? "" : "opacity-60"
+          }`}
         >
-          <h2 className="font-bold text-suaza-ink">새 항목 추가</h2>
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="font-bold text-suaza-ink">새 항목 추가</h2>
+            <span className="text-[11px] text-suaza-ink-faint">
+              {items.length} / {MAX_TOTAL}
+            </span>
+          </div>
+          {!canAdd && (
+            <p className="text-xs text-suaza-accent">
+              최대 4개까지 추가할 수 있어요. 항목을 삭제한 뒤 다시 추가해 주세요.
+            </p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
             <label className="flex flex-col gap-1">
               <span className="text-xs text-suaza-ink-muted">이름</span>
@@ -110,8 +127,9 @@ export default async function StatSettingsPage({
                 type="text"
                 name="label"
                 required
+                disabled={!canAdd}
                 placeholder="예: 심판횟수"
-                className="px-3 py-2 rounded-md border border-suaza-border text-sm focus:outline-none focus:border-suaza-button"
+                className="px-3 py-2 rounded-md border border-suaza-border text-sm focus:outline-none focus:border-suaza-button disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -121,13 +139,15 @@ export default async function StatSettingsPage({
                 name="sort_order"
                 defaultValue={items.length}
                 min={0}
-                className="w-24 px-3 py-2 rounded-md border border-suaza-border text-sm focus:outline-none focus:border-suaza-button"
+                disabled={!canAdd}
+                className="w-24 px-3 py-2 rounded-md border border-suaza-border text-sm focus:outline-none focus:border-suaza-button disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
             </label>
           </div>
           <button
             type="submit"
-            className="self-end text-sm bg-suaza-button text-white rounded-md px-3 py-1.5 font-medium hover:opacity-90"
+            disabled={!canAdd}
+            className="self-end text-sm bg-suaza-button text-white rounded-md px-3 py-1.5 font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:opacity-40"
           >
             추가
           </button>

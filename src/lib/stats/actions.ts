@@ -40,6 +40,19 @@ export async function addStatDefinition(formData: FormData) {
     );
   }
 
+  // 항목 수 제한 — 총 8개(기본 4개 + 추가 4개)까지만 허용.
+  const MAX_TOTAL = 8;
+  const { count } = await supabase
+    .from("stat_definitions")
+    .select("key", { head: true, count: "exact" });
+  if ((count ?? 0) >= MAX_TOTAL) {
+    redirect(
+      `/settings/stats?error=${encodeURIComponent(
+        "최대 4개까지만 추가할 수 있어요",
+      )}`,
+    );
+  }
+
   // 중복 확률은 매우 낮지만 안전하게 한 번 더 시도.
   let key = generateStatKey();
   let { error } = await supabase.from("stat_definitions").insert({
