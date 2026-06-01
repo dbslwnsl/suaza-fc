@@ -34,6 +34,7 @@ import {
   type StatDef,
 } from "@/lib/stats/helpers";
 import { AttendanceVote } from "./matches/[id]/page";
+import { computeSeasonKings } from "@/lib/stats/kings";
 import {
   fetchWeatherDebug,
   failureMessage,
@@ -233,6 +234,12 @@ export default async function Home() {
     jersey_number: number | null;
     attending_quarters?: number[] | null;
     voted_at?: string | null;
+    is_injured?: boolean | null;
+    on_leave?: boolean | null;
+    isGoalKing?: boolean;
+    isAssistKing?: boolean;
+    isCleanSheetKing?: boolean;
+    isRefereeKing?: boolean;
   };
   let myStatus: string | null = null;
   let myAttendingQuarters: number[] | null = null;
@@ -249,7 +256,7 @@ export default async function Home() {
         supabase
           .from("match_attendances")
           .select(
-            "status, attending_quarters, updated_at, player:profiles(id, name, jersey_number, deleted_at)",
+            "status, attending_quarters, updated_at, player:profiles(id, name, jersey_number, deleted_at, is_injured, on_leave)",
           )
           .eq("match_id", upcoming.id),
         supabase
@@ -260,10 +267,21 @@ export default async function Home() {
           .maybeSingle(),
         supabase
           .from("profiles")
-          .select("id, name, jersey_number")
+          .select("id, name, jersey_number, is_injured, on_leave")
           .is("deleted_at", null)
           .order("name", { ascending: true }),
       ]);
+
+    // 이 경기 일자가 속한 연도의 시즌 카테고리 1위 (공동 1위 포함)
+    const upcomingYear = new Date(upcoming.match_date).getFullYear();
+    const seasonKings = await computeSeasonKings(supabase, upcomingYear);
+    const withKings = (p: VotePlayer): VotePlayer => ({
+      ...p,
+      isGoalKing: seasonKings.goal.has(p.id),
+      isAssistKing: seasonKings.assist.has(p.id),
+      isCleanSheetKing: seasonKings.cleanSheet.has(p.id),
+      isRefereeKing: seasonKings.referee.has(p.id),
+    });
 
     const votedIds = new Set<string>();
     for (const row of (attRaw ?? []) as unknown as {
@@ -275,17 +293,27 @@ export default async function Home() {
       // 소프트 삭제된 회원은 출석 명단에서 제외
       if (row.player?.deleted_at) continue;
       if (row.player && row.status in byStatus) {
-        byStatus[row.status].push({
+        const enriched = withKings({
           ...row.player,
           attending_quarters: row.attending_quarters,
           voted_at: row.updated_at,
         });
+        // 부상/장기불참은 자동 불참 처리 (매치 상세와 동일)
+        const forcedAbsent =
+          !!row.player.is_injured || !!row.player.on_leave;
+        const effectiveStatus = forcedAbsent ? "absent" : row.status;
+        byStatus[effectiveStatus].push(enriched);
         votedIds.add(row.player.id);
       }
     }
-    nonVoters = ((allMembers ?? []) as VotePlayer[]).filter(
-      (m) => !votedIds.has(m.id),
-    );
+    const rawNonVoters = ((allMembers ?? []) as VotePlayer[])
+      .filter((m) => !votedIds.has(m.id))
+      .map(withKings);
+    // 부상/장기불참 미투표자도 불참으로 이동
+    nonVoters = rawNonVoters.filter((m) => !m.is_injured && !m.on_leave);
+    for (const m of rawNonVoters) {
+      if (m.is_injured || m.on_leave) byStatus.absent.push(m);
+    }
     for (const key of ["attending", "absent", "undecided"] as const) {
       byStatus[key].sort((a, b) => a.name.localeCompare(b.name, "ko"));
     }
