@@ -744,9 +744,12 @@ function AttendingByQuarterSection({
                 {full.map((m) => (
                   <span
                     key={m.id}
-                    className="text-xs px-2 py-0.5 rounded-full border bg-white text-suaza-ink"
+                    className="inline-flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full border bg-white text-suaza-ink"
                     style={{ borderColor: "#22C55E" }}
                   >
+                    {m.is_injured && <InjuryBadge />}
+                    {m.on_leave && <OnLeaveBadge />}
+                    <KingBadges p={m} />
                     {m.name}
                   </span>
                 ))}
@@ -771,8 +774,11 @@ function AttendingByQuarterSection({
                     key={m.id}
                     className="flex items-center justify-between gap-3"
                   >
-                    <span className="text-xs font-medium text-suaza-ink truncate">
-                      {m.name}
+                    <span className="inline-flex items-center gap-0.5 text-xs font-medium text-suaza-ink min-w-0">
+                      {m.is_injured && <InjuryBadge />}
+                      {m.on_leave && <OnLeaveBadge />}
+                      <KingBadges p={m} />
+                      <span className="truncate">{m.name}</span>
                     </span>
                     <div className="shrink-0">
                       <QuarterDots
