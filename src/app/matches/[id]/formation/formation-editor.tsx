@@ -2781,7 +2781,9 @@ function PlayerRosterMobile({
       )}
       <div className="flex flex-col gap-3 rounded-2xl bg-white border border-suaza-border p-4">
         <div>
-        <h3 className="text-base font-bold text-suaza-ink">선수명단</h3>
+        <h3 className="text-base font-bold text-suaza-ink">
+          {matchLocked ? "출전선수" : "선수명단"}
+        </h3>
         {summaryStats && !matchLocked && (
           <p className="text-xs text-suaza-ink-muted mt-0.5">
             총 {summaryStats.total}명 · 출전 {summaryStats.played}명 · 평균{" "}
@@ -3062,11 +3064,17 @@ function PlayerRowMobile({
           {stat && (
             <span className="inline-flex items-center gap-1 ml-auto">
               <StatusPill label="출" tone="success" active />
-              <StatusPill
-                label="승"
-                tone="win"
-                active={!!team && winningTeam === team}
-              />
+              {!!team &&
+              winningTeam != null &&
+              winningTeam !== team ? (
+                <StatusPill label="패" tone="lose" active />
+              ) : (
+                <StatusPill
+                  label="승"
+                  tone="win"
+                  active={!!team && winningTeam === team}
+                />
+              )}
               <StatusPill
                 label="M"
                 tone="mom"
@@ -3140,17 +3148,20 @@ function StatusPill({
   onClick,
 }: {
   label: string;
-  tone: "success" | "win" | "mom";
+  tone: "success" | "win" | "lose" | "mom";
   active: boolean;
   disabled?: boolean;
   onClick?: () => void;
 }) {
-  const palette: Record<"success" | "win" | "mom", { bg: string; fg: string }> =
-    {
-      success: { bg: "#22C55E", fg: "#FFFFFF" },
-      win: { bg: "#F97316", fg: "#FFFFFF" },
-      mom: { bg: "#EAB308", fg: "#FFFFFF" },
-    };
+  const palette: Record<
+    "success" | "win" | "lose" | "mom",
+    { bg: string; fg: string }
+  > = {
+    success: { bg: "#22C55E", fg: "#FFFFFF" },
+    win: { bg: "#F97316", fg: "#FFFFFF" },
+    lose: { bg: "#3B82F6", fg: "#FFFFFF" },
+    mom: { bg: "#EAB308", fg: "#FFFFFF" },
+  };
   const p = palette[tone];
   const muted = !active || disabled;
   const cls = `inline-flex items-center justify-center w-4 h-4 rounded text-[9px] font-bold leading-none ${
@@ -3160,7 +3171,13 @@ function StatusPill({
     ? undefined
     : { backgroundColor: p.bg, color: p.fg };
   const titleText =
-    tone === "success" ? "출석" : tone === "win" ? "승리" : "MOM";
+    tone === "success"
+      ? "출석"
+      : tone === "win"
+        ? "승리"
+        : tone === "lose"
+          ? "패배"
+          : "MOM";
   if (onClick) {
     return (
       <button
@@ -3461,7 +3478,7 @@ function PlayerRosterDesktop({
           </h2>
         ) : (
           <h2 className="shrink-0 text-base font-bold text-suaza-ink">
-            선수 명단
+            {matchLocked ? "출전선수" : "선수 명단"}
           </h2>
         )}
         <FilterTabsWithCounts
@@ -3688,14 +3705,18 @@ function DesktopPlayerCard({
               </span>
             ))}
           </div>
-          {/* 2줄: 출 / 승 / M / 포인트 */}
+          {/* 2줄: 출 / 승|패 / M / 포인트 */}
           <div className="flex items-center gap-1.5">
             <StatusPill label="출" tone="success" active />
-            <StatusPill
-              label="승"
-              tone="win"
-              active={!!team && winningTeam === team}
-            />
+            {!!team && winningTeam != null && winningTeam !== team ? (
+              <StatusPill label="패" tone="lose" active />
+            ) : (
+              <StatusPill
+                label="승"
+                tone="win"
+                active={!!team && winningTeam === team}
+              />
+            )}
             <StatusPill
               label="M"
               tone="mom"
