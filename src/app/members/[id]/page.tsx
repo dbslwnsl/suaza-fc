@@ -156,7 +156,12 @@ export default async function MemberDetailPage({
       const admin = createAdminClient();
       const { data: target } = await admin.auth.admin.getUserById(profile.id);
       profileEmail = target?.user?.email ?? null;
-    } catch {
+    } catch (e) {
+      // 가장 흔한 원인: SUPABASE_SERVICE_ROLE_KEY 미설정. 서버 로그에 원인을 남긴다.
+      console.warn(
+        `[members/[id]] 다른 회원 이메일 조회 실패 (profile.id=${profile.id}). SUPABASE_SERVICE_ROLE_KEY 환경변수가 .env.local/배포환경에 있는지 확인하세요.`,
+        e instanceof Error ? e.message : e,
+      );
       profileEmail = null;
     }
   }

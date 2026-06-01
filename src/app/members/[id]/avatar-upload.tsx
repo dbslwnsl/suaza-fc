@@ -32,7 +32,9 @@ export default function AvatarUpload({
   if (!canEdit) {
     return (
       <div className="relative inline-block">
-        <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
+        {/* relative 필수 — next/image fill 의 컨테이너 요건.
+            (없으면 외곽 inline-block 기준으로 absolute 가 잡혀 원형 클립을 벗어나 Rectangle 로 보일 수 있음) */}
+        <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
           <AvatarContent src={src} name={name} />
         </div>
         <AvatarBadges titleBadges={titleBadges} awardBadges={awardBadges} />
