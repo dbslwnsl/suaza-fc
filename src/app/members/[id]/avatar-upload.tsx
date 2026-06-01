@@ -109,14 +109,14 @@ export default function AvatarUpload({
         </span>
       </button>
 
-      {/* 항상 보이는 카메라 어포던스 배지 (우상단) */}
+      {/* 카메라 어포던스 배지 — 우하단으로, 아바타와 최대한 안 겹치게 살짝 바깥쪽으로 배치 */}
       <span
         aria-hidden
-        className="absolute top-0 right-0 w-8 h-8 rounded-full bg-suaza-button text-white flex items-center justify-center shadow-md ring-2 ring-white pointer-events-none"
+        className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-suaza-button text-white flex items-center justify-center shadow-md ring-2 ring-white pointer-events-none"
       >
         <svg
-          width="16"
-          height="16"
+          width="12"
+          height="12"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"

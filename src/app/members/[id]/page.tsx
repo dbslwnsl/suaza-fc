@@ -271,9 +271,6 @@ export default async function MemberDetailPage({
   };
   const pointsRank = rankFromMap(seasonPointsByPlayer);
 
-  const top3 = (r: number | null): number | null =>
-    r != null && r <= 3 ? r : null;
-
   // 프로필 상단 통계 카드 6칸 순서 (요청):
   //   1줄: 출전 / 골 / 어시
   //   2줄: 클린시트 / 심판횟수 / 포인트   ← 포인트는 파란색 강조
@@ -286,25 +283,29 @@ export default async function MemberDetailPage({
     label: string;
     value: number;
     tone?: "primary";
-    /** 시즌 1~3위면 메달 표기 (1=🥇 / 2=🥈 / 3=🥉) */
+    /** 시즌 순위 (있으면 정수). 1~3위는 메달, 그 외는 표기 안 함. */
     rank?: number | null;
+    /** true 면 4위 이상도 "N위" 뱃지로 코너에 표기. 포인트 전용. */
+    alwaysShowRank?: boolean;
   }[] = [
-    { label: "출전", value: done.length, rank: top3(attendanceRank) },
-    { label: "골", value: totalGoals, rank: top3(goalRank) },
-    { label: "어시", value: totalAssists, rank: top3(assistRank) },
+    { label: "출전", value: done.length, rank: attendanceRank },
+    { label: "골", value: totalGoals, rank: goalRank },
+    { label: "어시", value: totalAssists, rank: assistRank },
     {
       ...(customByKey.clean_sheets ?? { label: "클린시트", value: 0 }),
-      rank: top3(cleanSheetRank),
+      rank: cleanSheetRank,
     },
     {
       ...(customByKey.referee_count ?? { label: "심판횟수", value: 0 }),
-      rank: top3(refereeRank),
+      rank: refereeRank,
     },
     {
       label: "포인트",
       value: totalPoints,
       tone: "primary",
-      rank: top3(pointsRank),
+      rank: pointsRank,
+      // 포인트는 중요한 지표라 4위 이상도 "N위" 뱃지로 항상 표기.
+      alwaysShowRank: true,
     },
   ];
 
@@ -313,39 +314,29 @@ export default async function MemberDetailPage({
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[600px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/members"
-            className="text-sm text-suaza-ink-muted hover:underline"
-          >
-            ← 회원 명단
-          </Link>
-          <Link
-            href="/"
-            aria-label="홈으로"
-            className="relative w-9 h-9 rounded-full overflow-hidden block hover:opacity-80 transition shrink-0 ml-auto"
-          >
-            <Image
-              src="/suaza-emblem.png"
-              alt="홈"
-              fill
-              sizes="36px"
-              className="object-cover"
-            />
-          </Link>
-        </div>
+        <Link
+          href="/members"
+          className="text-sm text-suaza-ink-muted hover:underline self-start"
+        >
+          ← 회원 명단
+        </Link>
 
         {/* 프로필 카드 — 아바타 + 이름/배지/이메일 + 통계 3×2 그리드 */}
         <section className="rounded-2xl border border-suaza-border p-4 sm:p-5 flex flex-col gap-4">
           <div className="flex items-center gap-4 min-w-0">
             {/* 아바타는 좌측 정렬 */}
             <div className="shrink-0">
+              {/* 프로필 페이지에서는 이미 이름 옆에 직책 배지(예: '회원')가 있으므로
+                  아바타에는 직책 뱃지를 표시하지 않는다. 수상 뱃지(득점왕 등)는 유지. */}
               <AvatarUpload
                 profileId={profile.id}
                 src={avatarSrc}
                 name={profile.name}
                 canEdit={canEdit}
-                {...getMemberBadges({ title, role: profile.role })}
+                titleBadges={[]}
+                awardBadges={
+                  getMemberBadges({ title, role: profile.role }).awardBadges
+                }
               />
             </div>
             {/* 이름·직책·이메일을 하나의 덩어리로 묶어 가운데 정렬 */}
@@ -378,6 +369,7 @@ export default async function MemberDetailPage({
                 value={t.value}
                 tone={t.tone}
                 rank={t.rank ?? null}
+                alwaysShowRank={t.alwaysShowRank}
               />
             ))}
           </div>
@@ -443,12 +435,15 @@ function Stat({
   value,
   tone,
   rank,
+  alwaysShowRank = false,
 }: {
   label: string;
   value: number;
   tone?: "primary";
-  /** 시즌 카테고리 순위 (있으면 1~3 정수). 그 외는 표기 없음. */
+  /** 시즌 카테고리 순위 (있으면 정수). 1~3위는 메달, 그 외는 alwaysShowRank 일 때만 표기. */
   rank?: number | null;
+  /** true 면 4위 이상도 "N위" 뱃지로 표기 (포인트용). */
+  alwaysShowRank?: boolean;
 }) {
   // tone="primary" 는 포인트 강조용 — 파란색 배경/텍스트
   const cls =
@@ -464,6 +459,8 @@ function Stat({
       ? "text-blue-600"
       : "text-suaza-ink-muted";
   const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
+  // 메달이 없는데 alwaysShowRank 이면 "N위" 텍스트 뱃지로 코너 표기 (포인트 박스 전용)
+  const showTextBadge = !medal && alwaysShowRank && rank != null;
   return (
     <div
       className={`relative flex flex-col items-center justify-center gap-1 py-3 sm:py-4 rounded-xl ${cls}`}
@@ -475,6 +472,17 @@ function Stat({
           title={`${label} 시즌 ${rank}위`}
         >
           {medal}
+        </span>
+      )}
+      {showTextBadge && (
+        <span
+          className={`absolute top-1 right-1 px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold leading-none text-suaza-ink ${
+            tone === "primary" ? "bg-blue-100" : "bg-gray-200"
+          }`}
+          aria-label={`${label} 시즌 ${rank}위`}
+          title={`${label} 시즌 ${rank}위`}
+        >
+          {rank}위
         </span>
       )}
       <span
