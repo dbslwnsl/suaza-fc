@@ -136,79 +136,51 @@ export default function ProfileEditForm({
       <input type="hidden" name="is_injured" value={injured ? "1" : "0"} />
       <input type="hidden" name="on_leave" value={onLeave ? "1" : "0"} />
 
-      {/* 이름 / 별명 */}
-      <div className="grid grid-cols-2 gap-3">
-        <Field
-          label="이름"
-          required
-          action={
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={injured}
-                onClick={() => setInjured((v) => !v)}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition ${
-                  injured
-                    ? "text-suaza-accent"
-                    : "text-suaza-ink-muted hover:text-suaza-ink"
-                }`}
-              >
-                부상
-                <span
-                  className={`inline-flex items-center justify-center w-3.5 h-3.5 rounded-[4px] border text-white text-[9px] leading-none ${
-                    injured
-                      ? "bg-suaza-accent border-suaza-accent"
-                      : "bg-white border-suaza-border"
-                  }`}
-                >
-                  {injured ? "✓" : ""}
-                </span>
-              </button>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={onLeave}
-                onClick={() => setOnLeave((v) => !v)}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition ${
-                  onLeave
-                    ? "text-suaza-ink"
-                    : "text-suaza-ink-muted hover:text-suaza-ink"
-                }`}
-              >
-                장기불참
-                <span
-                  className={`inline-flex items-center justify-center w-3.5 h-3.5 rounded-[4px] border text-white text-[9px] leading-none ${
-                    onLeave
-                      ? "bg-suaza-ink border-suaza-ink"
-                      : "bg-white border-suaza-border"
-                  }`}
-                >
-                  {onLeave ? "✓" : ""}
-                </span>
-              </button>
-            </div>
-          }
-        >
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="송영훈"
-            required
-            className={textInputCls}
-          />
-        </Field>
-        <Field label="별명">
-          <input
-            type="text"
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value.slice(0, 6))}
-            placeholder="해리"
-            maxLength={6}
-            className={textInputCls}
-          />
-        </Field>
+      {/* 이름 / 별명 + 상태 (선택사항) — 같은 카드로 묶고 디바이더로 구분 */}
+      <div className="flex flex-col gap-4 rounded-2xl border border-suaza-border p-4">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="이름" required>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="송영훈"
+              required
+              className={textInputCls}
+            />
+          </Field>
+          <Field label="별명">
+            <input
+              type="text"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value.slice(0, 6))}
+              placeholder="해리"
+              maxLength={6}
+              className={textInputCls}
+            />
+          </Field>
+        </div>
+        <div className="border-t border-suaza-border pt-4 flex flex-col gap-2">
+          <span className="text-suaza-ink-muted text-sm">
+            상태 (선택사항)
+          </span>
+          <div className="flex items-center gap-2">
+            <StatusPill
+              label="부상"
+              active={injured}
+              onColor="#EF3E3E"
+              onBg="rgba(239,62,62,0.10)"
+              onClick={() => setInjured((v) => !v)}
+            />
+            <StatusPill
+              label="장기불참"
+              active={onLeave}
+              onColor="#1F2937"
+              onBg="rgba(31,41,55,0.08)"
+              onClick={() => setOnLeave((v) => !v)}
+            />
+          </div>
+        </div>
       </div>
 
       {/* 등번호 / 생년월일 */}
@@ -467,6 +439,44 @@ function RoleChip({
     >
       {value}
     </span>
+  );
+}
+
+// 상태 선택 칩 (부상/장기불참) — 좌측 컬러 닷 + 라벨, 토글 형태.
+function StatusPill({
+  label,
+  active,
+  onColor,
+  onBg,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  /** 활성화 시 닷·텍스트 색 */
+  onColor: string;
+  /** 활성화 시 배경색 (반투명) */
+  onBg: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={active}
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition ${
+        active
+          ? ""
+          : "bg-gray-100 text-suaza-ink-muted hover:bg-gray-200"
+      }`}
+      style={active ? { backgroundColor: onBg, color: onColor } : undefined}
+    >
+      <span
+        className="inline-block w-2 h-2 rounded-full"
+        style={{ backgroundColor: active ? onColor : "#9CA3AF" }}
+      />
+      {label}
+    </button>
   );
 }
 
