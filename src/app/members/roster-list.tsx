@@ -43,7 +43,19 @@ export type RosterMember = {
 };
 
 type Filter = "ALL" | Position;
-type SortKey = "name" | "age";
+type SortKey = "priority" | "name" | "age";
+
+// 직책 기반 정렬 우선순위 (작을수록 먼저).
+// 본인 → 회장 → 부회장 → 총무 → 감사 → 감독 → 코치 → 그 외(가나다순)
+const TITLE_PRIORITY: Record<MemberTitle, number> = {
+  president: 1,
+  vice_president: 2,
+  treasurer: 3,
+  auditor: 4,
+  head_coach: 5,
+  coach: 6,
+  player: 99,
+};
 
 // 생년월일(YYYY-MM-DD)에서 만나이 계산. 타임존 영향 없도록 문자열로 파싱.
 function calcAge(birthDate: string | null): number | null {
@@ -59,13 +71,15 @@ function calcAge(birthDate: string | null): number | null {
   return age >= 0 ? age : null;
 }
 
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+// 칩은 가나다순/나이순만 노출. "priority" 는 칩 없이 페이지 첫 진입 시의 기본 정렬로만 사용.
+const SORT_OPTIONS: { key: Exclude<SortKey, "priority">; label: string }[] = [
   { key: "name", label: "가나다순" },
   { key: "age", label: "나이순" },
 ];
 
-// 처음 클릭 시 기본 방향: 이름은 가나다 정순(asc), 나이는 많은순(desc)
+// 처음 클릭 시 기본 방향: 직책(우선순)·이름은 정순(asc), 나이는 많은순(desc)
 const DEFAULT_DIR: Record<SortKey, "asc" | "desc"> = {
+  priority: "asc",
   name: "asc",
   age: "desc",
 };
@@ -78,7 +92,7 @@ export default function RosterList({
   myId: string | null;
 }) {
   const [filter, setFilter] = useState<Filter>("ALL");
-  const [sort, setSort] = useState<SortKey>("name");
+  const [sort, setSort] = useState<SortKey>("priority");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const onSelectSort = (key: SortKey) => {
@@ -113,7 +127,15 @@ export default function RosterList({
       if (!b.birthDate) return -1;
       return a.birthDate.localeCompare(b.birthDate) || byName(a, b);
     };
-    const baseComp = sort === "age" ? byAge : byName;
+    // 직책 우선순위 → 같은 직책 안에서는 가나다순. (본인은 아래쪽 self-pin 으로 맨 위 고정)
+    const byPriority = (a: RosterMember, b: RosterMember) => {
+      const ra = TITLE_PRIORITY[a.title] ?? 99;
+      const rb = TITLE_PRIORITY[b.title] ?? 99;
+      if (ra !== rb) return ra - rb;
+      return byName(a, b);
+    };
+    const baseComp =
+      sort === "age" ? byAge : sort === "priority" ? byPriority : byName;
     // sort 별 "기본 방향" 과 현재 방향이 같으면 그대로, 다르면 반전
     const baseIsAsc = DEFAULT_DIR[sort] === "asc";
     const reverse = sortDir === (baseIsAsc ? "desc" : "asc");

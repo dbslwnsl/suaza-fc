@@ -192,17 +192,17 @@ export default async function MemberDetailPage({
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[600px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
-        <Link
-          href="/members"
-          className="text-sm text-suaza-ink-muted hover:underline self-start"
-        >
-          ← 회원 명단
-        </Link>
-        <header className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/members"
+            className="text-sm text-suaza-ink-muted hover:underline"
+          >
+            ← 회원 명단
+          </Link>
           <Link
             href="/"
             aria-label="홈으로"
-            className="relative w-9 h-9 rounded-full overflow-hidden block hover:opacity-80 transition shrink-0"
+            className="relative w-9 h-9 rounded-full overflow-hidden block hover:opacity-80 transition shrink-0 ml-auto"
           >
             <Image
               src="/suaza-emblem.png"
@@ -212,20 +212,49 @@ export default async function MemberDetailPage({
               className="object-cover"
             />
           </Link>
-          <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
-            {profile.name}
-          </h1>
-          <span
-            className={`text-xs px-2 py-0.5 rounded ${TITLE_BADGE[title] ?? TITLE_BADGE.player}`}
-          >
-            {TITLE_LABEL[title] ?? title}
-          </span>
-          {profileEmail && (
-            <span className="ml-auto text-xs sm:text-sm text-suaza-ink-muted truncate max-w-[60%]">
-              {profileEmail}
-            </span>
-          )}
-        </header>
+        </div>
+
+        {/* 프로필 카드 — 아바타 + 이름/배지/이메일 + 통계 3×2 그리드 */}
+        <section className="rounded-2xl border border-suaza-border p-4 sm:p-5 flex flex-col gap-4">
+          <div className="flex items-center gap-4 min-w-0">
+            {/* 아바타는 좌측 정렬 */}
+            <div className="shrink-0">
+              <AvatarUpload
+                profileId={profile.id}
+                src={avatarSrc}
+                name={profile.name}
+                canEdit={canEdit}
+                {...getMemberBadges({ title, role: profile.role })}
+              />
+            </div>
+            {/* 이름·직책·이메일을 하나의 덩어리로 묶어 가운데 정렬 */}
+            <div className="flex-1 min-w-0 flex flex-col items-center text-center gap-1">
+              <div className="flex items-center justify-center gap-2 flex-wrap max-w-full">
+                <h1 className="text-xl sm:text-2xl font-bold text-suaza-ink truncate">
+                  {profile.name}
+                </h1>
+                <span
+                  className={`text-xs px-2 py-0.5 rounded ${TITLE_BADGE[title] ?? TITLE_BADGE.player}`}
+                >
+                  {TITLE_LABEL[title] ?? title}
+                </span>
+              </div>
+              {profileEmail && (
+                <p className="text-xs sm:text-sm text-suaza-ink-muted truncate max-w-full">
+                  {profileEmail}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="h-px bg-suaza-border" />
+
+          <div className="grid grid-cols-3 gap-2">
+            {totals.slice(0, 6).map((t) => (
+              <Stat key={t.label} label={t.label} value={t.value} />
+            ))}
+          </div>
+        </section>
 
         {message && (
           <p className="-mt-2 p-3 bg-green-50 text-green-700 rounded-lg text-sm">
@@ -237,23 +266,6 @@ export default async function MemberDetailPage({
             {error}
           </p>
         )}
-
-        <section className="flex items-center">
-          <div className="flex-1 flex justify-start pointer-fine:justify-center">
-            <AvatarUpload
-              profileId={profile.id}
-              src={avatarSrc}
-              name={profile.name}
-              canEdit={canEdit}
-              {...getMemberBadges({ title, role: profile.role })}
-            />
-          </div>
-          <div className="grid grid-cols-[repeat(3,auto)] gap-x-1 gap-y-2">
-            {totals.slice(0, 6).map((t) => (
-              <Stat key={t.label} label={t.label} value={t.value} />
-            ))}
-          </div>
-        </section>
 
         {!canEdit ? (
           <ReadOnlyView profile={profile} positions={positions} />
@@ -301,11 +313,13 @@ export default async function MemberDetailPage({
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="w-[66px] h-[66px] pointer-fine:w-20 pointer-fine:h-20 flex flex-col items-center justify-center gap-1 px-1 py-2 border border-suaza-border rounded-lg">
-      <span className="text-[11px] text-suaza-ink-muted whitespace-nowrap">
+    <div className="flex flex-col items-center justify-center gap-1 py-3 sm:py-4 rounded-xl bg-suaza-bg/60">
+      <span className="text-xl sm:text-2xl font-bold text-suaza-ink tabular-nums">
+        {value}
+      </span>
+      <span className="text-[11px] sm:text-xs text-suaza-ink-muted whitespace-nowrap">
         {label}
       </span>
-      <span className="text-lg font-bold text-suaza-ink">{value}</span>
     </div>
   );
 }
