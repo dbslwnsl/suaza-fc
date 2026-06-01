@@ -21,6 +21,7 @@ import TeamBuilder from "./team-builder";
 import FormationEmbed from "./formation/embed";
 import MatchInfoReadonly from "./match-info-readonly";
 import MatchCommentSection, { type MatchComment } from "./match-comments";
+import MatchShareButton from "./match-share-button";
 import {
   DEFAULT_TEAM_COLOR,
   DEFAULT_VS_COLOR,
@@ -602,6 +603,11 @@ function VSCard({
             {dDay}
           </span>
         )}
+        <MatchShareButton
+          matchId={m.id}
+          opponent={m.opponent}
+          matchDate={m.match_date}
+        />
       </div>
 
       <div className="grid grid-cols-3 items-center gap-3">
