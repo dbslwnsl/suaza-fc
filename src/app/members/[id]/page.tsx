@@ -16,7 +16,14 @@ import {
   type PreferredFoot,
 } from "@/lib/members/positions";
 import { getMemberBadges } from "@/lib/members/badges";
-import { pointsForParticipation, pointValueMap } from "@/lib/stats/helpers";
+import {
+  aggregateSeason,
+  pointsForParticipation,
+  pointValueMap,
+  yearRange,
+  type ParticipationRow as SeasonPartRow,
+  type PlayerSeasonStat,
+} from "@/lib/stats/helpers";
 import ProfileEditForm from "./profile-edit-form";
 import AvatarUpload from "./avatar-upload";
 import DeleteMemberButton from "./delete-member-button";
@@ -65,12 +72,17 @@ export default async function MemberDetailPage({
   } = await supabase.auth.getUser();
   if (!user) return null;
 
+  // 현재 시즌(달력 연도) — "득점왕/어시왕/CS왕/심판왕" 순위 산정용
+  const seasonYear = new Date().getFullYear();
+  const { from: seasonFrom, to: seasonTo } = yearRange(seasonYear);
+
   const [
     { data: profile },
     { data: me },
     { data: statsRaw },
     { data: defs },
     { data: coachCommentsRaw },
+    { data: seasonMatchesRaw },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -104,7 +116,32 @@ export default async function MemberDetailPage({
       )
       .eq("member_id", id)
       .order("created_at", { ascending: true }),
+    supabase
+      .from("matches")
+      .select("id, match_date")
+      .eq("status", "done")
+      .gte("match_date", seasonFrom)
+      .lt("match_date", seasonTo),
   ]);
+
+  // 시즌 종료 경기들에 대한 전체 회원 참여 데이터 — 순위 산정용
+  const seasonMatchRows = (seasonMatchesRaw ?? []) as {
+    id: string;
+    match_date: string;
+  }[];
+  const seasonMatchIds = seasonMatchRows.map((m) => m.id);
+  const seasonMatchDateById = new Map(
+    seasonMatchRows.map((m) => [m.id, m.match_date]),
+  );
+  const { data: seasonPartsRaw } = seasonMatchIds.length
+    ? await supabase
+        .from("match_participations")
+        .select(
+          "match_id, player_id, goals, assists, custom_stats, player:profiles(id, name, jersey_number)",
+        )
+        .in("match_id", seasonMatchIds)
+        .is("archived_at", null)
+    : { data: [] as SeasonPartRow[] };
 
   if (!profile) notFound();
 
@@ -176,16 +213,100 @@ export default async function MemberDetailPage({
     0,
   );
 
-  const totals: { label: string; value: number }[] = [
-    { label: "출전", value: done.length },
-    { label: "골", value: totalGoals },
-    { label: "어시", value: totalAssists },
-    { label: "포인트", value: totalPoints },
-  ];
+  // 시즌 순위 — 본인이 카테고리별 top 3 에 들면 통계 박스에 메달 표기.
+  // "Dense ranking": 동률은 같은 순위, 다음 distinct 값이 그 다음 순위. (예: 5,5,4 → 5=1위, 4=2위)
+  const seasonParts = (seasonPartsRaw ?? []) as unknown as SeasonPartRow[];
+  const seasonAggregated = aggregateSeason(seasonParts, statDefs);
+  const seasonStatsMap = new Map<string, PlayerSeasonStat>(
+    seasonAggregated.map((s) => [s.player_id, s]),
+  );
+  const rankInCategory = (
+    getter: (s: PlayerSeasonStat) => number,
+  ): number | null => {
+    const myStat = seasonStatsMap.get(profile.id);
+    if (!myStat) return null;
+    const my = getter(myStat);
+    if (my <= 0) return null;
+    const distinct = Array.from(
+      new Set(
+        Array.from(seasonStatsMap.values())
+          .map(getter)
+          .filter((v) => v > 0),
+      ),
+    ).sort((a, b) => b - a);
+    const idx = distinct.indexOf(my);
+    return idx >= 0 ? idx + 1 : null;
+  };
+  const goalRank = rankInCategory((s) => s.goals ?? 0);
+  const assistRank = rankInCategory((s) => s.assists ?? 0);
+  const cleanSheetRank = rankInCategory(
+    (s) => s.custom?.clean_sheets ?? 0,
+  );
+  const refereeRank = rankInCategory(
+    (s) => s.custom?.referee_count ?? 0,
+  );
+  const attendanceRank = rankInCategory((s) => s.appearances ?? 0);
+
+  // 포인트는 경기별 가중치 계산이라 별도 맵으로 집계 후 순위 산정
+  const seasonPointsByPlayer = new Map<string, number>();
+  for (const p of seasonParts) {
+    const pts = pointsForParticipation(
+      p,
+      seasonMatchDateById.get(p.match_id),
+      pvMap,
+    );
+    seasonPointsByPlayer.set(
+      p.player_id,
+      (seasonPointsByPlayer.get(p.player_id) ?? 0) + pts,
+    );
+  }
+  const rankFromMap = (map: Map<string, number>): number | null => {
+    const my = map.get(profile.id) ?? 0;
+    if (my <= 0) return null;
+    const distinct = Array.from(
+      new Set(Array.from(map.values()).filter((v) => v > 0)),
+    ).sort((a, b) => b - a);
+    const idx = distinct.indexOf(my);
+    return idx >= 0 ? idx + 1 : null;
+  };
+  const pointsRank = rankFromMap(seasonPointsByPlayer);
+
+  const top3 = (r: number | null): number | null =>
+    r != null && r <= 3 ? r : null;
+
+  // 프로필 상단 통계 카드 6칸 순서 (요청):
+  //   1줄: 출전 / 골 / 어시
+  //   2줄: 클린시트 / 심판횟수 / 포인트   ← 포인트는 파란색 강조
+  const customByKey: Record<string, { label: string; value: number }> = {};
   for (const d of statDefs) {
     if (BUILTIN_TOTAL_KEYS.has(d.key)) continue;
-    totals.push({ label: d.label, value: customAgg[d.key] ?? 0 });
+    customByKey[d.key] = { label: d.label, value: customAgg[d.key] ?? 0 };
   }
+  const totals: {
+    label: string;
+    value: number;
+    tone?: "primary";
+    /** 시즌 1~3위면 메달 표기 (1=🥇 / 2=🥈 / 3=🥉) */
+    rank?: number | null;
+  }[] = [
+    { label: "출전", value: done.length, rank: top3(attendanceRank) },
+    { label: "골", value: totalGoals, rank: top3(goalRank) },
+    { label: "어시", value: totalAssists, rank: top3(assistRank) },
+    {
+      ...(customByKey.clean_sheets ?? { label: "클린시트", value: 0 }),
+      rank: top3(cleanSheetRank),
+    },
+    {
+      ...(customByKey.referee_count ?? { label: "심판횟수", value: 0 }),
+      rank: top3(refereeRank),
+    },
+    {
+      label: "포인트",
+      value: totalPoints,
+      tone: "primary",
+      rank: top3(pointsRank),
+    },
+  ];
 
   const avatarSrc = profile.avatar_url ?? null;
 
@@ -251,7 +372,13 @@ export default async function MemberDetailPage({
 
           <div className="grid grid-cols-3 gap-2">
             {totals.slice(0, 6).map((t) => (
-              <Stat key={t.label} label={t.label} value={t.value} />
+              <Stat
+                key={t.label}
+                label={t.label}
+                value={t.value}
+                tone={t.tone}
+                rank={t.rank ?? null}
+              />
             ))}
           </div>
         </section>
@@ -311,13 +438,53 @@ export default async function MemberDetailPage({
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({
+  label,
+  value,
+  tone,
+  rank,
+}: {
+  label: string;
+  value: number;
+  tone?: "primary";
+  /** 시즌 카테고리 순위 (있으면 1~3 정수). 그 외는 표기 없음. */
+  rank?: number | null;
+}) {
+  // tone="primary" 는 포인트 강조용 — 파란색 배경/텍스트
+  const cls =
+    tone === "primary"
+      ? "bg-blue-50"
+      : "bg-suaza-bg/60";
+  const valueCls =
+    tone === "primary"
+      ? "text-blue-700"
+      : "text-suaza-ink";
+  const labelCls =
+    tone === "primary"
+      ? "text-blue-600"
+      : "text-suaza-ink-muted";
+  const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
   return (
-    <div className="flex flex-col items-center justify-center gap-1 py-3 sm:py-4 rounded-xl bg-suaza-bg/60">
-      <span className="text-xl sm:text-2xl font-bold text-suaza-ink tabular-nums">
+    <div
+      className={`relative flex flex-col items-center justify-center gap-1 py-3 sm:py-4 rounded-xl ${cls}`}
+    >
+      {medal && (
+        <span
+          className="absolute top-1 right-1 text-base leading-none"
+          aria-label={`${label} 시즌 ${rank}위`}
+          title={`${label} 시즌 ${rank}위`}
+        >
+          {medal}
+        </span>
+      )}
+      <span
+        className={`text-xl sm:text-2xl font-bold tabular-nums ${valueCls}`}
+      >
         {value}
       </span>
-      <span className="text-[11px] sm:text-xs text-suaza-ink-muted whitespace-nowrap">
+      <span
+        className={`text-[11px] sm:text-xs whitespace-nowrap ${labelCls}`}
+      >
         {label}
       </span>
     </div>
