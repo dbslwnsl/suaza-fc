@@ -75,7 +75,8 @@ export default async function RosterView({ year }: { year: number }) {
       : Promise.resolve({ data: [] as ParticipationRow[] }),
     supabase
       .from("stat_definitions")
-      .select("key, label, sort_order, point_value"),
+      .select("key, label, sort_order, point_value")
+      .is("hidden_at", null),
   ]);
 
   const defs = (defsRaw ?? []) as StatDef[];

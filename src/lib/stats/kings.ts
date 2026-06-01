@@ -48,7 +48,8 @@ export async function computeSeasonKings(
       .is("archived_at", null),
     supabase
       .from("stat_definitions")
-      .select("key, label, sort_order, point_value"),
+      .select("key, label, sort_order, point_value")
+      .is("hidden_at", null),
   ]);
 
   const defs = (defsRaw ?? []) as StatDef[];

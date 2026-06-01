@@ -40,11 +40,12 @@ export async function addStatDefinition(formData: FormData) {
     );
   }
 
-  // 항목 수 제한 — 총 8개(기본 4개 + 추가 4개)까지만 허용.
+  // 항목 수 제한 — 총 8개(기본 4개 + 추가 4개)까지만 허용. 숨김(소프트 삭제) 제외.
   const MAX_TOTAL = 8;
   const { count } = await supabase
     .from("stat_definitions")
-    .select("key", { head: true, count: "exact" });
+    .select("key", { head: true, count: "exact" })
+    .is("hidden_at", null);
   if ((count ?? 0) >= MAX_TOTAL) {
     redirect(
       `/settings/stats?error=${encodeURIComponent(
@@ -130,9 +131,11 @@ export async function removeStatDefinition(key: string) {
     );
   }
 
+  // 소프트 삭제 — row 와 누적된 custom_stats 값은 보존, 화면에서만 숨김.
+  // 향후 복구가 필요하면 hidden_at = NULL 로 되돌리면 됨.
   const { error } = await supabase
     .from("stat_definitions")
-    .delete()
+    .update({ hidden_at: new Date().toISOString() })
     .eq("key", key);
   if (error) {
     redirect(`/settings/stats?error=${encodeURIComponent(error.message)}`);

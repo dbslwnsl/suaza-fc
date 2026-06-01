@@ -159,7 +159,8 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
       .is("archived_at", null),
     supabase
       .from("stat_definitions")
-      .select("key, label, sort_order, point_value"),
+      .select("key, label, sort_order, point_value")
+      .is("hidden_at", null),
     // 코멘트 존재 여부 표시용 — RLS 가 본인(member_id=me) 또는 코칭스태프에게만 row 노출.
     // 일반 회원은 자기 자신에 대한 코멘트 카운트만 보임 → 아이콘 표시 분기에도 그대로 활용.
     supabase

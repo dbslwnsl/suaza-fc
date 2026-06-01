@@ -107,6 +107,7 @@ export default async function MemberDetailPage({
     supabase
       .from("stat_definitions")
       .select("key, label, sort_order, point_value")
+      .is("hidden_at", null)
       .order("sort_order", { ascending: true })
       .order("key", { ascending: true }),
     supabase

@@ -36,6 +36,7 @@ export default async function StatSettingsPage({
   const { data: defs, error: defsError } = await supabase
     .from("stat_definitions")
     .select("key, label, sort_order, point_value")
+    .is("hidden_at", null)
     .order("sort_order", { ascending: true })
     .order("key", { ascending: true });
 
