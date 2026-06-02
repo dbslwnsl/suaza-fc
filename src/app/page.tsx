@@ -16,13 +16,11 @@ import {
 import {
   MATCH_STATUS_BADGE,
   MATCH_STATUS_LABEL,
-  RESULT_BADGE,
-  RESULT_LABEL,
   formatMatchDate,
-  getResult,
   isMatchStarted,
   type Match,
 } from "@/lib/matches/helpers";
+import PastMatchCard from "./matches/past-match-card";
 import {
   CATEGORY_LABEL,
   formatPostDate,
@@ -206,13 +204,13 @@ export default async function Home() {
       .order("match_date", { ascending: true })
       .limit(1)
       .maybeSingle(),
+    // 일정&결과 페이지의 "지난 경기" 카드와 동일하게 종료/취소 경기 최근 2건
     supabase
       .from("matches")
       .select("*")
-      .eq("status", "done")
+      .in("status", ["done", "canceled"])
       .order("match_date", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .limit(2),
     supabase
       .from("match_participations")
       .select("goals, assists, custom_stats, match:matches(match_date, status)")
@@ -225,7 +223,7 @@ export default async function Home() {
   ]);
 
   const upcoming = upcomingMatch as Match | null;
-  const last = lastMatch as Match | null;
+  const recentMatches = (lastMatch ?? []) as Match[];
   const notice = latestNotice as unknown as NoticeRow | null;
 
   // 다가오는 경기 출석 데이터
@@ -324,10 +322,6 @@ export default async function Home() {
     myStatus = m?.status ?? null;
     myAttendingQuarters = m?.attending_quarters ?? null;
   }
-
-  const lastResult = last
-    ? getResult(last.our_score, last.opponent_score)
-    : null;
 
   // 누적 통계 (종료 경기만)
   type Part = {
@@ -614,29 +608,16 @@ export default async function Home() {
           </section>
         )}
 
-        {/* Last Match */}
-        {last && (
-          <Link
-            href={`/matches/${last.id}`}
-            className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border hover:bg-gray-50 transition flex flex-col gap-1.5"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-xs text-suaza-ink-muted font-medium">
-                최근 경기
-              </h2>
-              {lastResult && (
-                <span
-                  className={`text-xs px-2 py-0.5 rounded ${RESULT_BADGE[lastResult]}`}
-                >
-                  {RESULT_LABEL[lastResult]} {last.our_score}-{last.opponent_score}
-                </span>
-              )}
+        {/* 지난 경기 — 일정&결과 페이지와 동일한 카드 디자인. 최근 2건. */}
+        {recentMatches.length > 0 && (
+          <section className="flex flex-col gap-3">
+            <h2 className="text-lg font-bold text-suaza-ink">지난 경기</h2>
+            <div className="flex flex-col gap-3">
+              {recentMatches.map((m) => (
+                <PastMatchCard key={m.id} match={m} />
+              ))}
             </div>
-            <span className="font-bold text-suaza-ink">vs {last.opponent}</span>
-            <span className="text-sm text-suaza-ink-muted">
-              {formatMatchDate(last.match_date)}
-            </span>
-          </Link>
+          </section>
         )}
       </div>
     </main>
