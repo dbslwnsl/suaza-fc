@@ -24,9 +24,30 @@ function ConditionChip({
   level,
   onCycle,
 }: {
-  level: number;
+  /** 1~5 단계, 또는 null = 미설정 ("?" 표시) */
+  level: number | null;
   onCycle: () => void;
 }) {
+  // 미설정 상태 — 회색 톤 "?" 아이콘
+  if (level == null) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onCycle();
+        }}
+        title="컨디션 미설정 (눌러서 설정)"
+        aria-label="컨디션 미설정 (눌러서 설정)"
+        className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-white border-gray-300 text-gray-500 hover:scale-[1.02] active:scale-95 transition"
+      >
+        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-[10px] font-bold leading-none text-gray-600">
+          ?
+        </span>
+        <span>컨디션</span>
+      </button>
+    );
+  }
   const idx = Math.min(5, Math.max(1, level)) - 1;
   const color = CONDITION_COLOR[idx];
   const deg = CONDITION_DEG[idx];
@@ -446,7 +467,8 @@ export function AttendanceCardVote({
   myName: string | null;
   myStatus: string | null;
   myAttendingQuarters: number[] | null;
-  myCondition?: number;
+  /** 1~5 단계 또는 null = 미설정("?"). null 일 때 첫 클릭이 3 으로 초기화. */
+  myCondition?: number | null;
   byStatus: Groups;
   nonVoters: VotePlayer[];
   isManager: boolean;
@@ -472,11 +494,14 @@ export function AttendanceCardVote({
     nonVoters,
   );
 
-  // 본인 컨디션 — 클릭으로 1→2→…→5→1 순환 (낙관적 반영 + 서버 저장)
-  const [condition, setCondition] = useState<number>(myCondition ?? 3);
+  // 본인 컨디션 — null(미설정/"?") 상태에서 첫 클릭 시 3(보통)으로 초기화,
+  // 이후 1→2→…→5→1 순환. 낙관적 반영 + 서버 저장.
+  const [condition, setCondition] = useState<number | null>(
+    myCondition ?? null,
+  );
   const [, startConditionTransition] = useTransition();
   const cycleCondition = () => {
-    const next = condition >= 5 ? 1 : condition + 1;
+    const next: number = condition == null ? 3 : condition >= 5 ? 1 : condition + 1;
     setCondition(next);
     startConditionTransition(() => {
       setMyCondition(matchId, next);

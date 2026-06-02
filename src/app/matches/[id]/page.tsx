@@ -384,7 +384,8 @@ export default async function MatchDetailPage({
                     myInjured={injuredLock}
                     myOnLeave={onLeaveLock}
                     myCondition={
-                      (me as { condition?: number | null } | null)?.condition ?? 3
+                      (me as { condition?: number | null } | null)?.condition ??
+                      null
                     }
                     byStatus={byStatus}
                     nonVoters={nonVoters}
@@ -888,7 +889,8 @@ function AttendanceCard({
   myAttendingQuarters: number[] | null;
   myInjured?: boolean;
   myOnLeave?: boolean;
-  myCondition?: number;
+  /** null = 미설정 ("?") */
+  myCondition?: number | null;
   byStatus: {
     attending: AttendancePlayer[];
     absent: AttendancePlayer[];

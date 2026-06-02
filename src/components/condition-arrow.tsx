@@ -17,12 +17,27 @@ export default function ConditionArrow({
   onCycle,
   size = 18,
 }: {
-  level: number;
+  /** 1~5 단계, 또는 null = 미설정("?" 회색 원). */
+  level: number | null;
   interactive?: boolean;
   onCycle?: () => void;
   /** 원형 칩의 한 변 길이(px). 기본 18. */
   size?: number;
 }) {
+  // 미설정 — 회색 원 안에 "?" (다른 단계와 명확히 구분)
+  if (level == null) {
+    const fontPx = Math.max(9, Math.round(size * 0.6));
+    return (
+      <span
+        className="shrink-0 inline-flex items-center justify-center rounded-full bg-gray-200 text-gray-600 font-bold leading-none"
+        style={{ width: size, height: size, fontSize: fontPx }}
+        aria-label="컨디션 미설정"
+        title="컨디션 미설정"
+      >
+        ?
+      </span>
+    );
+  }
   const idx = Math.min(5, Math.max(1, level)) - 1;
   const color = CONDITION_COLOR[idx];
   const deg = CONDITION_DEG[idx];

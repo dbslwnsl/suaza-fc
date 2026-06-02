@@ -373,7 +373,7 @@ function PlayerChip({
           : ""
       }`}
     >
-      <ConditionArrow level={member.condition ?? 3} size={14} />
+      <ConditionArrow level={member.condition ?? null} size={14} />
       {displayMemberName(member.name)}
     </span>
   );

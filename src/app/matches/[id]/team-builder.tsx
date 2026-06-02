@@ -468,7 +468,7 @@ function TapChip({
           : "cursor-pointer hover:opacity-80 desktop:cursor-grab desktop:active:cursor-grabbing"
       }`}
     >
-      <ConditionArrow level={member.condition ?? 3} size={14} />
+      <ConditionArrow level={member.condition ?? null} size={14} />
       {displayMemberName(member.name)}
     </span>
   );
@@ -626,7 +626,7 @@ function TeamGroup({
                   : "cursor-pointer hover:opacity-80 desktop:cursor-grab desktop:active:cursor-grabbing"
               }`}
             >
-              <ConditionArrow level={m.condition ?? 3} size={14} />
+              <ConditionArrow level={m.condition ?? null} size={14} />
               {displayMemberName(m.name)}
             </span>
           )}
