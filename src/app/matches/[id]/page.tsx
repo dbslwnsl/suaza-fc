@@ -76,7 +76,7 @@ export default async function MatchDetailPage({
     supabase
       .from("match_attendances")
       .select(
-        "status, team, attending_quarters, updated_at, player:profiles(id, name, jersey_number, positions, title, deleted_at, is_injured, on_leave)",
+        "status, team, attending_quarters, updated_at, player:profiles(id, name, jersey_number, positions, title, deleted_at, is_injured, on_leave, condition)",
       )
       .eq("match_id", id),
     supabase
@@ -106,6 +106,8 @@ export default async function MatchDetailPage({
     voted_at?: string | null;
     is_injured?: boolean | null;
     on_leave?: boolean | null;
+    /** 컨디션 1~5 단계 (기본 3) */
+    condition?: number | null;
     isGoalKing?: boolean;
     isAssistKing?: boolean;
     isCleanSheetKing?: boolean;
@@ -123,6 +125,7 @@ export default async function MatchDetailPage({
     name: string;
     team: "A" | "B" | null;
     positions: string[] | null;
+    condition: number | null;
   }[] = [];
   // 종료/취소된 경기는 지난 기록이므로 삭제 회원도 그대로 보존,
   // 예정·진행 중 경기에서는 삭제 회원을 명단에서 제외.
@@ -167,6 +170,7 @@ export default async function MatchDetailPage({
           name: row.player.name,
           team: row.team ?? null,
           positions: row.player.positions ?? null,
+          condition: row.player.condition ?? null,
         });
       }
     }

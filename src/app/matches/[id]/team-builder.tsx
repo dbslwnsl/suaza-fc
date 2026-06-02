@@ -18,12 +18,15 @@ import { displayMemberName } from "@/lib/members/name";
 import { POSITION_COLOR, type Position } from "@/lib/members/positions";
 import { useIntraTeamColors } from "@/components/intra-team-colors";
 import CaptainPicker, { CAPTAIN_CHIP_CLASS } from "./captain-picker";
+import ConditionArrow from "@/components/condition-arrow";
 
 export type TeamMember = {
   id: string;
   name: string;
   team: "A" | "B" | null;
   positions?: string[] | null;
+  /** 컨디션 1~5 단계 (기본 3) */
+  condition?: number | null;
 };
 
 // 주 포지션(positions[0]) 기준 표기 순서. 미지정 회원은 맨 뒤 "기타" 그룹.
@@ -459,12 +462,13 @@ function TapChip({
         setTimeout(() => onDragStateChange?.(true), 0);
       }}
       onDragEnd={() => onDragStateChange?.(false)}
-      className={`px-2.5 py-0.5 rounded-full text-xs font-medium border border-dashed border-gray-300 bg-gray-100 text-suaza-ink-muted transition select-none ${
+      className={`inline-flex items-center gap-1 pl-1 pr-2.5 py-0.5 rounded-full text-xs font-medium border border-dashed border-gray-300 bg-gray-100 text-suaza-ink-muted transition select-none ${
         readonly
           ? "cursor-default"
           : "cursor-pointer hover:opacity-80 desktop:cursor-grab desktop:active:cursor-grabbing"
       }`}
     >
+      <ConditionArrow level={member.condition ?? 3} size={14} />
       {displayMemberName(member.name)}
     </span>
   );
@@ -614,7 +618,7 @@ function TeamGroup({
                 setTimeout(() => onDragStateChange(true), 0);
               }}
               onDragEnd={() => onDragStateChange(false)}
-              className={`inline-flex items-center text-xs px-2.5 py-0.5 rounded-full border select-none ${
+              className={`inline-flex items-center gap-1 text-xs pl-1 pr-2.5 py-0.5 rounded-full border select-none ${
                 m.id === captainId ? CAPTAIN_CHIP_CLASS : chipClass
               } ${
                 readonly
@@ -622,6 +626,7 @@ function TeamGroup({
                   : "cursor-pointer hover:opacity-80 desktop:cursor-grab desktop:active:cursor-grabbing"
               }`}
             >
+              <ConditionArrow level={m.condition ?? 3} size={14} />
               {displayMemberName(m.name)}
             </span>
           )}

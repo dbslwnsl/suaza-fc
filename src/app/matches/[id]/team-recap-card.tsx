@@ -10,12 +10,15 @@ import {
 } from "@/lib/members/positions";
 import { DEFAULT_TEAM_COLOR } from "@/lib/matches/helpers";
 import CaptainPicker, { CAPTAIN_CHIP_CLASS } from "./captain-picker";
+import ConditionArrow from "@/components/condition-arrow";
 
 type RecapMember = {
   id: string;
   name: string;
   team: "A" | "B" | null;
   positions?: string[] | null;
+  /** 컨디션 1~5 단계 (기본 3) */
+  condition?: number | null;
 };
 
 // 주포지션(positions[0]) 기준으로 FW → MF → DF → GK 순으로 묶음
@@ -362,7 +365,7 @@ function PlayerChip({
         setTimeout(() => onDragStateChange(true), 0);
       }}
       onDragEnd={() => onDragStateChange(false)}
-      className={`inline-flex items-center text-xs px-2.5 py-0.5 rounded-full border select-none ${
+      className={`inline-flex items-center gap-1 text-xs pl-1 pr-2.5 py-0.5 rounded-full border select-none ${
         isCaptain ? CAPTAIN_CHIP_CLASS : chipClass
       } ${
         editable
@@ -370,6 +373,7 @@ function PlayerChip({
           : ""
       }`}
     >
+      <ConditionArrow level={member.condition ?? 3} size={14} />
       {displayMemberName(member.name)}
     </span>
   );
