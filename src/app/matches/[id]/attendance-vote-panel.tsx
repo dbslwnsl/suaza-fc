@@ -735,6 +735,10 @@ function AttendingByQuarterSection({
           {full.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5">
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: "#22C55E" }}
+                />
                 <span className="text-xs font-bold text-suaza-ink">
                   전체 참여
                 </span>
@@ -763,6 +767,10 @@ function AttendingByQuarterSection({
           {partial.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5">
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: "#22C55E" }}
+                />
                 <span className="text-xs font-bold text-suaza-ink">
                   일부 참여
                 </span>

@@ -116,6 +116,7 @@ export default function AttendanceManagerBoard({
         label="전체 참여"
         count={full.length}
         status="attending"
+        dotColor="#22C55E"
         dragging={dragging}
         hoverClass="ring-2 ring-green-400"
         onDrop={handleDrop}
@@ -138,7 +139,11 @@ export default function AttendanceManagerBoard({
           DropSection 과 동일한 패딩/테두리로 좌측 정렬을 맞춤. */}
       {partial.length > 0 && (
         <div className="flex flex-col gap-1.5 p-1.5 border border-transparent">
-          <span className="self-start text-xs font-bold text-suaza-ink">
+          <span className="self-start inline-flex items-center gap-1.5 text-xs font-bold text-suaza-ink">
+            <span
+              className="w-1.5 h-1.5 rounded-full"
+              style={{ backgroundColor: "#22C55E" }}
+            />
             일부 참여 {partial.length}
           </span>
           <ul className="flex flex-col gap-1">
@@ -167,6 +172,7 @@ export default function AttendanceManagerBoard({
         label="불참"
         count={optimistic.byStatus.absent.length}
         status="absent"
+        dotColor="#EF3E3E"
         dragging={dragging}
         hoverClass="ring-2 ring-red-400"
         onDrop={handleDrop}
@@ -184,6 +190,7 @@ export default function AttendanceManagerBoard({
         label="미정"
         count={optimistic.byStatus.undecided.length}
         status="undecided"
+        dotColor="#9CA3AF"
         dragging={dragging}
         hoverClass="ring-2 ring-gray-400"
         onDrop={handleDrop}
@@ -203,6 +210,7 @@ export default function AttendanceManagerBoard({
         label="미투표"
         count={optimistic.nonVoters.length}
         status={null}
+        dotColor="#D1D5DB"
         dragging={dragging}
         hoverClass="ring-2 ring-gray-400"
         onDrop={handleDrop}
@@ -223,6 +231,7 @@ function DropSection({
   label,
   count,
   status,
+  dotColor,
   dragging,
   hoverClass,
   onDrop,
@@ -231,6 +240,8 @@ function DropSection({
   label: string;
   count: number;
   status: Status;
+  /** 헤더 라벨 앞 컬러 점 (일반 회원 화면과 동일한 시각 표시). 미지정 시 점 없음. */
+  dotColor?: string;
   dragging: boolean;
   hoverClass: string;
   onDrop: (playerId: string, status: Status) => void;
@@ -255,7 +266,13 @@ function DropSection({
         dragging ? "border-suaza-border" : "border-transparent"
       } ${over ? hoverClass + " bg-blue-50" : ""}`}
     >
-      <span className="self-start text-xs font-bold text-suaza-ink">
+      <span className="self-start inline-flex items-center gap-1.5 text-xs font-bold text-suaza-ink">
+        {dotColor && (
+          <span
+            className="w-1.5 h-1.5 rounded-full"
+            style={{ backgroundColor: dotColor }}
+          />
+        )}
         {label} {count}
       </span>
       <div className="flex flex-wrap gap-1 min-h-[20px]">{children}</div>
