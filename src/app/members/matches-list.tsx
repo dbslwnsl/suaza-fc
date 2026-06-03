@@ -63,8 +63,8 @@ const STAT_META: {
   {
     key: "absent",
     label: "미출전",
-    color: "#9CA3AF",
-    bg: "rgba(156,163,175,0.10)",
+    color: "#F59E0B",
+    bg: "rgba(245,158,11,0.10)",
   },
 ];
 
@@ -280,17 +280,39 @@ function MatrixTable({
   shown: Set<StatKey>;
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-suaza-border">
+    <div className="overflow-auto max-h-[75vh] rounded-xl border border-suaza-border">
       <table className="text-sm border-separate border-spacing-0 min-w-full">
         <thead className="bg-gray-50">
           <tr>
-            <th className="sticky left-0 z-10 bg-gray-50 py-3 px-3 text-left text-xs text-suaza-ink-muted font-medium border-b border-r border-suaza-border min-w-[110px]">
-              선수
+            <th className="sticky left-0 top-0 z-30 bg-gray-50 p-0 text-xs text-suaza-ink-muted font-medium border-b border-r border-suaza-border min-w-[110px] align-middle">
+              <div className="relative h-12 w-full overflow-hidden">
+                {/* 대각선 구분선 — 좌하단 모서리에서 우상단 모서리로 정확히 연결 */}
+                <svg
+                  aria-hidden
+                  className="absolute inset-0 h-full w-full"
+                  preserveAspectRatio="none"
+                  viewBox="0 0 100 100"
+                >
+                  <line
+                    x1="0"
+                    y1="0"
+                    x2="100"
+                    y2="100"
+                    stroke="#d9d9d9"
+                    strokeWidth="1"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </svg>
+                {/* 오른쪽 위: 가로축 = 경기 */}
+                <span className="absolute top-1 right-2 leading-none">경기</span>
+                {/* 왼쪽 아래: 세로축 = 선수 */}
+                <span className="absolute bottom-1 left-3 leading-none">선수</span>
+              </div>
             </th>
             {matches.map((m) => (
               <th
                 key={m.id}
-                className="py-3 px-2 font-normal border-b border-suaza-border min-w-[100px] align-middle"
+                className="sticky top-0 z-20 bg-gray-50 py-3 px-2 font-normal border-b border-suaza-border min-w-[100px] align-middle"
               >
                 <Link
                   href={`/matches/${m.id}`}
@@ -366,7 +388,7 @@ function MatrixCell({
   if (!attended) {
     // 미출전
     return shown.has("absent") ? (
-      <span className="text-suaza-ink-faint">—</span>
+      <span style={{ color: "#F59E0B" }}>—</span>
     ) : (
       <span className="text-transparent">—</span>
     );
