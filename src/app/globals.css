@@ -63,3 +63,15 @@ body {
   height: 0;
   display: none;
 }
+
+/* 자동완성(autofill) 시 브라우저가 입력창 배경/글자색을 바꾸는 것을 막음 */
+.login-input:-webkit-autofill,
+.login-input:-webkit-autofill:hover,
+.login-input:-webkit-autofill:focus,
+.login-input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  box-shadow: 0 0 0 1000px #ffffff inset;
+  -webkit-text-fill-color: var(--suaza-ink);
+  caret-color: var(--suaza-ink);
+  transition: background-color 9999s ease-in-out 0s;
+}
