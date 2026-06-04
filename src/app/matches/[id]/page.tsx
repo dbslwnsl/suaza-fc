@@ -54,15 +54,25 @@ export default async function MatchDetailPage({
   // 시각이 지난 모든 경기를 자동 진행/완료 처리 (조회 전 실행)
   await supabase.rpc("auto_progress_due_matches");
 
+  // 경기 1건을 먼저 조회해 연도를 확정한 뒤, 나머지 쿼리와 시즌 집계를 한 번에 병렬 실행.
+  // computeSeasonKings 가 matchYear 에 의존해 과거엔 Promise.all 뒤에서 순차 await 되었고,
+  // 댓글 등 revalidate 시 재렌더가 느려지는 큰 원인이었다 → 병렬로 합류.
+  const { data: match } = await supabase
+    .from("matches")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (!match) notFound();
+  const matchYear = new Date((match as Match).match_date).getFullYear();
+
   const [
-    { data: match },
     { data: me },
     { data: allMembers },
     { data: attendancesRaw },
     { data: myAttendance },
     { data: commentsRaw },
+    seasonKings,
   ] = await Promise.all([
-    supabase.from("matches").select("*").eq("id", id).single(),
     supabase
       .from("profiles")
       .select("role, name, avatar_url, is_injured, on_leave, condition")
@@ -92,6 +102,7 @@ export default async function MatchDetailPage({
       )
       .eq("match_id", id)
       .order("created_at", { ascending: true }),
+    computeSeasonKings(supabase, matchYear),
   ]);
 
   const comments = (commentsRaw ?? []) as unknown as MatchComment[];
@@ -131,10 +142,8 @@ export default async function MatchDetailPage({
   // 예정·진행 중 경기에서는 삭제 회원을 명단에서 제외.
   const matchStatus = (match as Match | null)?.status ?? null;
   const isPastMatch = matchStatus === "done" || matchStatus === "canceled";
-  // 이 경기 일자가 속한 연도의 시즌 카테고리 1위 산출 (공동 1위 포함).
+  // seasonKings(시즌 카테고리 1위, 공동 1위 포함)는 위 Promise.all 에서 병렬 산출됨.
   // 출석 명단에서 득점왕/어시왕/CS왕/심판왕 딱지 표기에 사용.
-  const matchYear = new Date((match as Match).match_date).getFullYear();
-  const seasonKings = await computeSeasonKings(supabase, matchYear);
   const withKings = (p: VotePlayer): VotePlayer => ({
     ...p,
     isGoalKing: seasonKings.goal.has(p.id),
@@ -204,8 +213,6 @@ export default async function MatchDetailPage({
   const myAttendingQuarters = forcedAbsent
     ? null
     : myAtt?.attending_quarters ?? null;
-
-  if (!match) notFound();
 
   const m = match as Match;
   const isStaff = me?.role === "manager" || me?.role === "coach";

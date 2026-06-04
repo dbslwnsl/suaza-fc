@@ -1531,17 +1531,25 @@ async function requireUser() {
 }
 
 /**
- * 댓글 작성 — 낙관적 UI 용. redirect 없이 revalidate 만.
- * 클라이언트가 즉시 화면을 갱신하고, 저장/revalidate 는 백그라운드로 처리.
+ * 댓글 작성/수정/삭제 — 클라이언트가 자체 상태로 즉시 반영하므로 무거운 전체 페이지
+ * revalidate 를 하지 않는다. 작성은 생성된 행(id·시각)을 반환해 클라이언트가 임시 항목을
+ * 실제 항목으로 교체한다. (경기 상세는 동적 페이지라 재방문 시 서버에서 최신 목록을 다시 읽는다.)
  */
+export type CreatedMatchComment = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  parent_id: string | null;
+};
+
 export async function createMatchComment(
   matchId: string,
   parentId: string | null,
   content: string,
-) {
+): Promise<CreatedMatchComment | null> {
   const { supabase, userId } = await requireUser();
   const trimmed = content.trim();
-  if (!trimmed) return;
+  if (!trimmed) return null;
 
   // 1단계만 허용: 답글의 답글이면 부모 댓글로 평탄화
   let effectiveParent: string | null = parentId;
@@ -1554,20 +1562,20 @@ export async function createMatchComment(
     if (parent?.parent_id) effectiveParent = parent.parent_id;
   }
 
-  await supabase.from("match_comments").insert({
-    match_id: matchId,
-    author_id: userId,
-    content: trimmed,
-    parent_id: effectiveParent,
-  });
-  revalidatePath(`/matches/${matchId}`);
+  const { data } = await supabase
+    .from("match_comments")
+    .insert({
+      match_id: matchId,
+      author_id: userId,
+      content: trimmed,
+      parent_id: effectiveParent,
+    })
+    .select("id, created_at, updated_at, parent_id")
+    .single();
+  return (data as CreatedMatchComment | null) ?? null;
 }
 
-export async function updateMatchComment(
-  commentId: string,
-  matchId: string,
-  content: string,
-) {
+export async function updateMatchComment(commentId: string, content: string) {
   const { supabase } = await requireUser();
   const trimmed = content.trim();
   if (!trimmed) return;
@@ -1575,11 +1583,9 @@ export async function updateMatchComment(
     .from("match_comments")
     .update({ content: trimmed, updated_at: new Date().toISOString() })
     .eq("id", commentId);
-  revalidatePath(`/matches/${matchId}`);
 }
 
-export async function deleteMatchComment(commentId: string, matchId: string) {
+export async function deleteMatchComment(commentId: string) {
   const { supabase } = await requireUser();
   await supabase.from("match_comments").delete().eq("id", commentId);
-  revalidatePath(`/matches/${matchId}`);
 }

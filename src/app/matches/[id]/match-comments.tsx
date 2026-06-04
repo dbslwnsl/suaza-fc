@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useOptimistic, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import {
   createMatchComment,
   deleteMatchComment,
@@ -20,28 +20,6 @@ export type MatchComment = {
 };
 
 type CommentWithReplies = MatchComment & { replies: MatchComment[] };
-
-type OptimisticAction =
-  | { type: "add"; comment: MatchComment }
-  | { type: "update"; id: string; content: string }
-  | { type: "delete"; id: string };
-
-function reduce(
-  state: MatchComment[],
-  action: OptimisticAction,
-): MatchComment[] {
-  if (action.type === "add") return [...state, action.comment];
-  if (action.type === "update") {
-    const now = new Date().toISOString();
-    return state.map((c) =>
-      c.id === action.id ? { ...c, content: action.content, updated_at: now } : c,
-    );
-  }
-  // delete: root 삭제 시 자식 답글도 함께 제거
-  return state.filter(
-    (c) => c.id !== action.id && c.parent_id !== action.id,
-  );
-}
 
 function buildTree(comments: MatchComment[]): CommentWithReplies[] {
   const roots: CommentWithReplies[] = [];
@@ -80,53 +58,72 @@ export default function MatchCommentSection({
   /** 데스크탑에서 컨테이너 전체 높이를 채우고 댓글 목록만 독립 세로 스크롤 */
   scrollableOnDesktop?: boolean;
 }) {
-  const [optimistic, dispatch] = useOptimistic(comments, reduce);
-  const [, startTransition] = useTransition();
+  const [items, setItems] = useState<MatchComment[]>(comments);
 
-  const tree = useMemo(() => buildTree(optimistic), [optimistic]);
-  const totalCount = optimistic.length;
+  const tree = useMemo(() => buildTree(items), [items]);
+  const totalCount = items.length;
 
   const submitCreate = (parentId: string | null, content: string) => {
     const trimmed = content.trim();
     if (!trimmed) return;
-    startTransition(async () => {
-      // 답글의 답글이면 부모로 평탄화 (서버와 동일 규칙)
-      let effectiveParent = parentId;
-      if (parentId) {
-        const parent = optimistic.find((c) => c.id === parentId);
-        if (parent?.parent_id) effectiveParent = parent.parent_id;
-      }
-      const now = new Date().toISOString();
-      dispatch({
-        type: "add",
-        comment: {
-          id: `temp-${Date.now()}-${Math.random()}`,
-          content: trimmed,
-          created_at: now,
-          updated_at: now,
-          author_id: myUserId,
-          parent_id: effectiveParent,
-          author: { name: myName ?? "", avatar_url: myAvatarUrl },
-        },
+    // 답글의 답글이면 부모로 평탄화 (서버와 동일 규칙)
+    let effectiveParent = parentId;
+    if (parentId) {
+      const parent = items.find((c) => c.id === parentId);
+      if (parent?.parent_id) effectiveParent = parent.parent_id;
+    }
+    // 1) 임시 항목을 즉시 추가해 화면에 바로 보이게 한다
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
+    const now = new Date().toISOString();
+    setItems((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        content: trimmed,
+        created_at: now,
+        updated_at: now,
+        author_id: myUserId,
+        parent_id: effectiveParent,
+        author: { name: myName ?? "", avatar_url: myAvatarUrl },
+      },
+    ]);
+    // 2) 저장 후 실제 행(id·시각)으로 교체. 실패하면 임시 항목 제거(롤백).
+    void (async () => {
+      const saved = await createMatchComment(matchId, parentId, trimmed);
+      setItems((prev) => {
+        if (!saved) return prev.filter((c) => c.id !== tempId);
+        return prev.map((c) =>
+          c.id === tempId
+            ? {
+                ...c,
+                id: saved.id,
+                created_at: saved.created_at,
+                updated_at: saved.updated_at,
+                parent_id: saved.parent_id,
+              }
+            : c,
+        );
       });
-      await createMatchComment(matchId, parentId, trimmed);
-    });
+    })();
   };
 
   const submitUpdate = (commentId: string, content: string) => {
     const trimmed = content.trim();
     if (!trimmed) return;
-    startTransition(async () => {
-      dispatch({ type: "update", id: commentId, content: trimmed });
-      await updateMatchComment(commentId, matchId, trimmed);
-    });
+    const now = new Date().toISOString();
+    setItems((prev) =>
+      prev.map((c) =>
+        c.id === commentId ? { ...c, content: trimmed, updated_at: now } : c,
+      ),
+    );
+    void updateMatchComment(commentId, trimmed);
   };
 
   const submitDelete = (commentId: string) => {
-    startTransition(async () => {
-      dispatch({ type: "delete", id: commentId });
-      await deleteMatchComment(commentId, matchId);
-    });
+    setItems((prev) =>
+      prev.filter((c) => c.id !== commentId && c.parent_id !== commentId),
+    );
+    void deleteMatchComment(commentId);
   };
 
   return (
@@ -358,7 +355,7 @@ function CommentItem({
           isReply
             ? "border-suaza-border/70 bg-suaza-bg/40"
             : "border-suaza-border"
-        } ${isTemp ? "opacity-60" : ""}`}
+        }`}
       >
         <div className="flex items-center justify-between gap-2">
           <div className="text-xs text-suaza-ink-muted flex items-center gap-1.5 flex-wrap min-w-0">
@@ -373,9 +370,6 @@ function CommentItem({
             <span>{formatPostDate(comment.created_at)}</span>
             {edited && !isTemp && (
               <span className="text-suaza-ink-faint">(수정됨)</span>
-            )}
-            {isTemp && (
-              <span className="text-suaza-ink-faint">저장 중…</span>
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
