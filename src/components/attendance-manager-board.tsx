@@ -78,12 +78,15 @@ export default function AttendanceManagerBoard({
   nonVoters,
   totalQuarters = 4,
   quarterActions,
+  readonly = false,
 }: {
   matchId: string;
   byStatus: ByStatus;
   nonVoters: Member[];
   totalQuarters?: number;
   quarterActions?: (string | null)[] | null;
+  /** true 면 드래그앤드롭·서버 변경을 막고 보기 전용으로 렌더 (일반 회원 화면) */
+  readonly?: boolean;
 }) {
   const [, startTransition] = useTransition();
   const [dragging, setDragging] = useState(false);
@@ -93,6 +96,7 @@ export default function AttendanceManagerBoard({
   );
 
   const handleDrop = (playerId: string, status: Status) => {
+    if (readonly) return;
     startTransition(async () => {
       applyOptimistic({ playerId, status });
       try {
@@ -120,6 +124,7 @@ export default function AttendanceManagerBoard({
         dragging={dragging}
         hoverClass="ring-2 ring-green-400"
         onDrop={handleDrop}
+        readonly={readonly}
       >
         {full.length === 0 ? (
           <span className="text-sm text-suaza-ink-faint">—</span>
@@ -130,6 +135,7 @@ export default function AttendanceManagerBoard({
               member={m}
               chipClass="border-green-300 text-suaza-ink"
               onDragStateChange={setDragging}
+              readonly={readonly}
             />
           ))
         )}
@@ -141,7 +147,7 @@ export default function AttendanceManagerBoard({
         <div className="flex flex-col gap-1.5 p-1.5 border border-transparent">
           <span className="self-start inline-flex items-center gap-1.5 text-xs font-bold text-suaza-ink">
             <span
-              className="w-1.5 h-1.5 rounded-full"
+              className="shrink-0 w-1.5 h-1.5 rounded-full"
               style={{ backgroundColor: "#22C55E" }}
             />
             일부 참여 {partial.length}
@@ -156,6 +162,7 @@ export default function AttendanceManagerBoard({
                   member={m}
                   chipClass="border-green-300 text-suaza-ink"
                   onDragStateChange={setDragging}
+                  readonly={readonly}
                 />
                 <QuarterDots
                   quarters={m.attending_quarters ?? null}
@@ -176,12 +183,18 @@ export default function AttendanceManagerBoard({
         dragging={dragging}
         hoverClass="ring-2 ring-red-400"
         onDrop={handleDrop}
+        readonly={readonly}
       >
         {optimistic.byStatus.absent.length === 0 ? (
           <span className="text-sm text-suaza-ink-faint">—</span>
         ) : (
           optimistic.byStatus.absent.map((m) => (
-            <Chip key={m.id} member={m} onDragStateChange={setDragging} />
+            <Chip
+              key={m.id}
+              member={m}
+              onDragStateChange={setDragging}
+              readonly={readonly}
+            />
           ))
         )}
       </DropSection>
@@ -194,12 +207,18 @@ export default function AttendanceManagerBoard({
         dragging={dragging}
         hoverClass="ring-2 ring-gray-400"
         onDrop={handleDrop}
+        readonly={readonly}
       >
         {optimistic.byStatus.undecided.length === 0 ? (
           <span className="text-sm text-suaza-ink-faint">—</span>
         ) : (
           optimistic.byStatus.undecided.map((m) => (
-            <Chip key={m.id} member={m} onDragStateChange={setDragging} />
+            <Chip
+              key={m.id}
+              member={m}
+              onDragStateChange={setDragging}
+              readonly={readonly}
+            />
           ))
         )}
       </DropSection>
@@ -214,12 +233,19 @@ export default function AttendanceManagerBoard({
         dragging={dragging}
         hoverClass="ring-2 ring-gray-400"
         onDrop={handleDrop}
+        readonly={readonly}
       >
         {optimistic.nonVoters.length === 0 ? (
           <span className="text-sm text-suaza-ink-faint">—</span>
         ) : (
           optimistic.nonVoters.map((m) => (
-            <Chip key={m.id} member={m} onDragStateChange={setDragging} muted />
+            <Chip
+              key={m.id}
+              member={m}
+              onDragStateChange={setDragging}
+              muted
+              readonly={readonly}
+            />
           ))
         )}
       </DropSection>
@@ -235,6 +261,7 @@ function DropSection({
   dragging,
   hoverClass,
   onDrop,
+  readonly,
   children,
 }: {
   label: string;
@@ -245,23 +272,32 @@ function DropSection({
   dragging: boolean;
   hoverClass: string;
   onDrop: (playerId: string, status: Status) => void;
+  readonly?: boolean;
   children: React.ReactNode;
 }) {
   const [over, setOver] = useState(false);
   return (
     <div
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        if (!over) setOver(true);
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setOver(false);
-        const playerId = e.dataTransfer.getData("text/plain");
-        if (playerId) onDrop(playerId, status);
-      }}
+      onDragOver={
+        readonly
+          ? undefined
+          : (e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              if (!over) setOver(true);
+            }
+      }
+      onDragLeave={readonly ? undefined : () => setOver(false)}
+      onDrop={
+        readonly
+          ? undefined
+          : (e) => {
+              e.preventDefault();
+              setOver(false);
+              const playerId = e.dataTransfer.getData("text/plain");
+              if (playerId) onDrop(playerId, status);
+            }
+      }
       className={`flex flex-col gap-1.5 p-1.5 rounded-md border border-dashed transition ${
         dragging ? "border-suaza-border" : "border-transparent"
       } ${over ? hoverClass + " bg-blue-50" : ""}`}
@@ -269,7 +305,7 @@ function DropSection({
       <span className="self-start inline-flex items-center gap-1.5 text-xs font-bold text-suaza-ink">
         {dotColor && (
           <span
-            className="w-1.5 h-1.5 rounded-full"
+            className="shrink-0 w-1.5 h-1.5 rounded-full"
             style={{ backgroundColor: dotColor }}
           />
         )}
@@ -312,24 +348,32 @@ function Chip({
   chipClass = "border-suaza-border text-suaza-ink-muted",
   onDragStateChange,
   muted,
+  readonly,
 }: {
   member: Member;
   chipClass?: string;
   onDragStateChange: (dragging: boolean) => void;
   muted?: boolean;
+  readonly?: boolean;
 }) {
   return (
     <span
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData("text/plain", member.id);
-        e.dataTransfer.effectAllowed = "move";
-        setTimeout(() => onDragStateChange(true), 0);
-      }}
-      onDragEnd={() => onDragStateChange(false)}
-      className={`select-none cursor-grab active:cursor-grabbing inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs border bg-white hover:bg-gray-50 ${chipClass} ${
-        muted ? "opacity-80" : ""
-      }`}
+      draggable={!readonly}
+      onDragStart={
+        readonly
+          ? undefined
+          : (e) => {
+              e.dataTransfer.setData("text/plain", member.id);
+              e.dataTransfer.effectAllowed = "move";
+              setTimeout(() => onDragStateChange(true), 0);
+            }
+      }
+      onDragEnd={readonly ? undefined : () => onDragStateChange(false)}
+      className={`select-none ${
+        readonly ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+      } inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs border bg-white ${
+        readonly ? "" : "hover:bg-gray-50"
+      } ${chipClass} ${muted ? "opacity-80" : ""}`}
     >
       {member.is_injured && <InjuryBadge />}
       {member.on_leave && <OnLeaveBadge />}

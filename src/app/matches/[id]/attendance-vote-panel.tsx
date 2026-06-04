@@ -508,8 +508,6 @@ export function AttendanceCardVote({
     });
   };
 
-  const showBoard = isManager;
-
   return (
     <>
       {/* My response */}
@@ -557,46 +555,16 @@ export function AttendanceCardVote({
         <StatCount label="미투표" value={counts.nonVoters} color="#D1D5DB" />
       </div>
 
-      {/* 매니저: 통합 드래그 보드(전체·일부 참여 + 불참·미정·미투표).
-          그 외: 참여 쿼터 표시 + 단순 명단. */}
-      {showBoard ? (
-        <AttendanceManagerBoard
-          matchId={matchId}
-          byStatus={groups}
-          nonVoters={nv}
-          totalQuarters={totalQuarters}
-          quarterActions={quarterActions}
-        />
-      ) : (
-        <>
-          <AttendingByQuarterSection
-            attending={groups.attending}
-            totalQuarters={totalQuarters}
-            quarterActions={quarterActions}
-          />
-          <div className="flex flex-col gap-3 pt-1">
-            <MemberGroup
-              label="불참"
-              count={counts.absent}
-              color="#EF3E3E"
-              members={groups.absent}
-            />
-            <MemberGroup
-              label="미정"
-              count={counts.undecided}
-              color="#9CA3AF"
-              members={groups.undecided}
-            />
-            <MemberGroup
-              label="미투표"
-              count={counts.nonVoters}
-              color="#D1D5DB"
-              members={nv}
-              muted
-            />
-          </div>
-        </>
-      )}
+      {/* 모든 회원이 동일한 보드 뷰를 본다. 매니저·감독만 드래그앤드롭으로 변경 가능하고,
+          일반 회원은 같은 레이아웃을 보기 전용(readonly)으로 본다. */}
+      <AttendanceManagerBoard
+        matchId={matchId}
+        byStatus={groups}
+        nonVoters={nv}
+        totalQuarters={totalQuarters}
+        quarterActions={quarterActions}
+        readonly={!isManager}
+      />
     </>
   );
 }
