@@ -643,38 +643,16 @@ export function AttendanceCompactVote({
         <StatCount label="미투표" value={counts.nonVoters} color="#D1D5DB" />
       </div>
 
-      {isManager ? (
-        <AttendanceManagerBoard
-          matchId={matchId}
-          byStatus={groups}
-          nonVoters={nv}
-          totalQuarters={totalQuarters}
-          quarterActions={quarterActions}
-        />
-      ) : (
-        <div className="flex flex-col gap-2 pt-1">
-          <AttendanceRow
-            label="참석"
-            count={groups.attending.length}
-            badgeClass="bg-green-100 text-green-700"
-            members={groups.attending}
-          />
-          <AttendanceRow
-            label="불참"
-            count={groups.absent.length}
-            badgeClass="bg-red-100 text-red-700"
-            members={groups.absent}
-          />
-          <AttendanceRow
-            label="미정"
-            count={groups.undecided.length}
-            badgeClass="bg-gray-200 text-gray-700"
-            members={groups.undecided}
-          />
-          <div className="h-px bg-suaza-border my-1" />
-          <NonVoterRow members={nv} />
-        </div>
-      )}
+      {/* 경기 상세와 동일하게 모든 회원이 같은 보드 뷰를 본다.
+          매니저·감독만 드래그앤드롭 변경 가능, 일반 회원은 보기 전용(readonly). */}
+      <AttendanceManagerBoard
+        matchId={matchId}
+        byStatus={groups}
+        nonVoters={nv}
+        totalQuarters={totalQuarters}
+        quarterActions={quarterActions}
+        readonly={!isManager}
+      />
     </>
   );
 }
