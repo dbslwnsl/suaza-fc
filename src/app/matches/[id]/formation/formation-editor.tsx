@@ -1841,15 +1841,6 @@ function FormationDropdown({
       >
         <span className="inline-flex items-center gap-2 min-w-0">
           <span className="font-bold tabular-nums">{currentShape}</span>
-          {currentMeta?.name && (
-            <span
-              className={`text-[11px] font-normal truncate ${
-                open ? "text-white/80" : "text-suaza-ink-muted"
-              }`}
-            >
-              {currentMeta.name}
-            </span>
-          )}
         </span>
         <span
           aria-hidden
@@ -1895,13 +1886,6 @@ function FormationDropdown({
                   }`}
                 >
                   <span className="tabular-nums font-semibold">{f.shape}</span>
-                  <span
-                    className={`text-xs ${
-                      active ? "text-suaza-accent/80" : "text-suaza-ink-muted"
-                    }`}
-                  >
-                    {f.name}
-                  </span>
                 </button>
               );
             })}
@@ -3157,12 +3141,7 @@ function PlayerRowMobile({
           {stat.points}P
         </span>
       ) : (
-        <span
-          className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold text-white"
-          style={{ backgroundColor: tierColor }}
-        >
-          {participation.totalPlayed}/{participation.byQuarter.length}
-        </span>
+        <QuarterBar byQuarter={participation.byQuarter} />
       )}
     </div>
   );
@@ -4020,6 +3999,26 @@ function PlayerRosterDesktop({
   );
 }
 
+// 쿼터별 출전 포지션 bar — 그날 쿼터 수만큼 칸을 만들고, 출전한 쿼터는 그 포지션 색으로,
+// 미출전 쿼터는 회색으로 채운다. (모바일 A/B 단일 팀 명단에서만 사용)
+function QuarterBar({ byQuarter }: { byQuarter: (Position | null)[] }) {
+  return (
+    <div
+      className="shrink-0 flex items-center gap-0.5"
+      aria-label="쿼터별 출전 포지션"
+    >
+      {byQuarter.map((pos, i) => (
+        <span
+          key={i}
+          className="w-1.5 h-4 rounded-sm"
+          style={{ backgroundColor: pos ? POSITION_COLOR[pos] : "#E5E7EB" }}
+          title={`${i + 1}쿼터 ${pos ?? "미출전"}`}
+        />
+      ))}
+    </div>
+  );
+}
+
 function DesktopPlayerCard({
   participation,
   placed,
@@ -4066,7 +4065,6 @@ function DesktopPlayerCard({
   showOnlyPrimaryPosition?: boolean;
 }) {
   const m = participation.member;
-  const teamBg = team === "A" ? "#3B82F6" : team === "B" ? "#EF4444" : null;
   const positionsToShow = showOnlyPrimaryPosition
     ? (m.positions ?? []).slice(0, 1)
     : (m.positions ?? []);
@@ -4132,14 +4130,6 @@ function DesktopPlayerCard({
           : "cursor-pointer hover:bg-suaza-bg"
       } ${disabled ? "opacity-50" : ""}`}
     >
-      {team && !stat && (
-        <span
-          className="absolute -top-1.5 -left-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-white shadow-sm"
-          style={{ backgroundColor: teamBg ?? undefined }}
-        >
-          {team}
-        </span>
-      )}
       {stat ? (
         // 종료 임베드 모바일 — 3줄 구조: 이름+포지션 / 출·승·M·포인트 / (PlayerStatRow는 wrapper 에서)
         <>
@@ -4199,30 +4189,36 @@ function DesktopPlayerCard({
           </div>
         </>
       ) : (
-        // 진행 중 카드 — 기존 한 줄
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1 flex-wrap">
-            <ConditionArrow
-              level={conditionLevel}
-              interactive={isMe}
-              onCycle={onCycleCondition}
-            />
-            <PlayerName
-              name={m.name}
-              className="text-xs font-semibold text-suaza-ink"
-            />
-            <FootBadge foot={m.preferred_foot} />
-            {positionsToShow.map((pos) => (
-              <span
-                key={pos}
-                className="inline-flex items-center gap-0.5 text-[10px] font-semibold"
-                style={{ color: POSITION_COLOR[pos] }}
-              >
-                {pos}
-              </span>
-            ))}
+        // 진행 중 카드 — 한 줄 + (A/B 단일 팀 보기) 우측 쿼터 bar
+        <>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1 flex-wrap">
+              <ConditionArrow
+                level={conditionLevel}
+                interactive={isMe}
+                onCycle={onCycleCondition}
+              />
+              <PlayerName
+                name={m.name}
+                className="text-xs font-semibold text-suaza-ink"
+              />
+              <FootBadge foot={m.preferred_foot} />
+              {positionsToShow.map((pos) => (
+                <span
+                  key={pos}
+                  className="inline-flex items-center gap-0.5 text-[10px] font-semibold"
+                  style={{ color: POSITION_COLOR[pos] }}
+                >
+                  {pos}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
+          {/* 양 팀 동시(전체) 보기에는 미표시. A/B 단일 팀 보기에서만 우측에 쿼터별 출전 bar. */}
+          {!showOnlyPrimaryPosition && (
+            <QuarterBar byQuarter={participation.byQuarter} />
+          )}
+        </>
       )}
     </div>
   );
