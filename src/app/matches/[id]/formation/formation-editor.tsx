@@ -2755,6 +2755,9 @@ function PlayerRosterMobile({
       canWriteCoachComment={canWriteCoachComment}
       matchDate={matchDate}
       hasComment={(commentCountByPlayer[p.member.id] ?? 0) > 0}
+      // 모바일에서 양 팀(A/B) 두 컬럼이 동시에 보일 때는 카드 폭이 좁아 부포지션이
+      // 두번째 줄로 빠지며 카드 높이가 들쭉날쭉해진다. 그 경우엔 주포지션만 표시.
+      showOnlyPrimaryPosition={isIntra && !showOnlyTeam}
     />
   );
 
@@ -4040,6 +4043,7 @@ function DesktopPlayerCard({
   canWriteCoachComment = false,
   matchDate = null,
   hasComment = false,
+  showOnlyPrimaryPosition = false,
 }: {
   participation: PlayerParticipation;
   placed: boolean;
@@ -4062,9 +4066,14 @@ function DesktopPlayerCard({
   matchDate?: string | null;
   /** 이 선수에 대해 (이 경기) 코멘트가 한 건이라도 있는지 */
   hasComment?: boolean;
+  /** true 면 주포지션 1개만 표시 (모바일 양 팀 동시 노출 시 카드 폭 절약 / 줄바꿈 방지) */
+  showOnlyPrimaryPosition?: boolean;
 }) {
   const m = participation.member;
   const teamBg = team === "A" ? "#3B82F6" : team === "B" ? "#EF4444" : null;
+  const positionsToShow = showOnlyPrimaryPosition
+    ? (m.positions ?? []).slice(0, 1)
+    : (m.positions ?? []);
   // 현재 쿼터에 참여하지 않는 선수 — 배치 불가, 비활성 표시 (이미 배치돼 있으면 평소대로)
   const disabled = !available && !placed;
   // 현재 쿼터 배치(placed) 강조 — A팀 파랑 / B팀 빨강 / 상대전 초록
@@ -4144,7 +4153,7 @@ function DesktopPlayerCard({
               name={m.name}
               className="text-sm font-semibold text-suaza-ink"
             />
-            {(m.positions ?? []).map((pos) => (
+            {positionsToShow.map((pos) => (
               <span
                 key={pos}
                 className="inline-flex items-center gap-0.5 text-[10px] font-semibold"
@@ -4211,7 +4220,7 @@ function DesktopPlayerCard({
               className="text-xs font-semibold text-suaza-ink"
             />
             <FootBadge foot={m.preferred_foot} />
-            {(m.positions ?? []).map((pos) => (
+            {positionsToShow.map((pos) => (
               <span
                 key={pos}
                 className="inline-flex items-center gap-0.5 text-[10px] font-semibold"
