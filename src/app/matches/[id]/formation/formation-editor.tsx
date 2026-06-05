@@ -3095,10 +3095,6 @@ function PlayerRowMobile({
                 className="inline-flex items-center gap-0.5 text-[10px] font-semibold"
                 style={{ color: POSITION_COLOR[pos] }}
               >
-                <span
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: POSITION_COLOR[pos] }}
-                />
                 {pos}
               </span>
             ))
@@ -4159,10 +4155,6 @@ function DesktopPlayerCard({
                 className="inline-flex items-center gap-0.5 text-[10px] font-semibold"
                 style={{ color: POSITION_COLOR[pos] }}
               >
-                <span
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: POSITION_COLOR[pos] }}
-                />
                 {pos}
               </span>
             ))}
@@ -4226,10 +4218,6 @@ function DesktopPlayerCard({
                 className="inline-flex items-center gap-0.5 text-[10px] font-semibold"
                 style={{ color: POSITION_COLOR[pos] }}
               >
-                <span
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: POSITION_COLOR[pos] }}
-                />
                 {pos}
               </span>
             ))}
