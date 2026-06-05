@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useOptimistic, useState, useTransition } from "react";
 import {
   autoBalanceTeams,
@@ -102,6 +101,7 @@ export default function TeamBuilder({
   teamACaptain = null,
   teamBCaptain = null,
   readonly,
+  canAddMercenary = false,
 }: {
   matchId: string;
   attendees: TeamMember[];
@@ -115,6 +115,8 @@ export default function TeamBuilder({
   teamACaptain?: string | null;
   teamBCaptain?: string | null;
   readonly: boolean;
+  /** 용병 추가 버튼 노출 권한 — 회장·감독·주장 */
+  canAddMercenary?: boolean;
 }) {
   const [, startTransition] = useTransition();
   // 데스크탑 드래그앤드롭 상태
@@ -342,15 +344,26 @@ export default function TeamBuilder({
 
       {/* 헤더 + 탭/드래그 가능한 참석자 칩 */}
       <div className="flex flex-col gap-1">
-        <h2 className="font-bold text-suaza-ink text-lg">
-          참석 {total}명 · 탭해서 팀 지정
-        </h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-bold text-suaza-ink text-lg">
+            참석 {total}명
+          </h2>
+          {canAddMercenary && (
+            <button
+              type="button"
+              disabled
+              className="shrink-0 inline-flex items-center gap-0.5 h-8 px-3 rounded-lg border border-suaza-border text-xs font-bold text-suaza-ink transition disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              + 용병
+            </button>
+          )}
+        </div>
         {!readonly && (
           <p className="text-xs text-suaza-ink-muted">
             <span className="hidden desktop:inline">
               드래그해서 팀으로 옮기거나{" "}
             </span>
-            이름을 탭하면 미배정 → A팀(빨강) → B팀(파랑) 순환
+            이름을 탭하면 미배정 → A팀 → B팀 순환
           </p>
         )}
       </div>
@@ -392,15 +405,6 @@ export default function TeamBuilder({
         (편성 제외)
       </p>
 
-      {/* 완료 → 포메이션 */}
-      {!readonly && (
-        <Link
-          href={`/matches/${matchId}/formation`}
-          className="mt-2 h-[52px] rounded-lg bg-suaza-button text-white text-base font-bold flex items-center justify-center hover:opacity-90 transition"
-        >
-          팀 편성 완료 · 포메이션 설정 →
-        </Link>
-      )}
     </section>
   );
 }

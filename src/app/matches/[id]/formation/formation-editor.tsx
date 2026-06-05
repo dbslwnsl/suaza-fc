@@ -1822,7 +1822,6 @@ function FormationDropdown({
   fullWidth?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const currentMeta = FORMATIONS.find((f) => f.shape === currentShape);
 
   return (
     <div className={`relative ${fullWidth ? "flex w-full" : "inline-flex"}`}>
@@ -2263,14 +2262,6 @@ function computeParticipations(
       hasPositionChange: positionsPlayed.length > 1,
     };
   });
-}
-
-function getTierColor(played: number): string {
-  if (played >= 4) return "#22C55E";
-  if (played === 3) return "#3B82F6";
-  if (played === 2) return "#F59E0B";
-  if (played === 1) return "#EF4444";
-  return "#9CA3AF";
 }
 
 function FilterTabsWithCounts({
@@ -2995,7 +2986,6 @@ function PlayerRowMobile({
 }) {
   const m = participation.member;
   const memberPositions = m.positions ?? [];
-  const tierColor = getTierColor(participation.totalPlayed);
   const hasPlayed = participation.totalPlayed > 0;
   // 현재 쿼터에 참여하지 않는 선수 — 배치 불가, 비활성 표시 (단, 이미 배치돼 있으면 평소대로)
   const disabled = !available && !placed;

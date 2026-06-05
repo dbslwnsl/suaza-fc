@@ -439,6 +439,11 @@ export default async function MatchDetailPage({
                     teamACaptain={m.team_a_captain}
                     teamBCaptain={m.team_b_captain}
                     readonly={!isStaff}
+                    canAddMercenary={
+                      isStaff ||
+                      user.id === m.team_a_captain ||
+                      user.id === m.team_b_captain
+                    }
                   />
                 </div>
               )}
