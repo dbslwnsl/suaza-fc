@@ -2,6 +2,7 @@
 
 import { useMemo, useOptimistic, useState, useTransition } from "react";
 import {
+  setAttendanceFor,
   setMyAttendingQuarters,
   setMyCondition,
   voteAttendance,
@@ -223,14 +224,17 @@ const OPTS: {
   },
 ];
 
-type OptimisticState = {
-  status: string | null;
-  attendingQuarters: number[] | null;
-};
+// 본인 투표와 매니저 드래그를 하나의 status 오버라이드로 통합한다.
+// passthrough(EMPTY)는 모듈 상수로 둬야 useOptimistic 이 매 렌더 리셋·무한루프되지 않는다.
+const EMPTY_OVERRIDES: ReadonlyMap<string, Status | null> = new Map();
+
+type OverrideAction = { playerId: string; status: Status | null };
 
 /**
- * 본인 출석 상태 + 참여 쿼터 집합을 낙관적으로 관리한다.
- * status 가 attending 이 아니면 attendingQuarters 는 항상 null(전체).
+ * 출석 낙관 상태 — 서버값(byStatus/nonVoters)을 base 로 두고, 변경분만
+ * playerId→status 오버라이드 맵으로 관리한다. 본인 투표(vote)와 매니저 드래그(drag)가
+ * 동일한 경로(addOverride)를 쓰므로, 칩과 상단 통계가 한 번의 렌더로 함께 갱신된다.
+ * 본인 참여 쿼터(myQuarters)는 표시용으로만 별도 낙관 관리.
  */
 function useOptimisticVote(
   matchId: string,
@@ -240,64 +244,85 @@ function useOptimisticVote(
   byStatus: Groups,
   nonVoters: VotePlayer[],
 ) {
-  const [optimistic, setOptimistic] = useOptimistic<OptimisticState>({
-    status: myStatus,
-    attendingQuarters: myStatus === "attending" ? myAttendingQuarters : null,
+  const [overrides, addOverride] = useOptimistic<
+    ReadonlyMap<string, Status | null>,
+    OverrideAction
+  >(EMPTY_OVERRIDES, (prev, action) => {
+    const next = new Map(prev);
+    next.set(action.playerId, action.status);
+    return next;
   });
+  const [myQuarters, setMyQuarters] = useOptimistic<number[] | null>(
+    myAttendingQuarters,
+  );
   const [, startTransition] = useTransition();
 
+  const myId = me?.id ?? null;
+  const optimisticStatus: Status | null =
+    myId && overrides.has(myId)
+      ? overrides.get(myId) ?? null
+      : (myStatus as Status | null);
+
   const vote = (value: Status) => {
+    if (!myId) return;
     // 토글: 이미 선택된 항목을 다시 누르면 미투표(null)
-    const next: Status | null = optimistic.status === value ? null : value;
+    const next: Status | null = optimisticStatus === value ? null : value;
     startTransition(async () => {
-      setOptimistic({ status: next, attendingQuarters: null });
+      addOverride({ playerId: myId, status: next });
+      setMyQuarters(null);
       await voteAttendance(matchId, value);
     });
   };
 
   const setAttendingQuarters = (quarters: number[] | null) => {
-    if (optimistic.status !== "attending") return;
+    if (!myId || optimisticStatus !== "attending") return;
     // 모든 쿼터 해제(빈 배열) → 출석 취소(미투표)
     const emptied = Array.isArray(quarters) && quarters.length === 0;
     startTransition(async () => {
-      setOptimistic(
-        emptied
-          ? { status: null, attendingQuarters: null }
-          : { status: "attending", attendingQuarters: quarters },
-      );
+      if (emptied) {
+        addOverride({ playerId: myId, status: null });
+        setMyQuarters(null);
+      } else {
+        addOverride({ playerId: myId, status: "attending" });
+        setMyQuarters(quarters);
+      }
       await setMyAttendingQuarters(matchId, quarters);
+    });
+  };
+
+  // 매니저 드래그 — 임의 선수의 status 변경. 본인 투표와 동일한 낙관 경로를 탄다.
+  const drag = (playerId: string, status: Status | null) => {
+    startTransition(async () => {
+      addOverride({ playerId, status });
+      await setAttendanceFor(matchId, playerId, status);
     });
   };
 
   const computed = useMemo(() => {
     const byName = (a: VotePlayer, b: VotePlayer) =>
       a.name.localeCompare(b.name, "ko");
-    const strip = (arr: VotePlayer[]) =>
-      me ? arr.filter((p) => p.id !== me.id) : arr;
-
-    const groups: Groups = {
-      attending: strip(byStatus.attending),
-      absent: strip(byStatus.absent),
-      undecided: strip(byStatus.undecided),
+    const groups: Groups = { attending: [], absent: [], undecided: [] };
+    const nv: VotePlayer[] = [];
+    const place = (p: VotePlayer, base: Status | null) => {
+      const status = overrides.has(p.id) ? overrides.get(p.id) ?? null : base;
+      // 본인이 참석이면 참여 쿼터(낙관)를 칩에 반영
+      const pp =
+        myId && p.id === myId && status === "attending"
+          ? { ...p, attending_quarters: myQuarters }
+          : p;
+      if (status === "attending") groups.attending.push(pp);
+      else if (status === "absent") groups.absent.push(pp);
+      else if (status === "undecided") groups.undecided.push(pp);
+      else nv.push(pp);
     };
-    let nv = strip(nonVoters);
-
-    if (me) {
-      const meWith: VotePlayer = {
-        ...me,
-        attending_quarters: optimistic.attendingQuarters,
-        voted_at: new Date().toISOString(),
-      };
-      if (optimistic.status === "attending") {
-        groups.attending = [...groups.attending, meWith].sort(byName);
-      } else if (optimistic.status === "absent") {
-        groups.absent = [...groups.absent, meWith].sort(byName);
-      } else if (optimistic.status === "undecided") {
-        groups.undecided = [...groups.undecided, meWith].sort(byName);
-      } else {
-        nv = [meWith, ...nv];
-      }
-    }
+    for (const p of byStatus.attending) place(p, "attending");
+    for (const p of byStatus.absent) place(p, "absent");
+    for (const p of byStatus.undecided) place(p, "undecided");
+    for (const p of nonVoters) place(p, null);
+    groups.attending.sort(byName);
+    groups.absent.sort(byName);
+    groups.undecided.sort(byName);
+    nv.sort(byName);
 
     return {
       groups,
@@ -309,13 +334,14 @@ function useOptimisticVote(
         nonVoters: nv.length,
       },
     };
-  }, [me, byStatus, nonVoters, optimistic]);
+  }, [myId, byStatus, nonVoters, overrides, myQuarters]);
 
   return {
-    optimisticStatus: optimistic.status,
-    optimisticQuarters: optimistic.attendingQuarters,
+    optimisticStatus,
+    optimisticQuarters: myQuarters,
     vote,
     setAttendingQuarters,
+    drag,
     ...computed,
   };
 }
@@ -482,6 +508,7 @@ export function AttendanceCardVote({
     optimisticQuarters,
     vote,
     setAttendingQuarters,
+    drag,
     groups,
     nonVoters: nv,
     counts,
@@ -493,10 +520,6 @@ export function AttendanceCardVote({
     byStatus,
     nonVoters,
   );
-
-  // 드래그(타인 배정)도 상단 통계에 즉시 반영 — 보드의 낙관 카운트를 받아 우선 표시.
-  const [liveCounts, setLiveCounts] = useState<typeof counts | null>(null);
-  const shownCounts = liveCounts ?? counts;
 
   // 본인 컨디션 — null(미설정/"?") 상태에서 첫 클릭 시 3(보통)으로 초기화,
   // 이후 1→2→…→5→1 순환. 낙관적 반영 + 서버 저장.
@@ -553,22 +576,22 @@ export function AttendanceCardVote({
 
       {/* Stats row */}
       <div className="grid grid-cols-4 gap-2 py-2">
-        <StatCount label="참석" value={shownCounts.attending} color="#22C55E" />
-        <StatCount label="불참" value={shownCounts.absent} color="#EF3E3E" />
-        <StatCount label="미정" value={shownCounts.undecided} color="#9CA3AF" />
-        <StatCount label="미투표" value={shownCounts.nonVoters} color="#D1D5DB" />
+        <StatCount label="참석" value={counts.attending} color="#22C55E" />
+        <StatCount label="불참" value={counts.absent} color="#EF3E3E" />
+        <StatCount label="미정" value={counts.undecided} color="#9CA3AF" />
+        <StatCount label="미투표" value={counts.nonVoters} color="#D1D5DB" />
       </div>
 
       {/* 모든 회원이 동일한 보드 뷰를 본다. 매니저·감독만 드래그앤드롭으로 변경 가능하고,
-          일반 회원은 같은 레이아웃을 보기 전용(readonly)으로 본다. */}
+          일반 회원은 같은 레이아웃을 보기 전용(readonly)으로 본다.
+          드롭은 부모의 통합 낙관(drag)에 위임 → 칩·상단 통계가 한 번에 갱신. */}
       <AttendanceManagerBoard
-        matchId={matchId}
         byStatus={groups}
         nonVoters={nv}
         totalQuarters={totalQuarters}
         quarterActions={quarterActions}
         readonly={!isManager}
-        onCountsChange={setLiveCounts}
+        onDrop={isManager ? drag : undefined}
       />
     </>
   );
@@ -608,6 +631,7 @@ export function AttendanceCompactVote({
     optimisticQuarters,
     vote,
     setAttendingQuarters,
+    drag,
     groups,
     nonVoters: nv,
     counts,
@@ -619,10 +643,6 @@ export function AttendanceCompactVote({
     byStatus,
     nonVoters,
   );
-
-  // 드래그(타인 배정)도 상단 통계에 즉시 반영 — 보드의 낙관 카운트를 우선 표시.
-  const [liveCounts, setLiveCounts] = useState<typeof counts | null>(null);
-  const shownCounts = liveCounts ?? counts;
 
   return (
     <>
@@ -646,22 +666,22 @@ export function AttendanceCompactVote({
 
       {/* 통계 줄 */}
       <div className="grid grid-cols-4 gap-2 py-1">
-        <StatCount label="참석" value={shownCounts.attending} color="#22C55E" />
-        <StatCount label="불참" value={shownCounts.absent} color="#EF3E3E" />
-        <StatCount label="미정" value={shownCounts.undecided} color="#9CA3AF" />
-        <StatCount label="미투표" value={shownCounts.nonVoters} color="#D1D5DB" />
+        <StatCount label="참석" value={counts.attending} color="#22C55E" />
+        <StatCount label="불참" value={counts.absent} color="#EF3E3E" />
+        <StatCount label="미정" value={counts.undecided} color="#9CA3AF" />
+        <StatCount label="미투표" value={counts.nonVoters} color="#D1D5DB" />
       </div>
 
       {/* 경기 상세와 동일하게 모든 회원이 같은 보드 뷰를 본다.
-          매니저·감독만 드래그앤드롭 변경 가능, 일반 회원은 보기 전용(readonly). */}
+          매니저·감독만 드래그앤드롭 변경 가능, 일반 회원은 보기 전용(readonly).
+          드롭은 부모의 통합 낙관(drag)에 위임 → 칩·상단 통계가 한 번에 갱신. */}
       <AttendanceManagerBoard
-        matchId={matchId}
         byStatus={groups}
         nonVoters={nv}
         totalQuarters={totalQuarters}
         quarterActions={quarterActions}
         readonly={!isManager}
-        onCountsChange={setLiveCounts}
+        onDrop={isManager ? drag : undefined}
       />
     </>
   );

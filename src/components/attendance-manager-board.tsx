@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useOptimistic, useState, useTransition } from "react";
-import { setAttendanceFor } from "@/lib/matches/actions";
+import { useState } from "react";
 import { quarterShortLabel } from "@/lib/matches/helpers";
 
 export type Member = {
@@ -25,123 +24,36 @@ type ByStatus = {
   undecided: Member[];
 };
 
-type BoardState = {
-  byStatus: ByStatus;
-  nonVoters: Member[];
-};
-
-type Move = { playerId: string; status: Status };
-
-/**
- * 드래그앤드롭 결과를 byStatus/nonVoters 에 즉시 반영해 새 state 를 만든다.
- * - 옛 위치에서 제거 후 목적지에 추가 (이름순 정렬 유지)
- * - 참석(attending)으로 이동하면 항상 '전체 참여'(attending_quarters=null)
- */
-function applyMove(state: BoardState, move: Move): BoardState {
-  const { playerId, status } = move;
-  const byName = (a: Member, b: Member) => a.name.localeCompare(b.name, "ko");
-  const stripFrom = (arr: Member[]) => arr.filter((m) => m.id !== playerId);
-
-  const findIn = (arr: Member[]) => arr.find((m) => m.id === playerId);
-  const moved =
-    findIn(state.byStatus.attending) ??
-    findIn(state.byStatus.absent) ??
-    findIn(state.byStatus.undecided) ??
-    findIn(state.nonVoters) ??
-    null;
-  if (!moved) return state;
-
-  const nextBy: ByStatus = {
-    attending: stripFrom(state.byStatus.attending),
-    absent: stripFrom(state.byStatus.absent),
-    undecided: stripFrom(state.byStatus.undecided),
-  };
-  let nextNon = stripFrom(state.nonVoters);
-
-  if (status === null) {
-    nextNon = [moved, ...nextNon].sort(byName);
-  } else if (status === "attending") {
-    // 참석으로 이동 → 전체 참여로
-    nextBy.attending = [
-      ...nextBy.attending,
-      { ...moved, attending_quarters: null },
-    ].sort(byName);
-  } else {
-    nextBy[status] = [...nextBy[status], moved].sort(byName);
-  }
-  return { byStatus: nextBy, nonVoters: nextNon };
-}
-
 export default function AttendanceManagerBoard({
-  matchId,
   byStatus,
   nonVoters,
   totalQuarters = 4,
   quarterActions,
   readonly = false,
-  onCountsChange,
+  onDrop,
 }: {
-  matchId: string;
   byStatus: ByStatus;
   nonVoters: Member[];
   totalQuarters?: number;
   quarterActions?: (string | null)[] | null;
-  /** true 면 드래그앤드롭·서버 변경을 막고 보기 전용으로 렌더 (일반 회원 화면) */
+  /** true 면 드래그앤드롭을 막고 보기 전용으로 렌더 (일반 회원 화면) */
   readonly?: boolean;
-  /** 낙관적 카운트를 상단 통계와 즉시 동기화하기 위한 콜백 */
-  onCountsChange?: (counts: {
-    attending: number;
-    absent: number;
-    undecided: number;
-    nonVoters: number;
-  }) => void;
+  /** 드롭 시 부모의 통합 낙관 상태에 위임 — 칩·상단 통계가 한 번의 렌더로 함께 갱신된다.
+   *  byStatus/nonVoters 는 이미 부모에서 낙관 반영된 값이므로 보드는 순수 표시만 한다. */
+  onDrop?: (playerId: string, status: Status) => void;
 }) {
-  const [, startTransition] = useTransition();
   const [dragging, setDragging] = useState(false);
-  const [optimistic, applyOptimistic] = useOptimistic<BoardState, Move>(
-    { byStatus, nonVoters },
-    applyMove,
-  );
 
   const handleDrop = (playerId: string, status: Status) => {
     if (readonly) return;
-    startTransition(async () => {
-      applyOptimistic({ playerId, status });
-      try {
-        await setAttendanceFor(matchId, playerId, status);
-      } catch (e) {
-        console.error(e);
-      }
-    });
+    onDrop?.(playerId, status);
   };
-
-  // 드래그로 보드 낙관 상태가 바뀌면 상단 통계도 즉시 갱신 (서버 revalidate 대기 없이).
-  // 의존성은 카운트 숫자(원시값)로 둔다 — optimistic 객체 참조는 매 렌더 새로 생겨
-  // 무한 루프를 유발하기 때문.
-  const attendingCount = optimistic.byStatus.attending.length;
-  const absentCount = optimistic.byStatus.absent.length;
-  const undecidedCount = optimistic.byStatus.undecided.length;
-  const nonVotersCount = optimistic.nonVoters.length;
-  useEffect(() => {
-    onCountsChange?.({
-      attending: attendingCount,
-      absent: absentCount,
-      undecided: undecidedCount,
-      nonVoters: nonVotersCount,
-    });
-  }, [
-    attendingCount,
-    absentCount,
-    undecidedCount,
-    nonVotersCount,
-    onCountsChange,
-  ]);
 
   // 참석을 전체/일부로 분리
   const isFull = (m: Member) =>
     m.attending_quarters == null || m.attending_quarters.length >= totalQuarters;
-  const full = optimistic.byStatus.attending.filter(isFull);
-  const partial = optimistic.byStatus.attending.filter((m) => !isFull(m));
+  const full = byStatus.attending.filter(isFull);
+  const partial = byStatus.attending.filter((m) => !isFull(m));
 
   return (
     <div className="flex flex-col gap-3">
@@ -207,7 +119,7 @@ export default function AttendanceManagerBoard({
       {/* 불참 / 미정 — 전체·일부 참여와 같은 레벨의 드롭 섹션 */}
       <DropSection
         label="불참"
-        count={optimistic.byStatus.absent.length}
+        count={byStatus.absent.length}
         status="absent"
         dotColor="#EF3E3E"
         dragging={dragging}
@@ -215,10 +127,10 @@ export default function AttendanceManagerBoard({
         onDrop={handleDrop}
         readonly={readonly}
       >
-        {optimistic.byStatus.absent.length === 0 ? (
+        {byStatus.absent.length === 0 ? (
           <span className="text-sm text-suaza-ink-faint">—</span>
         ) : (
-          optimistic.byStatus.absent.map((m) => (
+          byStatus.absent.map((m) => (
             <Chip
               key={m.id}
               member={m}
@@ -231,7 +143,7 @@ export default function AttendanceManagerBoard({
 
       <DropSection
         label="미정"
-        count={optimistic.byStatus.undecided.length}
+        count={byStatus.undecided.length}
         status="undecided"
         dotColor="#9CA3AF"
         dragging={dragging}
@@ -239,10 +151,10 @@ export default function AttendanceManagerBoard({
         onDrop={handleDrop}
         readonly={readonly}
       >
-        {optimistic.byStatus.undecided.length === 0 ? (
+        {byStatus.undecided.length === 0 ? (
           <span className="text-sm text-suaza-ink-faint">—</span>
         ) : (
-          optimistic.byStatus.undecided.map((m) => (
+          byStatus.undecided.map((m) => (
             <Chip
               key={m.id}
               member={m}
@@ -257,7 +169,7 @@ export default function AttendanceManagerBoard({
 
       <DropSection
         label="미투표"
-        count={optimistic.nonVoters.length}
+        count={nonVoters.length}
         status={null}
         dotColor="#D1D5DB"
         dragging={dragging}
@@ -265,10 +177,10 @@ export default function AttendanceManagerBoard({
         onDrop={handleDrop}
         readonly={readonly}
       >
-        {optimistic.nonVoters.length === 0 ? (
+        {nonVoters.length === 0 ? (
           <span className="text-sm text-suaza-ink-faint">—</span>
         ) : (
-          optimistic.nonVoters.map((m) => (
+          nonVoters.map((m) => (
             <Chip
               key={m.id}
               member={m}
