@@ -1,6 +1,6 @@
 "use client";
 
-import { useOptimistic, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { setAttendanceFor } from "@/lib/matches/actions";
 import { quarterShortLabel } from "@/lib/matches/helpers";
 
@@ -79,6 +79,7 @@ export default function AttendanceManagerBoard({
   totalQuarters = 4,
   quarterActions,
   readonly = false,
+  onCountsChange,
 }: {
   matchId: string;
   byStatus: ByStatus;
@@ -87,6 +88,13 @@ export default function AttendanceManagerBoard({
   quarterActions?: (string | null)[] | null;
   /** true 면 드래그앤드롭·서버 변경을 막고 보기 전용으로 렌더 (일반 회원 화면) */
   readonly?: boolean;
+  /** 낙관적 카운트를 상단 통계와 즉시 동기화하기 위한 콜백 */
+  onCountsChange?: (counts: {
+    attending: number;
+    absent: number;
+    undecided: number;
+    nonVoters: number;
+  }) => void;
 }) {
   const [, startTransition] = useTransition();
   const [dragging, setDragging] = useState(false);
@@ -106,6 +114,28 @@ export default function AttendanceManagerBoard({
       }
     });
   };
+
+  // 드래그로 보드 낙관 상태가 바뀌면 상단 통계도 즉시 갱신 (서버 revalidate 대기 없이).
+  // 의존성은 카운트 숫자(원시값)로 둔다 — optimistic 객체 참조는 매 렌더 새로 생겨
+  // 무한 루프를 유발하기 때문.
+  const attendingCount = optimistic.byStatus.attending.length;
+  const absentCount = optimistic.byStatus.absent.length;
+  const undecidedCount = optimistic.byStatus.undecided.length;
+  const nonVotersCount = optimistic.nonVoters.length;
+  useEffect(() => {
+    onCountsChange?.({
+      attending: attendingCount,
+      absent: absentCount,
+      undecided: undecidedCount,
+      nonVoters: nonVotersCount,
+    });
+  }, [
+    attendingCount,
+    absentCount,
+    undecidedCount,
+    nonVotersCount,
+    onCountsChange,
+  ]);
 
   // 참석을 전체/일부로 분리
   const isFull = (m: Member) =>

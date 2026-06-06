@@ -494,6 +494,10 @@ export function AttendanceCardVote({
     nonVoters,
   );
 
+  // 드래그(타인 배정)도 상단 통계에 즉시 반영 — 보드의 낙관 카운트를 받아 우선 표시.
+  const [liveCounts, setLiveCounts] = useState<typeof counts | null>(null);
+  const shownCounts = liveCounts ?? counts;
+
   // 본인 컨디션 — null(미설정/"?") 상태에서 첫 클릭 시 3(보통)으로 초기화,
   // 이후 1→2→…→5→1 순환. 낙관적 반영 + 서버 저장.
   const [condition, setCondition] = useState<number | null>(
@@ -549,10 +553,10 @@ export function AttendanceCardVote({
 
       {/* Stats row */}
       <div className="grid grid-cols-4 gap-2 py-2">
-        <StatCount label="참석" value={counts.attending} color="#22C55E" />
-        <StatCount label="불참" value={counts.absent} color="#EF3E3E" />
-        <StatCount label="미정" value={counts.undecided} color="#9CA3AF" />
-        <StatCount label="미투표" value={counts.nonVoters} color="#D1D5DB" />
+        <StatCount label="참석" value={shownCounts.attending} color="#22C55E" />
+        <StatCount label="불참" value={shownCounts.absent} color="#EF3E3E" />
+        <StatCount label="미정" value={shownCounts.undecided} color="#9CA3AF" />
+        <StatCount label="미투표" value={shownCounts.nonVoters} color="#D1D5DB" />
       </div>
 
       {/* 모든 회원이 동일한 보드 뷰를 본다. 매니저·감독만 드래그앤드롭으로 변경 가능하고,
@@ -564,6 +568,7 @@ export function AttendanceCardVote({
         totalQuarters={totalQuarters}
         quarterActions={quarterActions}
         readonly={!isManager}
+        onCountsChange={setLiveCounts}
       />
     </>
   );
@@ -615,6 +620,10 @@ export function AttendanceCompactVote({
     nonVoters,
   );
 
+  // 드래그(타인 배정)도 상단 통계에 즉시 반영 — 보드의 낙관 카운트를 우선 표시.
+  const [liveCounts, setLiveCounts] = useState<typeof counts | null>(null);
+  const shownCounts = liveCounts ?? counts;
+
   return (
     <>
       {locked ? (
@@ -637,10 +646,10 @@ export function AttendanceCompactVote({
 
       {/* 통계 줄 */}
       <div className="grid grid-cols-4 gap-2 py-1">
-        <StatCount label="참석" value={counts.attending} color="#22C55E" />
-        <StatCount label="불참" value={counts.absent} color="#EF3E3E" />
-        <StatCount label="미정" value={counts.undecided} color="#9CA3AF" />
-        <StatCount label="미투표" value={counts.nonVoters} color="#D1D5DB" />
+        <StatCount label="참석" value={shownCounts.attending} color="#22C55E" />
+        <StatCount label="불참" value={shownCounts.absent} color="#EF3E3E" />
+        <StatCount label="미정" value={shownCounts.undecided} color="#9CA3AF" />
+        <StatCount label="미투표" value={shownCounts.nonVoters} color="#D1D5DB" />
       </div>
 
       {/* 경기 상세와 동일하게 모든 회원이 같은 보드 뷰를 본다.
@@ -652,6 +661,7 @@ export function AttendanceCompactVote({
         totalQuarters={totalQuarters}
         quarterActions={quarterActions}
         readonly={!isManager}
+        onCountsChange={setLiveCounts}
       />
     </>
   );
