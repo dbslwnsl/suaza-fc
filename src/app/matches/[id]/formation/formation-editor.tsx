@@ -933,7 +933,7 @@ export default function FormationEditor({
         )}
 
         {/* 경기장 */}
-        <div className="relative min-w-0 desktop-lg:shrink-0 desktop-lg:flex desktop-lg:flex-col desktop-lg:items-center desktop-lg:justify-center">
+        <div className="relative min-w-0 desktop-lg:shrink-0 desktop-lg:h-full desktop-lg:flex desktop-lg:flex-col desktop-lg:items-center desktop-lg:justify-center">
           {/* 자체전 + 회장·감독: 운동장 위 보기 모드 리본 (A팀 / 전체 / B팀).
               종료 경기에서는 좌·우 양 끝에 승/무/패 토글이 함께 노출됨. */}
           {fullAccess && isIntra && current.teamB && (
@@ -1485,7 +1485,7 @@ function Pitch({
   return (
     <div
       ref={pitchRef}
-      className={`relative w-full [container-type:size] ${
+      className={`relative w-full [container-type:inline-size] ${
         (tallContainer ?? isIntra) ? "aspect-[3/5]" : "aspect-[3/4]"
       } desktop-lg:w-auto desktop-lg:h-full ${
         compactWidth
@@ -1937,14 +1937,15 @@ function PlayerCircle({
   const color = POSITION_COLOR[role];
   const text = label ?? role;
   const stateRing = hovered ? "ring-4 ring-white/60 scale-105" : "";
-  // 경기장 크기에 비례(cqmin) + 상·하한(clamp). 자체전은 두 팀을 절반씩 욱여넣어
+  // 경기장 크기에 비례(cqi) + 상·하한(clamp). 자체전은 두 팀을 절반씩 욱여넣어
   // 세로 간격이 좁으므로 더 작은 비율 사용. (인라인 스타일로 확실히 적용)
+  // 컨테이너는 inline-size 만 contain 하므로 cqi 사용 (Safari 호환).
   const dim = compact
-    ? "clamp(24px, 5.5cqmin, 32px)"
-    : "clamp(38px, 11cqmin, 50px)";
+    ? "clamp(24px, 5.5cqi, 32px)"
+    : "clamp(38px, 11cqi, 50px)";
   const fontSize = compact
-    ? "clamp(8px, 1.5cqmin, 10px)"
-    : "clamp(9px, 2.6cqmin, 11px)";
+    ? "clamp(8px, 1.5cqi, 10px)"
+    : "clamp(9px, 2.6cqi, 11px)";
   const sizeStyle = { width: dim, height: dim, fontSize };
   if (player) {
     return (
@@ -1964,7 +1965,7 @@ function PlayerCircle({
       <span
         className="text-white/85 leading-none font-light"
         style={{
-          fontSize: compact ? "clamp(13px, 3cqmin, 17px)" : "clamp(16px, 4cqmin, 22px)",
+          fontSize: compact ? "clamp(13px, 3cqi, 17px)" : "clamp(16px, 4cqi, 22px)",
         }}
       >
         +
