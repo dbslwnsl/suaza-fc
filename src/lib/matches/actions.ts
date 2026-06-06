@@ -136,11 +136,17 @@ async function requireStaff() {
 
   const { data: me } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, title")
     .eq("id", user.id)
     .single();
 
-  if (me?.role !== "manager" && me?.role !== "coach") {
+  // 권한: 매니저(role=manager) / 코치(role=coach) / 회장(title=president) / 감독(title=head_coach)
+  const isStaff =
+    me?.role === "manager" ||
+    me?.role === "coach" ||
+    me?.title === "president" ||
+    me?.title === "head_coach";
+  if (!isStaff) {
     redirect(
       `/matches?error=${encodeURIComponent("경기 관리 권한이 없습니다")}`,
     );

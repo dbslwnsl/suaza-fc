@@ -222,6 +222,10 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
   const pvMap = pointValueMap(defs);
   const matchLocked =
     match.status === "done" || match.status === "canceled";
+  // 진행중/종료 경기는 명단 카드에 기록 입력 UI 노출.
+  // 진행중은 실시간 입력용 (포메이션 편집은 계속 가능), 종료는 사후 입력용.
+  const showRecording =
+    match.status === "done" || match.status === "in_progress";
   // 자체전 종료 시: 회장·감독이 토글한 matches.intra_winner 가 승리팀.
   //   NULL(기본) = 무승부 → 양 팀 win_points 0.
   // 실제 row 가 없어도 표시 계산엔 winPoints 가산을 포함하고,
@@ -292,12 +296,13 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
       editableTeam={editableTeam}
       captainIds={captainIds}
       matchLocked={matchLocked}
-      {...(matchLocked
+      {...(showRecording
         ? {
             statByPlayer,
             canEditStats: isFullStaff,
-            winningTeam: intraWinner,
-            canEditWinner: isIntra && isFullStaff,
+            // 우승팀은 경기 종료 후에만 의미가 있음 — 진행중에는 null/false
+            winningTeam: matchLocked ? intraWinner : null,
+            canEditWinner: matchLocked && isIntra && isFullStaff,
             canWriteCoachComment,
             matchDate: match.match_date as string,
             commentCountByPlayer,

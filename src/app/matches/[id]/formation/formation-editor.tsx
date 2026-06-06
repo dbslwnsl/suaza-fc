@@ -921,7 +921,7 @@ export default function FormationEditor({
               onAutoPlace={() => autoPlaceTeam("A")}
               matchLocked={matchLocked}
               statByPlayer={statByPlayer}
-              canEditStats={canEditStats && showAll}
+              canEditStats={canEditStats && (!matchLocked || showAll)}
               matchId={matchId}
               winningTeam={optWinningTeam}
               rosterTeam="A"
@@ -1141,7 +1141,7 @@ export default function FormationEditor({
                   }
                   matchLocked={matchLocked}
                   statByPlayer={statByPlayer}
-                  canEditStats={canEditStats && showAll}
+                  canEditStats={canEditStats && (!matchLocked || showAll)}
                   matchId={matchId}
                   winningTeam={optWinningTeam}
                   rosterTeam={isIntra ? rightTeam : null}
@@ -1211,7 +1211,7 @@ export default function FormationEditor({
         onAllClick={() => setShowAll(true)}
         matchLocked={matchLocked}
         statByPlayer={statByPlayer}
-        canEditStats={canEditStats && showAll}
+        canEditStats={canEditStats && (!matchLocked || showAll)}
         matchId={matchId}
         winningTeam={optWinningTeam}
         canWriteCoachComment={canWriteCoachComment}
@@ -2729,6 +2729,7 @@ function PlayerRosterMobile({
       onCycleCondition={onCycleCondition}
       stat={statByPlayer?.[p.member.id]}
       canEditStats={canEditStats}
+      matchLocked={matchLocked}
       matchId={matchId}
       winningTeam={winningTeam}
       canWriteCoachComment={canWriteCoachComment}
@@ -2960,6 +2961,7 @@ function PlayerRowMobile({
   onCycleCondition,
   stat,
   canEditStats = false,
+  matchLocked = false,
   matchId,
   winningTeam = null,
   canWriteCoachComment = false,
@@ -2977,9 +2979,11 @@ function PlayerRowMobile({
   isMe: boolean;
   conditionLevel: number;
   onCycleCondition: () => void;
-  /** 종료 경기 임베드 — 이번 경기 기록(있으면 포인트 + 입력 UI 노출) */
+  /** 진행중/종료 경기 — 이번 경기 기록(있으면 포인트 + 입력 UI 노출) */
   stat?: PlayerStat;
   canEditStats?: boolean;
+  /** true(종료/취소) 면 카드 본체에서 배치/드래그/클릭 비활성. 진행중(false)은 입력 UI + 편집 모두 허용. */
+  matchLocked?: boolean;
   matchId?: string;
   winningTeam?: "A" | "B" | null;
   /** 감독·코치 코멘트 작성 권한 (title=head_coach/coach) */
@@ -3010,9 +3014,8 @@ function PlayerRowMobile({
     setMomActive((stat?.mom ?? 0) > 0);
   }, [stat?.mom]);
 
-  // 카드 본체(이름 줄) — 종료 경기 임베드에서는 클릭/드래그가 의미 없으므로 비활성.
-  // stat 이 있으면 wrapper 가 테두리/배경을 담당하므로 본체는 border-0/투명.
-  const lockedForRecord = !!stat;
+  // 종료/취소 경기 + stat 있음 → 본체 비활성. 진행중(stat 있어도 matchLocked=false)은 드래그/클릭 허용.
+  const lockedForRecord = !!stat && matchLocked;
   const cardBody = (
     <div
       style={{
@@ -3979,6 +3982,7 @@ function PlayerRosterDesktop({
                 onCycleCondition={onCycleCondition}
                 stat={statByPlayer?.[p.member.id]}
                 canEditStats={canEditStats}
+                matchLocked={matchLocked}
                 matchId={matchId}
                 winningTeam={winningTeam}
                 canWriteCoachComment={canWriteCoachComment}
@@ -4027,6 +4031,7 @@ function DesktopPlayerCard({
   onCycleCondition,
   stat,
   canEditStats = false,
+  matchLocked = false,
   matchId,
   winningTeam = null,
   canWriteCoachComment = false,
@@ -4045,9 +4050,11 @@ function DesktopPlayerCard({
   isMe: boolean;
   conditionLevel: number;
   onCycleCondition: () => void;
-  /** 종료 경기 임베드 — 이번 경기 기록(있으면 포인트 + 입력 UI 노출) */
+  /** 진행중/종료 경기 — 이번 경기 기록(있으면 포인트 + 입력 UI 노출) */
   stat?: PlayerStat;
   canEditStats?: boolean;
+  /** true(종료/취소) 면 카드 본체에서 배치/드래그/클릭 비활성. 진행중(false)은 입력 UI + 편집 모두 허용. */
+  matchLocked?: boolean;
   matchId?: string;
   winningTeam?: "A" | "B" | null;
   /** 감독·코치 코멘트 작성 권한 (title=head_coach/coach) */
@@ -4080,8 +4087,8 @@ function DesktopPlayerCard({
     setMomActive((stat?.mom ?? 0) > 0);
   }, [stat?.mom]);
 
-  // 종료 임베드(stat 있음) — 카드 본체에서 배치/드래그/클릭 비활성
-  const lockedForRecord = !!stat;
+  // 종료/취소 경기 + stat 있음 → 본체 비활성. 진행중(stat 있어도 matchLocked=false)은 드래그/클릭 허용.
+  const lockedForRecord = !!stat && matchLocked;
   const momToggle = canEditStats && matchId
     ? () => {
         const next = !momActive;
