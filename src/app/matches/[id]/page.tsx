@@ -13,6 +13,7 @@ import {
 import {
   AttendanceCardVote,
   AttendanceCompactVote,
+  AttendanceProvider,
 } from "./attendance-vote-panel";
 import NewMatchForm from "@/app/matches/new/new-match-form";
 import ScoreControl from "./score-control";
@@ -206,6 +207,13 @@ export default async function MatchDetailPage({
       isMercenary: true,
     });
   }
+  // 팀 편성 참석 리스트를 출석 낙관과 공유하기 위한 데이터 (AttendanceProvider 주입용).
+  const baseTeam = new Map<string, "A" | "B" | null>(
+    teamMembers
+      .filter((tm) => !tm.isMercenary)
+      .map((tm) => [tm.id, tm.team] as const),
+  );
+  const mercenaries = teamMembers.filter((tm) => tm.isMercenary);
   const rawNonVoters = ((allMembers ?? []) as VotePlayer[])
     .filter((m) => !votedIds.has(m.id))
     .map(withKings);
@@ -401,23 +409,31 @@ export default async function MatchDetailPage({
           dDay={dDay}
         />
 
+            <AttendanceProvider
+              matchId={m.id}
+              myStatus={myStatus}
+              myAttendingQuarters={myAttendingQuarters}
+              me={{
+                id: user.id,
+                name: me?.name ?? "",
+                is_injured: injuredLock,
+                on_leave: onLeaveLock,
+              }}
+              byStatus={byStatus}
+              nonVoters={nonVoters}
+              baseTeam={baseTeam}
+              mercenaries={mercenaries}
+            >
             <div className="grid grid-cols-1 desktop:grid-cols-2 gap-4 desktop:items-stretch">
               {/* 출석투표: 좌측 상단 — 취소 경기엔 숨김 (완료 경기는 조회용으로 노출) */}
               {m.status !== "canceled" && (
                 <div className="order-1 desktop:h-full">
                   <AttendanceCard
                     matchId={m.id}
-                    meId={user.id}
-                    myStatus={myStatus}
-                    myAttendingQuarters={myAttendingQuarters}
-                    myInjured={injuredLock}
-                    myOnLeave={onLeaveLock}
                     myCondition={
                       (me as { condition?: number | null } | null)?.condition ??
                       null
                     }
-                    byStatus={byStatus}
-                    nonVoters={nonVoters}
                     isManager={isStaff}
                     myName={me?.name ?? null}
                     totalMembers={totalMembers}
@@ -450,7 +466,6 @@ export default async function MatchDetailPage({
                 <div className="order-2 desktop:h-full">
                   <TeamBuilder
                     matchId={m.id}
-                    attendees={teamMembers}
                     absentCount={byStatus.absent.length}
                     undecidedCount={byStatus.undecided.length}
                     nonVoterCount={nonVoters.length}
@@ -545,6 +560,7 @@ export default async function MatchDetailPage({
                 </div>
               )}
             </div>
+            </AttendanceProvider>
 
             {isStaff && (
               <form action={deleteMatch.bind(null, m.id)} className="flex justify-center mt-4">
@@ -899,14 +915,7 @@ type AttendancePlayer = {
 
 function AttendanceCard({
   matchId,
-  meId,
-  myStatus,
-  myAttendingQuarters,
-  myInjured,
-  myOnLeave,
   myCondition,
-  byStatus,
-  nonVoters,
   isManager,
   myName,
   totalMembers,
@@ -918,19 +927,8 @@ function AttendanceCard({
   lockedMessage,
 }: {
   matchId: string;
-  meId: string;
-  myStatus: string | null;
-  myAttendingQuarters: number[] | null;
-  myInjured?: boolean;
-  myOnLeave?: boolean;
   /** null = 미설정 ("?") */
   myCondition?: number | null;
-  byStatus: {
-    attending: AttendancePlayer[];
-    absent: AttendancePlayer[];
-    undecided: AttendancePlayer[];
-  };
-  nonVoters: AttendancePlayer[];
   isManager?: boolean;
   myName: string | null;
   totalMembers: number;
@@ -977,18 +975,8 @@ function AttendanceCard({
 
       <AttendanceCardVote
         matchId={matchId}
-        me={{
-          id: meId,
-          name: myName ?? "",
-          is_injured: myInjured,
-          on_leave: myOnLeave,
-        }}
         myName={myName}
-        myStatus={myStatus}
         myCondition={myCondition}
-        myAttendingQuarters={myAttendingQuarters}
-        byStatus={byStatus}
-        nonVoters={nonVoters}
         isManager={!!isManager}
         totalQuarters={totalQuarters}
         quarterActions={quarterActions}

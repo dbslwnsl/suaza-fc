@@ -1,6 +1,14 @@
 "use client";
 
-import { useMemo, useOptimistic, useState, useTransition } from "react";
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useOptimistic,
+  useState,
+  useTransition,
+  type ReactNode,
+} from "react";
 import {
   setAttendanceFor,
   setMyAttendingQuarters,
@@ -93,6 +101,10 @@ export type VotePlayer = {
   id: string;
   name: string;
   jersey_number?: number | null;
+  // 주 포지션 목록(positions[0] = 주포지션) — 팀 편성 참석 리스트 분류에 사용
+  positions?: string[] | null;
+  // 컨디션 1~5 (null = 미설정)
+  condition?: number | null;
   // 참석자만 의미. NULL = 전체 쿼터 참여, 배열 = 참여하는 쿼터 번호 집합(1-indexed)
   attending_quarters?: number[] | null;
   // 응답 시각 — 정렬 기준
@@ -357,6 +369,83 @@ function useOptimisticVote(
   };
 }
 
+// ───────────────────────────────────────────────────────────
+// AttendanceProvider — 출석 낙관 상태를 페이지 트리에서 공유.
+// AttendanceCardVote(투표)와 TeamBuilder(참석 리스트)가 같은 낙관 소스를 보도록 해,
+// 투표/드래그 시 팀 편성 참석 리스트도 즉시 갱신된다.
+// ───────────────────────────────────────────────────────────
+
+export type AttendingMember = {
+  id: string;
+  name: string;
+  team: "A" | "B" | null;
+  positions: string[] | null;
+  condition: number | null;
+  isMercenary?: boolean;
+};
+
+type AttendanceCtxValue = ReturnType<typeof useOptimisticVote> & {
+  attendingMembers: AttendingMember[];
+};
+
+const AttendanceCtx = createContext<AttendanceCtxValue | null>(null);
+
+export function AttendanceProvider({
+  matchId,
+  myStatus,
+  myAttendingQuarters,
+  me,
+  byStatus,
+  nonVoters,
+  baseTeam,
+  mercenaries,
+  children,
+}: {
+  matchId: string;
+  myStatus: string | null;
+  myAttendingQuarters: number[] | null;
+  me: VotePlayer | null;
+  byStatus: Groups;
+  nonVoters: VotePlayer[];
+  /** 참석자 팀 배정 서버값(낙관 base) — playerId→team */
+  baseTeam: ReadonlyMap<string, "A" | "B" | null>;
+  /** 용병(서버) — 참석 리스트에 그대로 포함 */
+  mercenaries: AttendingMember[];
+  children: ReactNode;
+}) {
+  const vote = useOptimisticVote(
+    matchId,
+    myStatus,
+    myAttendingQuarters,
+    me,
+    byStatus,
+    nonVoters,
+  );
+  const attendingMembers = useMemo<AttendingMember[]>(() => {
+    const members = vote.groups.attending.map((p) => ({
+      id: p.id,
+      name: p.name,
+      team: baseTeam.get(p.id) ?? null,
+      positions: p.positions ?? null,
+      condition: p.condition ?? null,
+    }));
+    return [...members, ...mercenaries];
+  }, [vote.groups.attending, baseTeam, mercenaries]);
+
+  return (
+    <AttendanceCtx.Provider value={{ ...vote, attendingMembers }}>
+      {children}
+    </AttendanceCtx.Provider>
+  );
+}
+
+export function useAttendanceCtx(): AttendanceCtxValue {
+  const ctx = useContext(AttendanceCtx);
+  if (!ctx)
+    throw new Error("useAttendanceCtx must be used within AttendanceProvider");
+  return ctx;
+}
+
 function VoteButtons({
   status,
   onVote,
@@ -486,13 +575,8 @@ function QuarterPicker({
 
 export function AttendanceCardVote({
   matchId,
-  me,
   myName,
-  myStatus,
-  myAttendingQuarters,
   myCondition,
-  byStatus,
-  nonVoters,
   isManager,
   totalQuarters,
   quarterActions,
@@ -500,20 +584,16 @@ export function AttendanceCardVote({
   lockedMessage = "🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다",
 }: {
   matchId: string;
-  me: VotePlayer | null;
   myName: string | null;
-  myStatus: string | null;
-  myAttendingQuarters: number[] | null;
   /** 1~5 단계 또는 null = 미설정("?"). null 일 때 첫 클릭이 3 으로 초기화. */
   myCondition?: number | null;
-  byStatus: Groups;
-  nonVoters: VotePlayer[];
   isManager: boolean;
   totalQuarters: number;
   quarterActions?: (string | null)[] | null;
   locked: boolean;
   lockedMessage?: string;
 }) {
+  // 출석 낙관 상태는 AttendanceProvider 가 소유 — TeamBuilder 와 같은 소스를 공유한다.
   const {
     optimisticStatus,
     optimisticQuarters,
@@ -523,14 +603,7 @@ export function AttendanceCardVote({
     groups,
     nonVoters: nv,
     counts,
-  } = useOptimisticVote(
-    matchId,
-    myStatus,
-    myAttendingQuarters,
-    me,
-    byStatus,
-    nonVoters,
-  );
+  } = useAttendanceCtx();
 
   // 본인 컨디션 — null(미설정/"?") 상태에서 첫 클릭 시 3(보통)으로 초기화,
   // 이후 1→2→…→5→1 순환. 낙관적 반영 + 서버 저장.

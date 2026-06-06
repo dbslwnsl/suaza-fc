@@ -22,6 +22,7 @@ import { POSITION_COLOR, type Position } from "@/lib/members/positions";
 import { useIntraTeamColors } from "@/components/intra-team-colors";
 import CaptainPicker, { CAPTAIN_CHIP_CLASS } from "./captain-picker";
 import ConditionArrow from "@/components/condition-arrow";
+import { useAttendanceCtx } from "./attendance-vote-panel";
 
 export type TeamMember = {
   id: string;
@@ -109,7 +110,6 @@ function PositionGroupedChips({
 
 export default function TeamBuilder({
   matchId,
-  attendees,
   absentCount,
   undecidedCount,
   nonVoterCount,
@@ -123,7 +123,6 @@ export default function TeamBuilder({
   canAddMercenary = false,
 }: {
   matchId: string;
-  attendees: TeamMember[];
   absentCount: number;
   undecidedCount: number;
   nonVoterCount: number;
@@ -137,6 +136,8 @@ export default function TeamBuilder({
   /** 용병 추가 버튼 노출 권한 — 회장·감독·주장 */
   canAddMercenary?: boolean;
 }) {
+  // 출석 낙관과 같은 소스 — 투표/드래그 시 참석 리스트가 즉시 갱신된다.
+  const { attendingMembers: attendees } = useAttendanceCtx();
   const [, startTransition] = useTransition();
   // 데스크탑 드래그앤드롭 상태
   const [dragging, setDragging] = useState(false);
