@@ -1595,3 +1595,134 @@ export async function deleteMatchComment(commentId: string) {
   const { supabase } = await requireUser();
   await supabase.from("match_comments").delete().eq("id", commentId);
 }
+
+// ─────────────────────────────────────────────────────────────
+// 용병 (match_mercenaries) — 자체전에서 임시로 추가되는 1회성 멤버
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * 용병 관리 권한 — staff(매니저/코치/회장/감독) 또는 해당 경기의 주장.
+ */
+async function requireCanManageMercenary(matchId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const [{ data: me }, { data: m }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("role, title")
+      .eq("id", user.id)
+      .single(),
+    supabase
+      .from("matches")
+      .select("team_a_captain, team_b_captain")
+      .eq("id", matchId)
+      .single(),
+  ]);
+
+  const isStaff =
+    me?.role === "manager" ||
+    me?.role === "coach" ||
+    me?.title === "president" ||
+    me?.title === "head_coach";
+  const isCaptain =
+    (!!m?.team_a_captain && m.team_a_captain === user.id) ||
+    (!!m?.team_b_captain && m.team_b_captain === user.id);
+
+  if (!isStaff && !isCaptain) {
+    throw new Error("용병을 관리할 권한이 없습니다");
+  }
+  return { supabase, userId: user.id };
+}
+
+/**
+ * 용병 추가: 이름은 자동으로 "용병N" (N = 기존 이름 중 가장 큰 번호 + 1).
+ * 삭제 후 재추가 시 이름 충돌을 피하기 위해 max+1 방식.
+ */
+export async function addMercenary(matchId: string) {
+  const { supabase } = await requireCanManageMercenary(matchId);
+
+  const { data: existing } = await supabase
+    .from("match_mercenaries")
+    .select("name")
+    .eq("match_id", matchId);
+
+  let maxNum = 0;
+  for (const m of (existing ?? []) as { name: string }[]) {
+    const match = m.name.match(/^용병(\d+)$/);
+    if (match) {
+      const n = parseInt(match[1], 10);
+      if (n > maxNum) maxNum = n;
+    }
+  }
+  const nextNum = maxNum + 1;
+
+  const { error } = await supabase.from("match_mercenaries").insert({
+    match_id: matchId,
+    name: `용병${nextNum}`,
+    team: null,
+  });
+  if (error) throw error;
+
+  revalidatePath(`/matches/${matchId}`);
+}
+
+/**
+ * 용병 팀 배정 (A/B/null).
+ */
+export async function setMercenaryTeam(
+  matchId: string,
+  mercenaryId: string,
+  team: "A" | "B" | null,
+) {
+  const { supabase } = await requireCanManageMercenary(matchId);
+  const { error } = await supabase
+    .from("match_mercenaries")
+    .update({ team })
+    .eq("id", mercenaryId);
+  if (error) throw error;
+  revalidatePath(`/matches/${matchId}`);
+}
+
+/**
+ * 용병 팀 순환 (없음 → A → B → 없음). 칩 탭 동작.
+ */
+export async function cycleMercenaryTeam(
+  matchId: string,
+  mercenaryId: string,
+) {
+  const { supabase } = await requireCanManageMercenary(matchId);
+  const { data: cur } = await supabase
+    .from("match_mercenaries")
+    .select("team")
+    .eq("id", mercenaryId)
+    .single();
+  const next: "A" | "B" | null =
+    cur?.team === null || cur?.team === undefined
+      ? "A"
+      : cur.team === "A"
+        ? "B"
+        : null;
+  const { error } = await supabase
+    .from("match_mercenaries")
+    .update({ team: next })
+    .eq("id", mercenaryId);
+  if (error) throw error;
+  revalidatePath(`/matches/${matchId}`);
+}
+
+/**
+ * 용병 삭제.
+ */
+export async function removeMercenary(matchId: string, mercenaryId: string) {
+  const { supabase } = await requireCanManageMercenary(matchId);
+  const { error } = await supabase
+    .from("match_mercenaries")
+    .delete()
+    .eq("id", mercenaryId);
+  if (error) throw error;
+  revalidatePath(`/matches/${matchId}`);
+}

@@ -3086,51 +3086,59 @@ function PlayerRowMobile({
               · MOM:  stat.mom > 0 이면 활성(노랑). 회장·감독·매니저만 토글 가능 */}
           {stat && (
             <span className="inline-flex items-center gap-1 ml-auto">
-              <StatusPill label="출" tone="success" active />
-              {!!team &&
-              winningTeam != null &&
-              winningTeam !== team ? (
-                <StatusPill label="패" tone="lose" active />
+              {m.isMercenary ? (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">
+                  용병
+                </span>
               ) : (
-                <StatusPill
-                  label="승"
-                  tone="win"
-                  active={!!team && winningTeam === team}
-                />
-              )}
-              <StatusPill
-                label="M"
-                tone="mom"
-                active={momActive}
-                disabled={!canEditStats}
-                onClick={
-                  canEditStats && matchId
-                    ? () => {
-                        const next = !momActive;
-                        setMomActive(next);
-                        startMomTransition(() => {
-                          setMomForPlayer(matchId, m.id, next);
-                        });
-                      }
-                    : undefined
-                }
-              />
-              {(canWriteCoachComment || isMe) && matchId && (
-                <CoachCommentButton
-                  memberId={m.id}
-                  memberName={m.name}
-                  matchId={matchId}
-                  matchDate={matchDate}
-                  hasComment={hasComment}
-                  readonly={!canWriteCoachComment}
-                />
+                <>
+                  <StatusPill label="출" tone="success" active />
+                  {!!team &&
+                  winningTeam != null &&
+                  winningTeam !== team ? (
+                    <StatusPill label="패" tone="lose" active />
+                  ) : (
+                    <StatusPill
+                      label="승"
+                      tone="win"
+                      active={!!team && winningTeam === team}
+                    />
+                  )}
+                  <StatusPill
+                    label="M"
+                    tone="mom"
+                    active={momActive}
+                    disabled={!canEditStats}
+                    onClick={
+                      canEditStats && matchId
+                        ? () => {
+                            const next = !momActive;
+                            setMomActive(next);
+                            startMomTransition(() => {
+                              setMomForPlayer(matchId, m.id, next);
+                            });
+                          }
+                        : undefined
+                    }
+                  />
+                  {(canWriteCoachComment || isMe) && matchId && (
+                    <CoachCommentButton
+                      memberId={m.id}
+                      memberName={m.name}
+                      matchId={matchId}
+                      matchDate={matchDate}
+                      hasComment={hasComment}
+                      readonly={!canWriteCoachComment}
+                    />
+                  )}
+                </>
               )}
             </span>
           )}
         </div>
       </div>
 
-      {stat ? (
+      {stat && !m.isMercenary ? (
         <span
           className="shrink-0 px-2.5 py-0.5 rounded-full text-[11px] font-bold text-white bg-suaza-accent"
           title="이번 경기 획득 포인트"
@@ -3160,7 +3168,7 @@ function PlayerRowMobile({
         matchId={matchId!}
         playerId={m.id}
         stat={stat}
-        canEdit={canEditStats}
+        canEdit={canEditStats && !m.isMercenary}
       />
     </div>
   );
@@ -4149,7 +4157,7 @@ function DesktopPlayerCard({
                 {pos}
               </span>
             ))}
-            {(canWriteCoachComment || isMe) && matchId && (
+            {(canWriteCoachComment || isMe) && matchId && !m.isMercenary && (
               <span className="ml-auto">
                 <CoachCommentButton
                   memberId={m.id}
@@ -4162,32 +4170,43 @@ function DesktopPlayerCard({
               </span>
             )}
           </div>
-          {/* 2줄: 출 / 승|패 / M / 포인트 */}
-          <div className="flex items-center gap-1.5">
-            <StatusPill label="출" tone="success" active />
-            {!!team && winningTeam != null && winningTeam !== team ? (
-              <StatusPill label="패" tone="lose" active />
-            ) : (
+          {/* 2줄: 용병은 "용병" 라벨만, 그 외엔 출 / 승|패 / M / 포인트 */}
+          {m.isMercenary ? (
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">
+                용병
+              </span>
+              <span className="text-[10px] text-suaza-ink-muted">
+                기록 비대상
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <StatusPill label="출" tone="success" active />
+              {!!team && winningTeam != null && winningTeam !== team ? (
+                <StatusPill label="패" tone="lose" active />
+              ) : (
+                <StatusPill
+                  label="승"
+                  tone="win"
+                  active={!!team && winningTeam === team}
+                />
+              )}
               <StatusPill
-                label="승"
-                tone="win"
-                active={!!team && winningTeam === team}
+                label="M"
+                tone="mom"
+                active={momActive}
+                disabled={!canEditStats}
+                onClick={momToggle}
               />
-            )}
-            <StatusPill
-              label="M"
-              tone="mom"
-              active={momActive}
-              disabled={!canEditStats}
-              onClick={momToggle}
-            />
-            <span
-              className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-suaza-accent"
-              title="이번 경기 획득 포인트"
-            >
-              {stat.points}P
-            </span>
-          </div>
+              <span
+                className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-suaza-accent"
+                title="이번 경기 획득 포인트"
+              >
+                {stat.points}P
+              </span>
+            </div>
+          )}
         </>
       ) : (
         // 진행 중 카드 — 한 줄 + (A/B 단일 팀 보기) 우측 쿼터 bar
@@ -4241,7 +4260,7 @@ function DesktopPlayerCard({
         matchId={matchId!}
         playerId={m.id}
         stat={stat}
-        canEdit={canEditStats}
+        canEdit={canEditStats && !m.isMercenary}
       />
     </div>
   );

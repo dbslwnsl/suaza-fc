@@ -2,11 +2,15 @@
 
 import { useMemo, useOptimistic, useState, useTransition } from "react";
 import {
+  addMercenary,
   autoBalanceTeams,
   cycleMatchTeam,
+  cycleMercenaryTeam,
+  removeMercenary,
   resetMatchTeams,
   setMatchCaptain,
   setMatchTeam,
+  setMercenaryTeam,
   setTeamColor,
 } from "@/lib/matches/actions";
 import {
@@ -26,6 +30,8 @@ export type TeamMember = {
   positions?: string[] | null;
   /** 컨디션 1~5 단계 (기본 3) */
   condition?: number | null;
+  /** 용병(임시 멤버)인 경우 true. 포지션과 무관하게 별도 그룹으로 분류된다. */
+  isMercenary?: boolean;
 };
 
 // 주 포지션(positions[0]) 기준 표기 순서. 미지정 회원은 맨 뒤 "기타" 그룹.
@@ -53,6 +59,7 @@ function groupByPosition(
 }
 
 // 포지션 라벨(좌) + 해당 그룹 칩(우)을 줄바꿈으로 나열. 칩 렌더링은 호출부가 결정.
+// 용병은 포지션과 무관하게 "용병" 그룹으로 분리된다.
 function PositionGroupedChips({
   members,
   emptyText = "—",
@@ -69,9 +76,11 @@ function PositionGroupedChips({
       </span>
     );
   }
+  const mercenaries = members.filter((m) => m.isMercenary);
+  const regular = members.filter((m) => !m.isMercenary);
   return (
     <div className="flex flex-col gap-1.5 w-full">
-      {groupByPosition(members).map((g) => (
+      {groupByPosition(regular).map((g) => (
         <div key={g.pos ?? "none"} className="flex items-start gap-2">
           <span
             className="shrink-0 w-7 text-[11px] font-bold leading-6"
@@ -84,6 +93,16 @@ function PositionGroupedChips({
           </div>
         </div>
       ))}
+      {mercenaries.length > 0 && (
+        <div key="mercenary" className="flex items-start gap-2">
+          <span className="shrink-0 w-7 text-[11px] font-bold leading-6 text-amber-700">
+            용병
+          </span>
+          <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
+            {mercenaries.map(renderChip)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -193,14 +212,61 @@ export default function TeamBuilder({
       cur.team === null ? "A" : cur.team === "A" ? "B" : null;
     startTransition(() => {
       applyOptimistic(setTeamLocally(playerId, next));
-      cycleMatchTeam(matchId, playerId);
+      if (cur.isMercenary) {
+        cycleMercenaryTeam(matchId, playerId);
+      } else {
+        cycleMatchTeam(matchId, playerId);
+      }
     });
   };
   const dropTo = (playerId: string, team: "A" | "B" | null) => {
     if (readonly) return;
+    const cur = optimisticAttendees.find((m) => m.id === playerId);
     startTransition(() => {
       applyOptimistic(setTeamLocally(playerId, team));
-      setMatchTeam(matchId, playerId, team);
+      if (cur?.isMercenary) {
+        setMercenaryTeam(matchId, playerId, team);
+      } else {
+        setMatchTeam(matchId, playerId, team);
+      }
+    });
+  };
+  const onAddMercenary = () => {
+    if (readonly) return;
+    // 낙관적 추가 — 서버 응답을 기다리지 않고 즉시 화면에 표시.
+    // 이름 번호는 현재 보이는 용병 칩 기준 max+1 (서버 로직과 동일).
+    let maxNum = 0;
+    for (const m of optimisticAttendees) {
+      if (!m.isMercenary) continue;
+      const mt = m.name.match(/^용병(\d+)$/);
+      if (mt) {
+        const n = parseInt(mt[1], 10);
+        if (n > maxNum) maxNum = n;
+      }
+    }
+    const tempId = `temp-merc-${Date.now()}`;
+    startTransition(() => {
+      applyOptimistic([
+        ...optimisticAttendees,
+        {
+          id: tempId,
+          name: `용병${maxNum + 1}`,
+          team: null,
+          positions: null,
+          condition: null,
+          isMercenary: true,
+        },
+      ]);
+      addMercenary(matchId);
+    });
+  };
+  const onRemoveMercenary = (mercenaryId: string) => {
+    if (readonly) return;
+    startTransition(() => {
+      applyOptimistic(
+        optimisticAttendees.filter((m) => m.id !== mercenaryId),
+      );
+      removeMercenary(matchId, mercenaryId);
     });
   };
   const auto = () => {
@@ -321,6 +387,7 @@ export default function TeamBuilder({
         onDropTo={dropTo}
         onDragStateChange={setDragging}
         onCaptainChange={(id) => setCaptain("A", id)}
+        onRemove={onRemoveMercenary}
       />
       {/* B팀 */}
       <TeamGroup
@@ -338,6 +405,7 @@ export default function TeamBuilder({
         onDropTo={dropTo}
         onDragStateChange={setDragging}
         onCaptainChange={(id) => setCaptain("B", id)}
+        onRemove={onRemoveMercenary}
       />
 
       <div className="h-px bg-suaza-border" />
@@ -351,8 +419,8 @@ export default function TeamBuilder({
           {canAddMercenary && (
             <button
               type="button"
-              disabled
-              className="shrink-0 inline-flex items-center gap-0.5 h-8 px-3 rounded-lg border border-suaza-border text-xs font-bold text-suaza-ink transition disabled:opacity-40 disabled:cursor-not-allowed"
+              onClick={onAddMercenary}
+              className="shrink-0 inline-flex items-center gap-0.5 h-8 px-3 rounded-lg border border-suaza-border text-xs font-bold text-suaza-ink transition hover:bg-gray-50"
             >
               + 용병
             </button>
@@ -394,6 +462,9 @@ export default function TeamBuilder({
                 readonly={readonly}
                 onClick={() => cycle(m.id)}
                 onDragStateChange={setDragging}
+                onRemove={
+                  m.isMercenary ? () => onRemoveMercenary(m.id) : undefined
+                }
               />
             )}
           />
@@ -446,11 +517,14 @@ function TapChip({
   readonly,
   onClick,
   onDragStateChange,
+  onRemove,
 }: {
   member: TeamMember;
   readonly: boolean;
   onClick: () => void;
   onDragStateChange?: (dragging: boolean) => void;
+  /** 용병 등 삭제 가능한 칩일 때 우측 X 버튼 노출 */
+  onRemove?: () => void;
 }) {
   // 미배정 전용 칩 (탭하면 A팀으로). 점선 회색으로 미배정 표시.
   // 데스크탑 드래그 가능 — span 으로 구현 (button 은 HTML5 drag 불안정).
@@ -466,13 +540,28 @@ function TapChip({
         setTimeout(() => onDragStateChange?.(true), 0);
       }}
       onDragEnd={() => onDragStateChange?.(false)}
-      className={`inline-flex items-center gap-1 pl-1 pr-2.5 py-0.5 rounded-full text-xs font-medium border border-dashed border-gray-300 bg-gray-100 text-suaza-ink-muted transition select-none ${
+      className={`inline-flex items-center gap-1 ${onRemove ? "pl-1" : "pl-1"} pr-2.5 py-0.5 rounded-full text-xs font-medium border border-dashed border-gray-300 bg-gray-100 text-suaza-ink-muted transition select-none ${
         readonly
           ? "cursor-default"
           : "cursor-pointer hover:opacity-80 desktop:cursor-grab desktop:active:cursor-grabbing"
       }`}
     >
-      <ConditionArrow level={member.condition ?? null} size={14} />
+      {onRemove && !readonly && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          aria-label="용병 삭제"
+          className="w-4 h-4 inline-flex items-center justify-center rounded-full text-suaza-ink-muted hover:bg-gray-200 hover:text-suaza-ink"
+        >
+          ×
+        </button>
+      )}
+      {!member.isMercenary && (
+        <ConditionArrow level={member.condition ?? null} size={14} />
+      )}
       {displayMemberName(member.name)}
     </span>
   );
@@ -535,6 +624,7 @@ function TeamGroup({
   onDropTo,
   onDragStateChange,
   onCaptainChange,
+  onRemove,
 }: {
   label: string;
   color: string;
@@ -550,6 +640,8 @@ function TeamGroup({
   onDropTo: (playerId: string, team: "A" | "B" | null) => void;
   onDragStateChange: (dragging: boolean) => void;
   onCaptainChange: (playerId: string | null) => void;
+  /** 용병 삭제 콜백 (mercenary 칩에 X 노출용) */
+  onRemove?: (memberId: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -630,7 +722,22 @@ function TeamGroup({
                   : "cursor-pointer hover:opacity-80 desktop:cursor-grab desktop:active:cursor-grabbing"
               }`}
             >
-              <ConditionArrow level={m.condition ?? null} size={14} />
+              {m.isMercenary && !readonly && onRemove && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove(m.id);
+                  }}
+                  aria-label="용병 삭제"
+                  className="w-4 h-4 inline-flex items-center justify-center rounded-full text-suaza-ink-muted hover:bg-black/10"
+                >
+                  ×
+                </button>
+              )}
+              {!m.isMercenary && (
+                <ConditionArrow level={m.condition ?? null} size={14} />
+              )}
               {displayMemberName(m.name)}
             </span>
           )}

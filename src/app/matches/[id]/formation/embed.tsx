@@ -38,6 +38,8 @@ export type EditorMember = {
   avatar_url: string | null;
   condition: number;
   preferred_foot: PreferredFoot | null;
+  /** 용병 여부 — true 면 카드 내 모든 기록 입력 버튼 비활성, 출석/승리 포인트 비표시. */
+  isMercenary?: boolean;
 };
 
 type FormationRow = {
@@ -132,6 +134,7 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
     { data: participations },
     { data: statDefs },
     { data: coachComments },
+    { data: mercenaries },
   ] = await Promise.all([
     supabase.from("matches").select("*").eq("id", matchId).single(),
     supabase.from("profiles").select("role, title").eq("id", user.id).single(),
@@ -167,6 +170,11 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
       .from("coach_comments")
       .select("member_id")
       .eq("match_id", matchId),
+    supabase
+      .from("match_mercenaries")
+      .select("id, name, team")
+      .eq("match_id", matchId)
+      .order("created_at", { ascending: true }),
   ]);
 
   if (!match) notFound();
@@ -205,6 +213,34 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
   for (const a of attendanceRows) {
     teamByPlayer[a.player_id] = a.team;
     attendingQuartersByPlayer[a.player_id] = a.attending_quarters ?? null;
+  }
+  // 용병 — 팀이 배정된(A/B) 용병만 포메이션 명단/운동장에 출전 가능 멤버로 포함.
+  // 미배정 용병은 팀 편성 단계에서만 노출되고 포메이션엔 등장하지 않는다.
+  const mercenaryRows = ((mercenaries ?? []) as {
+    id: string;
+    name: string;
+    team: "A" | "B" | null;
+  }[]).filter((m) => m.team === "A" || m.team === "B") as {
+    id: string;
+    name: string;
+    team: "A" | "B";
+  }[];
+  const mercenaryMembers: EditorMember[] = mercenaryRows.map((m) => ({
+    id: m.id,
+    name: m.name,
+    jersey_number: null,
+    positions: null,
+    title: null,
+    avatar_url: null,
+    condition: 3,
+    preferred_foot: null,
+    isMercenary: true,
+  }));
+  for (const m of mercenaryRows) {
+    attendingIds.push(m.id);
+    teamByPlayer[m.id] = m.team;
+    // 전체 쿼터 참여 (null = 모든 쿼터 참석으로 해석됨)
+    attendingQuartersByPlayer[m.id] = null;
   }
   const isIntra = match.opponent === "자체전";
 
@@ -279,12 +315,26 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
       points: attendanceBase + (isWinningSide ? winPointBase : 0),
     };
   }
+  // 용병은 stat 객체를 받지만 모든 값 0 (출석/승리 포인트 비표시, 카드 UI 는 비활성으로 노출).
+  for (const m of mercenaryRows) {
+    if (statByPlayer[m.id]) continue;
+    statByPlayer[m.id] = {
+      goals: 0,
+      assists: 0,
+      cleanSheets: 0,
+      refereeCount: 0,
+      mom: 0,
+      winPoints: 0,
+      attendance: 0,
+      points: 0,
+    };
+  }
 
   return (
     <FormationEditor
       matchId={matchId}
       myUserId={user.id}
-      members={(members ?? []) as EditorMember[]}
+      members={[...((members ?? []) as EditorMember[]), ...mercenaryMembers]}
       attendingIds={attendingIds}
       teamByPlayer={teamByPlayer}
       attendingQuartersByPlayer={attendingQuartersByPlayer}

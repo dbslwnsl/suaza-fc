@@ -71,6 +71,7 @@ export default async function MatchDetailPage({
     { data: attendancesRaw },
     { data: myAttendance },
     { data: commentsRaw },
+    { data: mercenariesRaw },
     seasonKings,
   ] = await Promise.all([
     supabase
@@ -100,6 +101,11 @@ export default async function MatchDetailPage({
       .select(
         "id, content, created_at, updated_at, author_id, parent_id, author:profiles(name, avatar_url)",
       )
+      .eq("match_id", id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("match_mercenaries")
+      .select("id, name, team")
       .eq("match_id", id)
       .order("created_at", { ascending: true }),
     computeSeasonKings(supabase, matchYear),
@@ -137,6 +143,7 @@ export default async function MatchDetailPage({
     team: "A" | "B" | null;
     positions: string[] | null;
     condition: number | null;
+    isMercenary?: boolean;
   }[] = [];
   // 종료/취소된 경기는 지난 기록이므로 삭제 회원도 그대로 보존,
   // 예정·진행 중 경기에서는 삭제 회원을 명단에서 제외.
@@ -183,6 +190,21 @@ export default async function MatchDetailPage({
         });
       }
     }
+  }
+  // 용병은 참석 리스트에 자동 포함 (포지션 미지정 → "용병" 그룹으로 별도 분류).
+  for (const merc of (mercenariesRaw ?? []) as {
+    id: string;
+    name: string;
+    team: "A" | "B" | null;
+  }[]) {
+    teamMembers.push({
+      id: merc.id,
+      name: merc.name,
+      team: merc.team,
+      positions: null,
+      condition: null,
+      isMercenary: true,
+    });
   }
   const rawNonVoters = ((allMembers ?? []) as VotePlayer[])
     .filter((m) => !votedIds.has(m.id))
