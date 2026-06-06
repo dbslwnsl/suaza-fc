@@ -301,6 +301,17 @@ function useOptimisticVote(
   const computed = useMemo(() => {
     const byName = (a: VotePlayer, b: VotePlayer) =>
       a.name.localeCompare(b.name, "ko");
+    // 투표/변경 그룹(참석·불참·미정) 정렬: 방금 바꾼 사람(override) 맨 앞 →
+    // 그다음 최근 투표(voted_at 내림차순) → 동시면 가나다.
+    const byRecent = (a: VotePlayer, b: VotePlayer) => {
+      const oa = overrides.has(a.id) ? 1 : 0;
+      const ob = overrides.has(b.id) ? 1 : 0;
+      if (oa !== ob) return ob - oa;
+      const ta = a.voted_at ?? "";
+      const tb = b.voted_at ?? "";
+      if (ta !== tb) return tb < ta ? -1 : 1;
+      return a.name.localeCompare(b.name, "ko");
+    };
     const groups: Groups = { attending: [], absent: [], undecided: [] };
     const nv: VotePlayer[] = [];
     const place = (p: VotePlayer, base: Status | null) => {
@@ -319,9 +330,9 @@ function useOptimisticVote(
     for (const p of byStatus.absent) place(p, "absent");
     for (const p of byStatus.undecided) place(p, "undecided");
     for (const p of nonVoters) place(p, null);
-    groups.attending.sort(byName);
-    groups.absent.sort(byName);
-    groups.undecided.sort(byName);
+    groups.attending.sort(byRecent);
+    groups.absent.sort(byRecent);
+    groups.undecided.sort(byRecent);
     nv.sort(byName);
 
     return {
