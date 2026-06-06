@@ -1443,13 +1443,16 @@ function Pitch({
 
   function onSlotPointerUp(e: React.PointerEvent) {
     if (pitchDrag) {
-      if (pitchDrag.targetTeam != null && pitchDrag.targetIdx != null) {
-        onSwapSlots(
-          pitchDrag.sourceTeam,
-          pitchDrag.sourceIdx,
-          pitchDrag.targetTeam,
-          pitchDrag.targetIdx,
-        );
+      // 손가락 좌표로 타겟을 즉시 재계산.
+      // (마지막 move 의 setState 가 commit 되기 전 up 이 발생하면
+      //  pitchDrag.targetTeam/targetIdx 가 stale 일 수 있음)
+      const t = findSlotFromPoint(e.clientX, e.clientY);
+      const sameSlot =
+        t != null &&
+        t.team === pitchDrag.sourceTeam &&
+        t.idx === pitchDrag.sourceIdx;
+      if (t && !sameSlot) {
+        onSwapSlots(pitchDrag.sourceTeam, pitchDrag.sourceIdx, t.team, t.idx);
       } else {
         const rect = pitchRef.current?.getBoundingClientRect();
         const outside =
