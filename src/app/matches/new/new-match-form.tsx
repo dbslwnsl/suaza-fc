@@ -464,45 +464,15 @@ export default function NewMatchForm({
       {/* 날짜 + 킥오프 */}
       <div className="grid grid-cols-2 gap-3">
         <Field label="경기 날짜" hint="YYYY-MM-DD" required>
-          {/* 모바일: 커스텀 달력 (화면 가득 차지 않음) */}
-          <div className="desktop:hidden">
-            <DatePicker value={date} onChange={setDate} required />
-          </div>
-          {/* 데스크탑: native input */}
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            required
-            className={`${inputCls} hidden desktop:block`}
-          />
+          <DatePicker value={date} onChange={setDate} required />
         </Field>
         <Field label="시작 시간" hint="30분 단위" required>
-          {/* 모바일: 커스텀 시간 픽커 */}
-          <div className="desktop:hidden">
-            <TimePicker
-              value={time}
-              onChange={setTime}
-              options={TIME_OPTIONS}
-              required
-            />
-          </div>
-          {/* 데스크탑: native select */}
-          <select
+          <TimePicker
             value={time}
-            onChange={(e) => setTime(e.target.value)}
+            onChange={setTime}
+            options={TIME_OPTIONS}
             required
-            className={`${inputCls} bg-white hidden desktop:block`}
-          >
-            <option value="" disabled>
-              시간 선택
-            </option>
-            {TIME_OPTIONS.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+          />
         </Field>
       </div>
 
@@ -702,42 +672,18 @@ export default function NewMatchForm({
           return (
             <div className="grid grid-cols-2 gap-3">
               {/* 마감 날짜 */}
-              <div className="desktop:hidden">
-                <DatePicker
-                  value={dlDate || ""}
-                  onChange={setDlDate}
-                  placeholder="마감 날짜"
-                />
-              </div>
-              <input
-                type="date"
+              <DatePicker
                 value={dlDate || ""}
-                onChange={(e) => setDlDate(e.target.value)}
-                className={`${inputCls} hidden desktop:block`}
+                onChange={setDlDate}
+                placeholder="마감 날짜"
               />
               {/* 마감 시간 */}
-              <div className="desktop:hidden">
-                <TimePicker
-                  value={dlTime || ""}
-                  onChange={setDlTime}
-                  options={TIME_OPTIONS}
-                  placeholder="마감 시간"
-                />
-              </div>
-              <select
+              <TimePicker
                 value={dlTime || ""}
-                onChange={(e) => setDlTime(e.target.value)}
-                className={`${inputCls} bg-white hidden desktop:block`}
-              >
-                <option value="" disabled>
-                  시간 선택
-                </option>
-                {TIME_OPTIONS.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
+                onChange={setDlTime}
+                options={TIME_OPTIONS}
+                placeholder="마감 시간"
+              />
             </div>
           );
         })()}
