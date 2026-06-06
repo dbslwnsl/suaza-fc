@@ -39,6 +39,47 @@ export default async function MatchesPage({
       (a, b) =>
         new Date(a.match_date).getTime() - new Date(b.match_date).getTime(),
     );
+
+  // 진행중인 경기들의 득점/어시스트 집계 (라이브 카드 표시용)
+  const liveStats = new Map<string, LiveStats>();
+  if (live.length > 0) {
+    const liveIds = live.map((m) => m.id);
+    const [{ data: liveParts }, { data: liveProfiles }] = await Promise.all([
+      supabase
+        .from("match_participations")
+        .select("match_id, player_id, goals, assists")
+        .in("match_id", liveIds)
+        .is("archived_at", null),
+      supabase.from("profiles").select("id, name"),
+    ]);
+    const nameById = new Map<string, string>();
+    for (const p of (liveProfiles ?? []) as { id: string; name: string }[]) {
+      nameById.set(p.id, p.name);
+    }
+    for (const id of liveIds) {
+      liveStats.set(id, { scorers: [], assisters: [] });
+    }
+    for (const row of (liveParts ?? []) as {
+      match_id: string;
+      player_id: string;
+      goals: number | null;
+      assists: number | null;
+    }[]) {
+      const bucket = liveStats.get(row.match_id);
+      if (!bucket) continue;
+      const name = nameById.get(row.player_id) ?? "?";
+      if ((row.goals ?? 0) > 0) {
+        bucket.scorers.push({ name, count: row.goals ?? 0 });
+      }
+      if ((row.assists ?? 0) > 0) {
+        bucket.assisters.push({ name, count: row.assists ?? 0 });
+      }
+    }
+    for (const b of liveStats.values()) {
+      b.scorers.sort((a, b) => b.count - a.count);
+      b.assisters.sort((a, b) => b.count - a.count);
+    }
+  }
   const upcoming = all
     .filter((m) => m.status === "scheduled")
     .sort(
@@ -113,7 +154,11 @@ export default async function MatchesPage({
             />
             <div className="flex flex-col gap-4">
               {live.map((m) => (
-                <LiveMatchCard key={m.id} match={m} />
+                <LiveMatchCard
+                  key={m.id}
+                  match={m}
+                  stats={liveStats.get(m.id) ?? { scorers: [], assisters: [] }}
+                />
               ))}
             </div>
           </section>
@@ -180,7 +225,18 @@ function SectionHeader({
   );
 }
 
-function LiveMatchCard({ match }: { match: Match }) {
+type LiveStats = {
+  scorers: { name: string; count: number }[];
+  assisters: { name: string; count: number }[];
+};
+
+function LiveMatchCard({
+  match,
+  stats,
+}: {
+  match: Match;
+  stats: LiveStats;
+}) {
   const isIntra = match.opponent === "자체전";
   const totalMin = (match.duration_hours ?? 2) * 60;
   const halfPoint = totalMin / 2;
@@ -196,9 +252,10 @@ function LiveMatchCard({ match }: { match: Match }) {
   const oppScore = match.opponent_score ?? 0;
   const dateStr = formatLongDate(match.match_date);
   const timeStr = formatTime(match.match_date);
+  const hasStats = stats.scorers.length > 0 || stats.assisters.length > 0;
 
   return (
-    <article className="rounded-2xl bg-suaza-ink text-white p-6 desktop:p-7 flex items-center justify-between gap-6">
+    <article className="rounded-2xl bg-suaza-ink text-white p-6 desktop:p-7 flex flex-col desktop:flex-row desktop:items-center desktop:justify-between gap-5 desktop:gap-6">
       <div className="flex flex-col gap-3 flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="inline-flex items-center gap-1.5 bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded">
@@ -216,7 +273,10 @@ function LiveMatchCard({ match }: { match: Match }) {
           </span>
           <span className="text-xs text-white/70 ml-1">{periodLabel}</span>
         </div>
-        <div className="text-3xl desktop:text-[40px] font-bold tracking-wide">
+        <Link
+          href={`/matches/${match.id}`}
+          className="text-3xl desktop:text-[40px] font-bold tracking-wide self-start hover:opacity-80 transition"
+        >
           {isIntra ? (
             <>
               {getTeamName(match, "A")}
@@ -234,23 +294,53 @@ function LiveMatchCard({ match }: { match: Match }) {
               {match.opponent}
             </>
           )}
-        </div>
+        </Link>
         <div className="flex items-center gap-4 text-sm text-white/80 flex-wrap">
           <span>📅 {dateStr}</span>
           <span>⏰ {timeStr} KICK-OFF</span>
           {match.location && <span>📍 {match.location}</span>}
         </div>
       </div>
-      <div className="flex flex-col items-end gap-1.5 shrink-0">
-        <Link
-          href={`/matches/${match.id}`}
-          className="bg-white text-suaza-ink text-sm font-bold rounded-lg px-4 py-2.5 hover:opacity-90 transition"
-        >
-          경기 현황 보기 →
-        </Link>
-        <span className="text-xs text-white/60">실시간 득점·교체 기록</span>
-      </div>
+      {hasStats && (
+        <div className="flex flex-col gap-2 desktop:shrink-0 desktop:max-w-[360px] desktop:items-end">
+          {stats.scorers.length > 0 && (
+            <StatLine icon="⚽" label="득점" items={stats.scorers} />
+          )}
+          {stats.assisters.length > 0 && (
+            <StatLine icon="🅰️" label="어시" items={stats.assisters} />
+          )}
+        </div>
+      )}
     </article>
+  );
+}
+
+function StatLine({
+  icon,
+  label,
+  items,
+}: {
+  icon: string;
+  label: string;
+  items: { name: string; count: number }[];
+}) {
+  return (
+    <div className="flex items-baseline gap-2 text-sm desktop:justify-end flex-wrap">
+      <span className="text-[11px] font-bold text-white/60 shrink-0">
+        {icon} {label}
+      </span>
+      <span className="text-white/95">
+        {items.map((s, i) => (
+          <span key={i}>
+            {i > 0 && ", "}
+            {s.name}
+            {s.count > 1 && (
+              <span className="text-white/60"> ({s.count})</span>
+            )}
+          </span>
+        ))}
+      </span>
+    </div>
   );
 }
 
