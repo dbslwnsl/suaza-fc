@@ -17,28 +17,16 @@ export default function ConditionArrow({
   onCycle,
   size = 18,
 }: {
-  /** 1~5 단계, 또는 null = 미설정("?" 회색 원). */
+  /** 1~5 단계, 또는 null = 미설정(기본 보통=3 으로 표시). */
   level: number | null;
   interactive?: boolean;
   onCycle?: () => void;
   /** 원형 칩의 한 변 길이(px). 기본 18. */
   size?: number;
 }) {
-  // 미설정 — 회색 원 안에 "?" (다른 단계와 명확히 구분)
-  if (level == null) {
-    const fontPx = Math.max(9, Math.round(size * 0.6));
-    return (
-      <span
-        className="shrink-0 inline-flex items-center justify-center rounded-full bg-gray-200 text-gray-600 font-bold leading-none"
-        style={{ width: size, height: size, fontSize: fontPx }}
-        aria-label="컨디션 미설정"
-        title="컨디션 미설정"
-      >
-        ?
-      </span>
-    );
-  }
-  const idx = Math.min(5, Math.max(1, level)) - 1;
+  // 미설정(null)은 기본 "보통"(3)으로 표시한다.
+  const lvl = level ?? 3;
+  const idx = Math.min(5, Math.max(1, lvl)) - 1;
   const color = CONDITION_COLOR[idx];
   const deg = CONDITION_DEG[idx];
   const svgPx = Math.round(size * (12 / 18));
@@ -77,7 +65,7 @@ export default function ConditionArrow({
           e.stopPropagation();
           onCycle();
         }}
-        aria-label={`내 컨디션 ${level}단계 (눌러서 변경)`}
+        aria-label={`내 컨디션 ${lvl}단계 (눌러서 변경)`}
         title="내 컨디션 변경"
         className="shrink-0 hover:scale-110 active:scale-95 transition"
       >
@@ -88,8 +76,8 @@ export default function ConditionArrow({
   return (
     <span
       className="shrink-0"
-      aria-label={`컨디션 ${level}단계`}
-      title={`컨디션 ${level}단계`}
+      aria-label={`컨디션 ${lvl}단계`}
+      title={`컨디션 ${lvl}단계`}
     >
       {inner}
     </span>
