@@ -832,6 +832,26 @@ export default function FormationEditor({
     });
   }
 
+  // 자체전 일반 회원 + 팀 미배정: 운동장·명단 없이 안내 카드만 표시.
+  // (참석은 했지만 아직 팀이 정해지지 않은 상태)
+  if (noTeamView) {
+    return (
+      // data-no-team-card: 상위 포메이션 박스(formation-collapsible)가 :has()로
+      // 이 카드를 감지해, 운동장용 고정 높이(80vh)를 콘텐츠 높이로 줄인다.
+      <div data-no-team-card className="py-2">
+        <div className="flex flex-col items-center text-center bg-white rounded-2xl border border-suaza-border px-6 py-5 gap-2 w-full">
+          <span className="text-4xl">⏳</span>
+          <h3 className="text-base font-bold text-suaza-ink">팀 배정 대기 중</h3>
+          <p className="text-sm text-suaza-ink-muted leading-relaxed">
+            회장 또는 감독이 자체전 팀을 배정하면
+            <br />
+            여기에 우리 팀 명단이 표시됩니다.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3 desktop:flex-1 desktop:min-h-0">
       {/* 자동 제거 경고 — 출석 쿼터 변경으로 일부 배치가 제거된 경우 */}
@@ -1153,20 +1173,6 @@ export default function FormationEditor({
             );
           })()}
 
-        {/* 자체전 + 일반 회원 + 팀 미배정: 안내 (운동장은 위에 그대로 표시) */}
-        {noTeamView && (
-          <aside className="hidden desktop-lg:flex desktop:w-[280px] flex-col items-center justify-center text-center bg-white rounded-2xl border border-suaza-border p-6 gap-2">
-            <span className="text-3xl">⏳</span>
-            <h3 className="text-sm font-bold text-suaza-ink">
-              팀 배정 대기 중
-            </h3>
-            <p className="text-xs text-suaza-ink-muted leading-relaxed">
-              회장 또는 감독이 자체전 팀을 배정하면
-              <br />
-              여기에 우리 팀 명단이 표시됩니다.
-            </p>
-          </aside>
-        )}
       </div>
 
       {/* 모바일 전용 선수 명단 (쿼터별 출전 현황) */}
@@ -1190,7 +1196,6 @@ export default function FormationEditor({
               ? pitchView
               : undefined
         }
-        unassignedNotice={noTeamView}
         teamAName={teamAName}
         teamBName={teamBName}
         shapeA={current.shape}
@@ -2590,7 +2595,6 @@ function PlayerRosterMobile({
   myCondition,
   onCycleCondition,
   showOnlyTeam,
-  unassignedNotice,
   teamAName = "A팀",
   teamBName = "B팀",
   shapeA,
@@ -2631,8 +2635,6 @@ function PlayerRosterMobile({
   onCycleCondition: () => void;
   /** 자체전 일반 회원이 본인 팀(A 또는 B)만 볼 때 지정 */
   showOnlyTeam?: "A" | "B";
-  /** 자체전 일반 회원이 팀 미배정일 때 안내만 표시 */
-  unassignedNotice?: boolean;
   /** 자체전 팀 표시명 */
   teamAName?: string;
   teamBName?: string;
@@ -2684,20 +2686,6 @@ function PlayerRosterMobile({
       a.member.name.localeCompare(b.member.name, "ko"),
     );
   }, [participations]);
-
-  if (unassignedNotice) {
-    return (
-      <div className="desktop-lg:hidden flex flex-col items-center justify-center text-center rounded-2xl border border-dashed border-suaza-border p-6 gap-2">
-        <span className="text-3xl">⏳</span>
-        <h3 className="text-sm font-bold text-suaza-ink">팀 배정 대기 중</h3>
-        <p className="text-xs text-suaza-ink-muted leading-relaxed">
-          회장 또는 감독이 자체전 팀을 배정하면
-          <br />
-          여기에 우리 팀 명단이 표시됩니다.
-        </p>
-      </div>
-    );
-  }
 
   if (members.length === 0) {
     return (

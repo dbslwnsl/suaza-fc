@@ -38,7 +38,9 @@ export default function FormationCollapsible({
         </span>
       </button>
       {expanded && (
-        <div className="desktop:h-[80vh] desktop:min-h-0 flex flex-col min-h-0 desktop:overflow-auto">
+        // 운동장용 고정 높이(80vh). 단, 안내 카드(data-no-team-card)만 들어있으면
+        // :has() 로 감지해 콘텐츠 높이로 줄인다(팀 미배정 대기 화면).
+        <div className="desktop:h-[80vh] desktop:has-[[data-no-team-card]]:h-auto desktop:min-h-0 flex flex-col min-h-0 desktop:overflow-auto">
           {children}
         </div>
       )}
