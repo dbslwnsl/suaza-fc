@@ -1464,10 +1464,12 @@ export async function setMyCondition(matchId: string, level: number) {
   if (!user) return;
   if (![1, 2, 3, 4, 5].includes(level)) return;
 
-  await supabase
-    .from("profiles")
-    .update({ condition: level })
-    .eq("id", user.id);
+  // 경기별 컨디션 — 본인 match_attendances row 의 condition 에 저장한다.
+  // row 가 없으면 생성(status 는 기본값 'undecided'), 있으면 condition 만 갱신.
+  await supabase.from("match_attendances").upsert(
+    { match_id: matchId, player_id: user.id, condition: level },
+    { onConflict: "match_id,player_id" },
+  );
 
   revalidatePath(`/matches/${matchId}/formation`);
   revalidatePath(`/matches/${matchId}`);

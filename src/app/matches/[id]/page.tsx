@@ -88,12 +88,12 @@ export default async function MatchDetailPage({
     supabase
       .from("match_attendances")
       .select(
-        "status, team, attending_quarters, updated_at, player:profiles(id, name, jersey_number, positions, title, deleted_at, is_injured, on_leave, condition)",
+        "status, team, attending_quarters, updated_at, condition, player:profiles(id, name, jersey_number, positions, title, deleted_at, is_injured, on_leave, condition)",
       )
       .eq("match_id", id),
     supabase
       .from("match_attendances")
-      .select("status, attending_quarters")
+      .select("status, attending_quarters, condition")
       .eq("match_id", id)
       .eq("player_id", user.id)
       .maybeSingle(),
@@ -164,6 +164,7 @@ export default async function MatchDetailPage({
     team: "A" | "B" | null;
     attending_quarters: number[] | null;
     updated_at: string | null;
+    condition: number | null;
     player: (VotePlayer & { deleted_at?: string | null }) | null;
   }[]) {
     // 소프트 삭제된 회원: 예정·진행 경기에서만 제외 (지난 경기는 기록 보존)
@@ -173,6 +174,8 @@ export default async function MatchDetailPage({
         ...row.player,
         attending_quarters: row.attending_quarters,
         voted_at: row.updated_at,
+        // 경기별 컨디션 — match_attendances.condition 을 우선 사용 (없으면 null = "?")
+        condition: row.condition,
       });
       // 부상자는 실제 투표와 무관하게 불참으로 강제 이동 (지난 경기는 기록 보존)
       const injuredNow = !isPastMatch && !!row.player.is_injured;
@@ -230,7 +233,11 @@ export default async function MatchDetailPage({
     byStatus[key].sort((a, b) => a.name.localeCompare(b.name, "ko"));
   }
   const myAtt = myAttendance as
-    | { status: string; attending_quarters: number[] | null }
+    | {
+        status: string;
+        attending_quarters: number[] | null;
+        condition: number | null;
+      }
     | null;
   // 부상자는 본인 응답도 불참으로 고정하고 투표 UI 를 잠근다 (지난 경기는 제외).
   const myInjured = !!(me as { is_injured?: boolean | null } | null)?.is_injured;
@@ -431,8 +438,7 @@ export default async function MatchDetailPage({
                   <AttendanceCard
                     matchId={m.id}
                     myCondition={
-                      (me as { condition?: number | null } | null)?.condition ??
-                      null
+                      myAtt?.condition ?? null
                     }
                     isManager={isStaff}
                     myName={me?.name ?? null}
