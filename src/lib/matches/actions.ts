@@ -1016,6 +1016,8 @@ export async function setAttendanceFor(
         player_id: playerId,
         status,
         attending_quarters: null,
+        // 참석이 아닌 상태로 옮기면 팀 배정을 비운다 — 다시 참석해도 옛 팀으로 자동 배정 방지.
+        ...(status !== "attending" ? { team: null } : {}),
         updated_at: new Date().toISOString(),
       },
       { onConflict: "match_id,player_id" },
@@ -1121,12 +1123,14 @@ export async function voteAttendance(matchId: string, status: AttendanceStatus) 
       .eq("player_id", user.id);
   } else {
     // 참석 선택 시 기본값 = 전체 쿼터(NULL). 트리거가 다른 status 에선 NULL 로 정리.
+    // 참석이 아닌 상태로 바뀌면 팀 배정도 비운다 — 다시 참석해도 옛 팀으로 자동 배정되지 않도록.
     await supabase.from("match_attendances").upsert(
       {
         match_id: matchId,
         player_id: user.id,
         status,
         attending_quarters: null,
+        ...(status !== "attending" ? { team: null } : {}),
         updated_at: new Date().toISOString(),
       },
       { onConflict: "match_id,player_id" },
