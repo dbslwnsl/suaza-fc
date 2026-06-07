@@ -275,17 +275,25 @@ export default function TeamBuilder({
     // 클라이언트에서도 동일한 셔플(랜덤) → 앞 절반 A, 뒤 절반 B. 결과는 서버 셔플과
     // 다를 수 있지만 시각적으로 즉시 변하는 게 우선. revalidate 가 도착하면 자동
     // 으로 서버 기준 결과로 정리된다.
-    const ids = optimisticAttendees.map((m) => m.id);
+    // 용병은 자동배분 대상이 아니다 — 회원만 셔플해 A/B 로 나누고, 용병은 현재 상태 유지.
+    // (서버 autoBalanceTeams 도 회원만 배분하므로 낙관/서버가 일치 → 깜빡임 없음)
+    const ids = optimisticAttendees
+      .filter((m) => !m.isMercenary)
+      .map((m) => m.id);
     for (let i = ids.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [ids[i], ids[j]] = [ids[j], ids[i]];
     }
     const half = Math.ceil(ids.length / 2);
     const aSet = new Set(ids.slice(0, half));
-    const next = optimisticAttendees.map((m) => ({
-      ...m,
-      team: (aSet.has(m.id) ? "A" : "B") as "A" | "B" | null,
-    }));
+    const next = optimisticAttendees.map((m) =>
+      m.isMercenary
+        ? m
+        : {
+            ...m,
+            team: (aSet.has(m.id) ? "A" : "B") as "A" | "B" | null,
+          },
+    );
     startTransition(() => {
       applyOptimistic(next);
       applyCaptains({ a: null, b: null });
