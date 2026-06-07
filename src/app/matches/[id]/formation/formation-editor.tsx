@@ -45,6 +45,23 @@ function isAvailableForQuarter(
   return attendingQuarters.includes(globalIndex);
 }
 
+// 명단 정렬 — 주포지션(positions[0]) 기준 GK→DF→MF→FW 순.
+// 포지션 정보가 없는 선수(용병 등)는 항상 맨 아래, 동순위는 가나다순.
+const POSITION_ORDER: Record<Position, number> = { GK: 0, DF: 1, MF: 2, FW: 3 };
+function mainPositionRank(positions: Position[] | null | undefined): number {
+  const main = positions?.[0];
+  return main && main in POSITION_ORDER ? POSITION_ORDER[main] : 99;
+}
+function byMainPosition(
+  a: { member: EditorMember },
+  b: { member: EditorMember },
+): number {
+  const ra = mainPositionRank(a.member.positions);
+  const rb = mainPositionRank(b.member.positions);
+  if (ra !== rb) return ra - rb;
+  return a.member.name.localeCompare(b.member.name, "ko");
+}
+
 type Filter = "ALL" | Position;
 
 type TeamFormation = {
@@ -2673,18 +2690,16 @@ function PlayerRosterMobile({
   // 멤버 부분집합 기준 통계(총원/출전/평균쿼터). 자체전이면 각 팀별로 따로 계산.
   const calcStats = (parts: PlayerParticipation[]) => {
     const total = parts.length;
-    const played = parts.filter((p) => p.totalPlayed > 0).length;
+    // 평균 쿼터 = 전체 배치 횟수(쿼터×인원) / 전체 인원수
     const sumQ = parts.reduce((s, p) => s + p.totalPlayed, 0);
-    const avg = played > 0 ? (sumQ / played).toFixed(1) : "0.0";
-    return { total, played, avg };
+    const avg = total > 0 ? (sumQ / total).toFixed(1) : "0.0";
+    return { total, avg };
   };
   const totalStats = calcStats(participations);
 
   const sorted = useMemo(() => {
-    // 가나다순 정렬
-    return [...participations].sort((a, b) =>
-      a.member.name.localeCompare(b.member.name, "ko"),
-    );
+    // 주포지션(GK→DF→MF→FW) 순, 용병은 맨 아래
+    return [...participations].sort(byMainPosition);
   }, [participations]);
 
   if (members.length === 0) {
@@ -2792,8 +2807,7 @@ function PlayerRosterMobile({
         </h3>
         {summaryStats && !matchLocked && (
           <p className="text-xs text-suaza-ink-muted mt-0.5">
-            총 {summaryStats.total}명 · 출전 {summaryStats.played}명 · 평균{" "}
-            {summaryStats.avg}쿼터
+            총 {summaryStats.total}명 평균 {summaryStats.avg}쿼터
           </p>
         )}
       </div>
@@ -2803,10 +2817,7 @@ function PlayerRosterMobile({
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-1">
               <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
-                {showOnlyTeam === "A" ? teamAName : teamBName}{" "}
-                <span className="text-xs text-suaza-ink-muted font-normal">
-                  {(showOnlyTeam === "A" ? teamACards : teamBCards).length}
-                </span>
+                {showOnlyTeam === "A" ? teamAName : teamBName}
               </span>
               {!readonly && !matchLocked && (
                 <TeamMiniActions
@@ -2837,10 +2848,7 @@ function PlayerRosterMobile({
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between gap-1">
                 <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
-                  {teamAName}{" "}
-                  <span className="text-xs text-suaza-ink-muted font-normal">
-                    {teamACards.length}
-                  </span>
+                  {teamAName}
                 </span>
                 {!readonly && !matchLocked && (
                   <TeamMiniActions
@@ -2851,7 +2859,7 @@ function PlayerRosterMobile({
               </div>
               {!matchLocked && (
                 <p className="text-[11px] text-suaza-ink-muted">
-                  출전 {teamAStats.played}명 · 평균 {teamAStats.avg}쿼터
+                  총 {teamAStats.total}명 평균 {teamAStats.avg}쿼터
                 </p>
               )}
               {shapeA && !matchLocked && !readonly && (
@@ -2865,10 +2873,7 @@ function PlayerRosterMobile({
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between gap-1">
                 <span className="inline-flex items-center gap-1.5 text-sm font-bold text-suaza-ink">
-                  {teamBName}{" "}
-                  <span className="text-xs text-suaza-ink-muted font-normal">
-                    {teamBCards.length}
-                  </span>
+                  {teamBName}
                 </span>
                 {!readonly && !matchLocked && (
                   <TeamMiniActions
@@ -2879,7 +2884,7 @@ function PlayerRosterMobile({
               </div>
               {!matchLocked && (
                 <p className="text-[11px] text-suaza-ink-muted">
-                  출전 {teamBStats.played}명 · 평균 {teamBStats.avg}쿼터
+                  총 {teamBStats.total}명 평균 {teamBStats.avg}쿼터
                 </p>
               )}
               {shapeB && !matchLocked && !readonly && (
@@ -3847,10 +3852,12 @@ function PlayerRosterDesktop({
   );
   // 자기 팀(또는 상대전 전체) 기준 출전/평균 쿼터
   const teamStats = useMemo(() => {
-    const played = participations.filter((p) => p.totalPlayed > 0).length;
+    // total = 명단 전체 인원(쿼터와 무관, 고정).
+    // 평균 쿼터 = 전체 배치 횟수(쿼터×인원) / 전체 인원수
+    const total = participations.length;
     const sumQ = participations.reduce((s, p) => s + p.totalPlayed, 0);
-    const avg = played > 0 ? (sumQ / played).toFixed(1) : "0.0";
-    return { played, avg };
+    const avg = total > 0 ? (sumQ / total).toFixed(1) : "0.0";
+    return { total, avg };
   }, [participations]);
   const posCounts = useMemo(() => {
     const c: Record<Filter, number> = {
@@ -3875,10 +3882,8 @@ function PlayerRosterDesktop({
       // 보유 포지션 중 하나라도 일치하면 포함
       out = out.filter((p) => (p.member.positions ?? []).includes(filter));
     }
-    // 가나다순 정렬
-    return [...out].sort((a, b) =>
-      a.member.name.localeCompare(b.member.name, "ko"),
-    );
+    // 주포지션(GK→DF→MF→FW) 순, 용병은 맨 아래
+    return [...out].sort(byMainPosition);
   }, [participations, filter]);
 
   return (
@@ -3894,12 +3899,6 @@ function PlayerRosterDesktop({
             {matchLocked ? "출전선수" : "선수 명단"}
           </h2>
         )}
-        <FilterTabsWithCounts
-          value={filter}
-          onChange={setFilter}
-          counts={posCounts}
-          keys={["ALL"]}
-        />
         {!readonly && !matchLocked && (onReset || onAutoPlace) && (
           <div className="ml-auto flex items-center gap-1.5 shrink-0">
             {onReset && (
@@ -3926,7 +3925,7 @@ function PlayerRosterDesktop({
       {/* 2줄: 출전 / 평균 쿼터 — 진행 중 경기에서만 표시. 종료 경기는 숨김. */}
       {members.length > 0 && !matchLocked && (
         <p className="text-xs text-suaza-ink-muted">
-          출전 {teamStats.played}명 · 평균 {teamStats.avg}쿼터
+          총 {teamStats.total}명 평균 {teamStats.avg}쿼터
         </p>
       )}
       {/* 3줄: 포메이션 드롭다운 — 진행 중 경기에서만 표시. 종료 경기는 숨김. */}
@@ -3943,7 +3942,7 @@ function PlayerRosterDesktop({
         value={filter}
         onChange={setFilter}
         counts={posCounts}
-        keys={["GK", "DF", "MF", "FW"]}
+        keys={["ALL", "GK", "DF", "MF", "FW"]}
       />
       <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">
         {filtered.length === 0 ? (
