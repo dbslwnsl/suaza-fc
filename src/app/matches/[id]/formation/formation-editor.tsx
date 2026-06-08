@@ -1661,7 +1661,11 @@ function Pitch({
                 left: `${s.x * 100}%`,
                 top: `${s.y * 100}%`,
                 WebkitTouchCallout: "none",
-                touchAction: pitchDrag ? "none" : "manipulation",
+                // 드래그 가능한(선수 배치된) 슬롯은 처음부터 touch-action:none 으로 둔다.
+                // touchstart 시점의 값으로 스크롤 여부가 결정되므로, 드래그 시작 후
+                // none 으로 바꿔도 이미 진행 중인 제스처엔 적용되지 않아 스크롤로
+                // 가로채져(pointercancel) 드래그를 놓치게 된다.
+                touchAction: canDrag ? "none" : "manipulation",
               }}
               draggable={nativeDraggable}
               data-slot-idx={i}
