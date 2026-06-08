@@ -1371,10 +1371,20 @@ function Pitch({
   const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lpStart = useRef<{ x: number; y: number } | null>(null);
   const suppressClick = useRef(false);
-  // 직전 pointerdown 이 터치/펜인지 — 터치에서는 네이티브 HTML5 드래그를 막고
-  // 포인터 기반 롱프레스 드래그(pitchDrag)만 사용한다. 두 경로가 동시에 발동하면
-  // 네이티브 drop 이 swap 대신 assignSlot(덮어쓰기)을 호출해 대상 선수가 배치 해제된다.
-  const isTouchPointer = useRef(false);
+  // 터치 기기 여부 — 터치에서는 슬롯의 네이티브 HTML5 드래그(draggable)를 끄고
+  // 포인터 기반 롱프레스 드래그(pitchDrag)만 사용한다.
+  // 네이티브 드래그가 살아 있으면 손가락 이동 시 브라우저가 드래그를 시도하면서
+  // pointercancel 을 먼저 발생시켜 pitchDrag 가 중단/해제되어 버린다.
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+
+  useEffect(() => {
+    if (
+      typeof window !== "undefined" &&
+      ("ontouchstart" in window || navigator.maxTouchPoints > 0)
+    ) {
+      setIsTouchDevice(true);
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -1405,8 +1415,6 @@ function Pitch({
     role: SlotRole,
     e: React.PointerEvent,
   ) {
-    isTouchPointer.current =
-      e.pointerType === "touch" || e.pointerType === "pen";
     if (readonly) return;
     const t = teams.find((x) => x.team === team);
     const pid = t?.assignments[i];
@@ -1491,6 +1499,19 @@ function Pitch({
           e.clientY > rect.bottom;
         if (outside) onUnassignSlot(pitchDrag.sourceTeam, pitchDrag.sourceIdx);
       }
+      setPitchDrag(null);
+      suppressClick.current = true;
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+    }
+    cancelLongPress();
+  }
+
+  // pointercancel: OS/브라우저가 포인터를 회수한 경우. 드래그를 조용히 취소만 하고
+  // 절대 배치 해제하지 않는다(onSlotPointerUp 의 outside 해제 로직을 타지 않도록).
+  function onSlotPointerCancel(e: React.PointerEvent) {
+    if (pitchDrag) {
       setPitchDrag(null);
       suppressClick.current = true;
       try {
@@ -1627,7 +1648,9 @@ function Pitch({
             ((draggedTeam != null && draggedTeam !== tf.team) ||
               (pitchDraggedTeam != null && pitchDraggedTeam !== tf.team));
           const showDropHint = isDropMode && isEmpty && !invalidHover;
+          // 터치 기기에서는 네이티브 HTML5 드래그를 비활성화하고 포인터 롱프레스 드래그만 사용.
           const canDrag = !readonly && !!pid;
+          const nativeDraggable = canDrag && !isTouchDevice;
           return (
             <div
               key={`${tf.team}-${s.index}`}
@@ -1640,22 +1663,16 @@ function Pitch({
                 WebkitTouchCallout: "none",
                 touchAction: pitchDrag ? "none" : "manipulation",
               }}
-              draggable={canDrag}
+              draggable={nativeDraggable}
               data-slot-idx={i}
               data-slot-team={tf.team}
               onPointerDown={(e) => startLongPress(tf.team, i, s.role, e)}
               onPointerMove={onSlotPointerMove}
               onPointerUp={onSlotPointerUp}
-              onPointerCancel={onSlotPointerUp}
+              onPointerCancel={onSlotPointerCancel}
               onDragStart={(e) => {
-                // 터치/펜: 네이티브 드래그를 중단하고 포인터 기반 롱프레스 드래그만 사용.
-                // (네이티브 drop 이 끼어들면 swap 이 덮어쓰기로 바뀌어 대상 선수가 사라진다)
-                if (isTouchPointer.current) {
-                  e.preventDefault();
-                  return;
-                }
                 cancelLongPress();
-                if (!canDrag || !pid) return;
+                if (!nativeDraggable || !pid) return;
                 e.dataTransfer.setData("text/plain", pid);
                 e.dataTransfer.setData(
                   "application/x-source-slot",
