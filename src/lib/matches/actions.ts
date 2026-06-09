@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { sendPushToPresident } from "@/lib/push/send";
+import {
+  notifyNewMatch,
+  notifyReply,
+  notifyTeamChange,
+} from "@/lib/push/triggers";
 import type { MatchStatus } from "./helpers";
 import {
   DEFAULT_MATCH_DURATION_HOURS,
@@ -192,13 +196,16 @@ export async function createMatch(formData: FormData) {
         minute: "2-digit",
       }).format(new Date(input.match_date));
       const isIntra = input.opponent === "자체전";
-      await sendPushToPresident({
-        title: isIntra ? "새 자체전 일정" : "새 경기 일정",
-        body: `${isIntra ? "자체전" : `vs ${input.opponent}`} · ${dateLabel}${
-          input.location ? ` · ${input.location}` : ""
-        }`,
-        url: `/matches/${matchId}`,
-      });
+      await notifyNewMatch(
+        {
+          title: isIntra ? "새 자체전 일정" : "새 경기 일정",
+          body: `${isIntra ? "자체전" : `vs ${input.opponent}`} · ${dateLabel}${
+            input.location ? ` · ${input.location}` : ""
+          }`,
+          url: `/matches/${matchId}`,
+        },
+        userId,
+      );
     } catch (e) {
       console.error("[push] 새 경기 알림 발송 실패", e);
     }
@@ -1312,6 +1319,44 @@ async function resetPlayersInFormation(
  * 한 선수의 팀 배정을 순환: null → 'A' → 'B' → null.
  * 참석(attending) 회원만 대상. 매니저/코치만 가능.
  */
+// 팀 편성/변경 시 해당 선수에게 푸시 (테스트: 회장에게). 응답을 막지 않도록 after() 로 예약.
+// 새 배정(null→A/B) 또는 다른 팀으로 변경될 때만 발송. 해제(→null)·변화없음은 제외.
+function scheduleTeamAssignmentPush(
+  supabase: Awaited<ReturnType<typeof requireStaff>>["supabase"],
+  matchId: string,
+  playerId: string,
+  prevTeam: "A" | "B" | null,
+  nextTeam: "A" | "B" | null,
+) {
+  if (nextTeam == null || prevTeam === nextTeam) return;
+  after(async () => {
+    try {
+      const { data: m } = await supabase
+        .from("matches")
+        .select("opponent, team_a_name, team_b_name")
+        .eq("id", matchId)
+        .single();
+      const teamLabel =
+        nextTeam === "A" ? m?.team_a_name || "A팀" : m?.team_b_name || "B팀";
+      const ctx =
+        m?.opponent === "자체전" ? "자체전" : `vs ${m?.opponent ?? ""}`;
+      const assigned = prevTeam == null;
+      await notifyTeamChange(
+        {
+          title: assigned ? "팀 편성 안내" : "팀 변경 안내",
+          body: `${ctx} · ${teamLabel}에 ${
+            assigned ? "배정되었어요" : "변경되었어요"
+          }`,
+          url: `/matches/${matchId}/formation`,
+        },
+        playerId,
+      );
+    } catch (e) {
+      console.error("[push] 팀 편성 알림 실패", e);
+    }
+  });
+}
+
 export async function cycleMatchTeam(matchId: string, playerId: string) {
   const { supabase } = await requireStaff();
 
@@ -1325,6 +1370,7 @@ export async function cycleMatchTeam(matchId: string, playerId: string) {
   // 참석자만 편성
   if (!row || row.status !== "attending") return;
 
+  const prevTeam = (row.team ?? null) as "A" | "B" | null;
   const next = row.team === null ? "A" : row.team === "A" ? "B" : null;
 
   const { error } = await supabase
@@ -1338,6 +1384,7 @@ export async function cycleMatchTeam(matchId: string, playerId: string) {
   await resetPlayersInFormation(supabase, matchId, [playerId]);
   // 떠난 팀의 주장이었다면 주장 해제
   await clearCaptainIfLeft(supabase, matchId, playerId, next);
+  scheduleTeamAssignmentPush(supabase, matchId, playerId, prevTeam, next);
   revalidatePath(`/matches/${matchId}`);
   revalidatePath(`/matches/${matchId}/formation`);
 }
@@ -1402,12 +1449,13 @@ export async function setMatchTeam(
 
   const { data: row } = await supabase
     .from("match_attendances")
-    .select("status")
+    .select("status, team")
     .eq("match_id", matchId)
     .eq("player_id", playerId)
     .maybeSingle();
 
   if (!row || row.status !== "attending") return;
+  const prevTeam = (row.team ?? null) as "A" | "B" | null;
 
   const { error } = await supabase
     .from("match_attendances")
@@ -1420,6 +1468,7 @@ export async function setMatchTeam(
   await resetPlayersInFormation(supabase, matchId, [playerId]);
   // 떠난 팀의 주장이었다면 주장 해제
   await clearCaptainIfLeft(supabase, matchId, playerId, team);
+  scheduleTeamAssignmentPush(supabase, matchId, playerId, prevTeam, team);
   revalidatePath(`/matches/${matchId}`);
   revalidatePath(`/matches/${matchId}/formation`);
 }
@@ -1613,6 +1662,33 @@ export async function createMatchComment(
     })
     .select("id, created_at, updated_at, parent_id")
     .single();
+
+  // 답글이면(부모 댓글 존재) 그 부모 댓글 작성자에게 알림 (본인 답글 제외).
+  if (data && effectiveParent) {
+    const { data: parent } = await supabase
+      .from("match_comments")
+      .select("author_id")
+      .eq("id", effectiveParent)
+      .single();
+    const targetId = parent?.author_id as string | undefined;
+    if (targetId && targetId !== userId) {
+      after(async () => {
+        try {
+          await notifyReply(
+            {
+              title: "새 답글",
+              body: "회원님의 경기 댓글에 답글이 달렸어요",
+              url: `/matches/${matchId}`,
+            },
+            targetId,
+          );
+        } catch (e) {
+          console.error("[push] 경기 댓글 답글 알림 실패", e);
+        }
+      });
+    }
+  }
+
   return (data as CreatedMatchComment | null) ?? null;
 }
 

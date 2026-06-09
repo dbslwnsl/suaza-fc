@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import {
+  notifyNewPost,
+  notifyReply,
+  notifyPostComment,
+} from "@/lib/push/triggers";
 import {
   DEFAULT_CATEGORY,
   canHomeExpose,
@@ -80,9 +86,26 @@ export async function createPost(formData: FormData) {
     redirect(`/board/new?error=${encodeURIComponent(error.message)}`);
   }
 
+  const postId = data!.id;
+  // 응답(리다이렉트) 이후 알림 발송 — after() 는 redirect 시에도 실행됨.
+  after(async () => {
+    try {
+      await notifyNewPost(
+        {
+          title: isNotice ? "새 공지" : "새 게시글",
+          body: title,
+          url: `/board/${postId}`,
+        },
+        userId,
+      );
+    } catch (e) {
+      console.error("[push] 새 게시글 알림 실패", e);
+    }
+  });
+
   revalidatePath("/board");
   revalidatePath("/");
-  redirect(`/board/${data!.id}`);
+  redirect(`/board/${postId}`);
 }
 
 export async function updatePost(postId: string, formData: FormData) {
@@ -184,6 +207,62 @@ export async function createComment(
   if (error) {
     redirect(`/board/${postId}?error=${encodeURIComponent(error.message)}`);
   }
+
+  // 알림 대상: 원 글 작성자 + (답글이면) 부모 댓글 작성자. 본인 동작·중복은 제외.
+  const notified = new Set<string>([userId]);
+
+  // 1) 원 글 작성자에게 "새 댓글" 알림 (댓글/답글 모두)
+  const { data: post } = await supabase
+    .from("posts")
+    .select("author_id")
+    .eq("id", postId)
+    .single();
+  const postAuthorId = post?.author_id as string | undefined;
+  if (postAuthorId && !notified.has(postAuthorId)) {
+    notified.add(postAuthorId);
+    after(async () => {
+      try {
+        await notifyPostComment(
+          {
+            title: "새 댓글",
+            body: "회원님의 게시글에 새 댓글이 달렸어요",
+            url: `/board/${postId}`,
+          },
+          postAuthorId,
+        );
+      } catch (e) {
+        console.error("[push] 게시글 댓글 알림 실패", e);
+      }
+    });
+  }
+
+  // 2) 답글이면 부모 댓글 작성자에게 "새 답글" 알림 (이미 알림 간 사람은 제외)
+  if (effectiveParent) {
+    const { data: parent } = await supabase
+      .from("post_comments")
+      .select("author_id")
+      .eq("id", effectiveParent)
+      .single();
+    const parentAuthorId = parent?.author_id as string | undefined;
+    if (parentAuthorId && !notified.has(parentAuthorId)) {
+      notified.add(parentAuthorId);
+      after(async () => {
+        try {
+          await notifyReply(
+            {
+              title: "새 답글",
+              body: "회원님의 게시판 댓글에 답글이 달렸어요",
+              url: `/board/${postId}`,
+            },
+            parentAuthorId,
+          );
+        } catch (e) {
+          console.error("[push] 게시판 답글 알림 실패", e);
+        }
+      });
+    }
+  }
+
   revalidatePath(`/board/${postId}`);
   revalidatePath("/board");
   redirect(`/board/${postId}`);

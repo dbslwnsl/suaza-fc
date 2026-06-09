@@ -11,8 +11,6 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("push", function (event) {
-  console.log("[sw] push 이벤트 수신", event.data ? "(data 있음)" : "(data 없음)");
-
   let data = {};
   if (event.data) {
     try {
@@ -21,26 +19,22 @@ self.addEventListener("push", function (event) {
       data = { title: "SUAZA FC", body: event.data.text() };
     }
   } else {
-    // DevTools 의 빈 Push 버튼 테스트 대비 — 기본 알림 표시
-    data = { title: "SUAZA FC", body: "테스트 푸시" };
+    data = { title: "SUAZA FC", body: "새 알림" };
   }
 
   const title = data.title || "SUAZA FC";
   const options = {
     body: data.body || "",
     icon: data.icon || "/icon-192.png",
-    badge: "/icon-192.png",
+    // 안드로이드 상태바 아이콘 — 알파(투명) 채널만 사용하는 단색 실루엣이어야 함.
+    // 컬러 이미지를 쓰면 흰 네모로 표시됨. 엠블럼 흰색 실루엣 PNG 사용.
+    badge: "/notification-badge.png",
     vibrate: [100, 50, 100],
     // 알림 클릭 시 열 경로
     data: { url: data.url || "/" },
   };
 
-  event.waitUntil(
-    self.registration
-      .showNotification(title, options)
-      .then(() => console.log("[sw] showNotification 성공:", title))
-      .catch((err) => console.error("[sw] showNotification 실패:", err)),
-  );
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener("notificationclick", function (event) {

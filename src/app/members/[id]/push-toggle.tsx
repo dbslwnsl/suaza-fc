@@ -1,11 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  subscribeUser,
-  unsubscribeUser,
-  sendTestToSelf,
-} from "@/lib/push/actions";
+import { subscribeUser, unsubscribeUser } from "@/lib/push/actions";
 
 // VAPID 공개키(base64url) → Uint8Array (PushManager.subscribe 요구 형식)
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
@@ -29,7 +25,6 @@ export default function PushToggle() {
   const [state, setState] = useState<State>("loading");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [testMsg, setTestMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const isIOS =
@@ -130,19 +125,6 @@ export default function PushToggle() {
     }
   }
 
-  async function sendTest() {
-    setBusy(true);
-    setTestMsg(null);
-    try {
-      const r = await sendTestToSelf();
-      setTestMsg((r.ok ? "✅ " : "⚠️ ") + r.message);
-    } catch (e) {
-      setTestMsg("⚠️ " + (e instanceof Error ? e.message : "테스트 발송 실패"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   if (state === "loading") return null;
 
   return (
@@ -195,22 +177,6 @@ export default function PushToggle() {
           이 브라우저는 푸시 알림을 지원하지 않아요.
         </p>
       )}
-      {state === "subscribed" && (
-        <div className="flex items-center gap-2 pt-1">
-          <button
-            type="button"
-            onClick={sendTest}
-            disabled={busy}
-            className="inline-flex items-center gap-1.5 text-xs rounded-lg px-3 py-1.5 font-medium border border-suaza-border text-suaza-ink hover:bg-suaza-bg transition disabled:opacity-50"
-          >
-            테스트 알림 보내기
-          </button>
-          {testMsg && (
-            <span className="text-xs text-suaza-ink-muted">{testMsg}</span>
-          )}
-        </div>
-      )}
-
       {error && <p className="text-xs text-red-600">{error}</p>}
     </section>
   );

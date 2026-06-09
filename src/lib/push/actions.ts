@@ -1,7 +1,6 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { sendTestPush } from "./send";
 
 // 브라우저 PushSubscription.toJSON() 형태 (필요한 필드만)
 type SerializedSubscription = {
@@ -53,24 +52,6 @@ export async function subscribeUser(
     return { success: false, error: `${error.code ?? ""} ${error.message}`.trim() };
   }
   return { success: true };
-}
-
-/** [디버그] 현재 로그인 회원 본인에게 테스트 푸시를 발송. */
-export async function sendTestToSelf(): Promise<{
-  ok: boolean;
-  message: string;
-}> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, message: "로그인이 필요합니다" };
-
-  const r = await sendTestPush(user.id);
-  if (r.ok) {
-    return { ok: true, message: `발송 완료 (구독 ${r.sent}/${r.total}대)` };
-  }
-  return { ok: false, message: r.error ?? "발송 실패" };
 }
 
 /** 현재 회원의 해당 endpoint 구독을 삭제(알림 끄기). */
