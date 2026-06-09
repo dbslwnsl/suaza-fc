@@ -6,6 +6,7 @@ import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
   notifyNewPost,
+  notifyNotice,
   notifyReply,
   notifyPostComment,
 } from "@/lib/push/triggers";
@@ -90,14 +91,13 @@ export async function createPost(formData: FormData) {
   // 응답(리다이렉트) 이후 알림 발송 — after() 는 redirect 시에도 실행됨.
   after(async () => {
     try {
-      await notifyNewPost(
-        {
-          title: isNotice ? "새 공지" : "새 게시글",
-          body: title,
-          url: `/board/${postId}`,
-        },
-        userId,
-      );
+      const payload = { body: title, url: `/board/${postId}` };
+      // 공지는 전용 트리거(notifyNotice), 일반 글은 notifyNewPost 로 분리 발송.
+      if (isNotice) {
+        await notifyNotice({ title: "새 공지", ...payload }, userId);
+      } else {
+        await notifyNewPost({ title: "새 게시글", ...payload }, userId);
+      }
     } catch (e) {
       console.error("[push] 새 게시글 알림 실패", e);
     }

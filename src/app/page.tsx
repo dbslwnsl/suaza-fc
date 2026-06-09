@@ -377,14 +377,36 @@ export default async function Home() {
             </div>
             <span className="font-bold text-suaza-ink text-xl">수아자FC</span>
           </div>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="text-[13px] border border-suaza-border rounded-md px-3 py-1.5 text-suaza-ink hover:bg-gray-100 transition"
+          <div className="flex items-center gap-2">
+            <Link
+              href="/settings/notifications"
+              aria-label="알림 설정"
+              title="알림 설정"
+              className="inline-flex items-center justify-center w-[34px] h-[34px] border border-suaza-border rounded-md text-suaza-ink hover:bg-gray-100 transition"
             >
-              로그아웃
-            </button>
-          </form>
+              <svg
+                viewBox="0 0 24 24"
+                className="w-[18px] h-[18px]"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            </Link>
+            <form action={logout}>
+              <button
+                type="submit"
+                className="text-[13px] border border-suaza-border rounded-md px-3 py-1.5 text-suaza-ink hover:bg-gray-100 transition"
+              >
+                로그아웃
+              </button>
+            </form>
+          </div>
         </header>
 
         {/* Profile Card */}

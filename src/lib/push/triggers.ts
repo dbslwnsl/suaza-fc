@@ -20,6 +20,12 @@ export async function notifyNewPost(payload: PushPayload, actorId: string) {
   return sendPushToPresident(payload);
 }
 
+/** 새 공지 — (운영) 전체 회원, 작성자 제외 */
+export async function notifyNotice(payload: PushPayload, actorId: string) {
+  void actorId; // 운영: return sendPushToAll(payload, actorId);
+  return sendPushToPresident(payload);
+}
+
 /** 내 댓글에 달린 답글 — (운영) 부모 댓글 작성자에게 */
 export async function notifyReply(payload: PushPayload, targetUserId: string) {
   void targetUserId; // 운영: return sendPushToUsers([targetUserId], payload);
