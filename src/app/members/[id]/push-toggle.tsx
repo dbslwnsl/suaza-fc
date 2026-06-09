@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { subscribeUser, unsubscribeUser } from "@/lib/push/actions";
+import {
+  subscribeUser,
+  unsubscribeUser,
+  sendTestToSelf,
+} from "@/lib/push/actions";
 
 // VAPID 공개키(base64url) → Uint8Array (PushManager.subscribe 요구 형식)
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
@@ -25,6 +29,7 @@ export default function PushToggle() {
   const [state, setState] = useState<State>("loading");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [testMsg, setTestMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const isIOS =
@@ -51,7 +56,21 @@ export default function PushToggle() {
           updateViaCache: "none",
         });
         const sub = await reg.pushManager.getSubscription();
-        setState(sub ? "subscribed" : "unsubscribed");
+        if (sub) {
+          // 브라우저엔 구독이 있는데 DB엔 없을 수 있다(이전 실패 등).
+          // 멱등 업서트로 항상 서버와 동기화해 둔다.
+          const json = sub.toJSON() as {
+            endpoint: string;
+            keys: { p256dh: string; auth: string };
+          };
+          const r = await subscribeUser(json, navigator.userAgent);
+          if (!r.success) {
+            setError(`구독 저장 실패: ${r.error ?? "알 수 없는 오류"}`);
+          }
+          setState("subscribed");
+        } else {
+          setState("unsubscribed");
+        }
       } catch {
         setState("unsupported");
       }
@@ -111,6 +130,19 @@ export default function PushToggle() {
     }
   }
 
+  async function sendTest() {
+    setBusy(true);
+    setTestMsg(null);
+    try {
+      const r = await sendTestToSelf();
+      setTestMsg((r.ok ? "✅ " : "⚠️ ") + r.message);
+    } catch (e) {
+      setTestMsg("⚠️ " + (e instanceof Error ? e.message : "테스트 발송 실패"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (state === "loading") return null;
 
   return (
@@ -163,6 +195,22 @@ export default function PushToggle() {
           이 브라우저는 푸시 알림을 지원하지 않아요.
         </p>
       )}
+      {state === "subscribed" && (
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            type="button"
+            onClick={sendTest}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 text-xs rounded-lg px-3 py-1.5 font-medium border border-suaza-border text-suaza-ink hover:bg-suaza-bg transition disabled:opacity-50"
+          >
+            테스트 알림 보내기
+          </button>
+          {testMsg && (
+            <span className="text-xs text-suaza-ink-muted">{testMsg}</span>
+          )}
+        </div>
+      )}
+
       {error && <p className="text-xs text-red-600">{error}</p>}
     </section>
   );

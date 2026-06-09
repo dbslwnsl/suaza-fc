@@ -2,14 +2,27 @@
 // 서버(web-push)가 보낸 push 이벤트를 받아 시스템 알림을 띄우고,
 // 알림 클릭 시 해당 경로(data.url)로 이동/포커스한다.
 
+// 새 버전 SW 가 즉시 활성화되도록 (디버깅/배포 갱신 편의)
+self.addEventListener("install", (event) => {
+  self.skipWaiting();
+});
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener("push", function (event) {
-  if (!event.data) return;
+  console.log("[sw] push 이벤트 수신", event.data ? "(data 있음)" : "(data 없음)");
 
   let data = {};
-  try {
-    data = event.data.json();
-  } catch {
-    data = { title: "SUAZA FC", body: event.data.text() };
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch {
+      data = { title: "SUAZA FC", body: event.data.text() };
+    }
+  } else {
+    // DevTools 의 빈 Push 버튼 테스트 대비 — 기본 알림 표시
+    data = { title: "SUAZA FC", body: "테스트 푸시" };
   }
 
   const title = data.title || "SUAZA FC";
@@ -22,7 +35,12 @@ self.addEventListener("push", function (event) {
     data: { url: data.url || "/" },
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    self.registration
+      .showNotification(title, options)
+      .then(() => console.log("[sw] showNotification 성공:", title))
+      .catch((err) => console.error("[sw] showNotification 실패:", err)),
+  );
 });
 
 self.addEventListener("notificationclick", function (event) {

@@ -103,6 +103,82 @@ export async function sendPushToAll(
 }
 
 /**
+ * [디버그] 특정 회원에게 테스트 푸시를 보내고, 단계별 결과를 반환한다.
+ * 알림이 안 올 때 어느 단계에서 끊겼는지 화면에서 바로 확인하기 위한 용도.
+ */
+export async function sendTestPush(userId: string): Promise<{
+  ok: boolean;
+  total: number;
+  sent: number;
+  error?: string;
+}> {
+  if (!ensureVapid()) {
+    return {
+      ok: false,
+      total: 0,
+      sent: 0,
+      error:
+        "서버에 VAPID 키가 없습니다 (NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY 환경변수 확인)",
+    };
+  }
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("push_subscriptions")
+    .select("id, endpoint, p256dh, auth")
+    .eq("user_id", userId);
+  if (error) {
+    return { ok: false, total: 0, sent: 0, error: `구독 조회 실패: ${error.message}` };
+  }
+  const rows = (data ?? []) as SubscriptionRow[];
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      total: 0,
+      sent: 0,
+      error: "저장된 구독이 없습니다. 먼저 '알림 켜기'를 눌러주세요.",
+    };
+  }
+
+  const body = JSON.stringify({
+    title: "테스트 알림",
+    body: "푸시 알림이 정상 동작합니다 🎉",
+    url: "/",
+    icon: "/icon-192.png",
+  });
+
+  let sent = 0;
+  let lastError: string | undefined;
+  const staleIds: string[] = [];
+  for (const row of rows) {
+    try {
+      await webpush.sendNotification(
+        { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
+        body,
+      );
+      sent++;
+    } catch (err: unknown) {
+      const statusCode =
+        typeof err === "object" && err !== null && "statusCode" in err
+          ? (err as { statusCode?: number }).statusCode
+          : undefined;
+      lastError = `발송 실패(status ${statusCode ?? "?"}): ${
+        err instanceof Error ? err.message : String(err)
+      }`;
+      if (statusCode === 404 || statusCode === 410) staleIds.push(row.id);
+    }
+  }
+  if (staleIds.length > 0) {
+    await admin.from("push_subscriptions").delete().in("id", staleIds);
+  }
+  return {
+    ok: sent > 0,
+    total: rows.length,
+    sent,
+    error: sent > 0 ? undefined : lastError ?? "알 수 없는 오류",
+  };
+}
+
+/**
  * [테스트용] 회장(title=president)에게만 발송.
  * 운영 전환 시 createMatch 에서 sendPushToAll 로 되돌릴 것.
  */
