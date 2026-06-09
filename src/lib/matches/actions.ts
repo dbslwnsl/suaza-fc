@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { sendPushToPresident } from "@/lib/push/send";
 import type { MatchStatus } from "./helpers";
 import {
   DEFAULT_MATCH_DURATION_HOURS,
@@ -175,8 +177,35 @@ export async function createMatch(formData: FormData) {
     redirect(`/matches/new?error=${encodeURIComponent(error.message)}`);
   }
 
+  const matchId = data!.id;
+
+  // 응답(리다이렉트) 이후 푸시 발송. after() 는 redirect 시에도 실행되며 응답을 막지 않는다.
+  // [테스트용] 현재는 회장에게만 발송. 운영 시 sendPushToAll(payload, userId) 로 변경.
+  after(async () => {
+    try {
+      const dateLabel = new Intl.DateTimeFormat("ko-KR", {
+        timeZone: "Asia/Seoul",
+        month: "long",
+        day: "numeric",
+        weekday: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(new Date(input.match_date));
+      const isIntra = input.opponent === "자체전";
+      await sendPushToPresident({
+        title: isIntra ? "새 자체전 일정" : "새 경기 일정",
+        body: `${isIntra ? "자체전" : `vs ${input.opponent}`} · ${dateLabel}${
+          input.location ? ` · ${input.location}` : ""
+        }`,
+        url: `/matches/${matchId}`,
+      });
+    } catch (e) {
+      console.error("[push] 새 경기 알림 발송 실패", e);
+    }
+  });
+
   revalidatePath("/matches");
-  redirect(`/matches/${data!.id}`);
+  redirect(`/matches/${matchId}`);
 }
 
 function actionsEqual(

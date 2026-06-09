@@ -27,6 +27,7 @@ import {
 import ProfileEditForm from "./profile-edit-form";
 import AvatarUpload from "./avatar-upload";
 import DeleteMemberButton from "./delete-member-button";
+import PushToggle from "./push-toggle";
 import CoachCommentSection, { type CoachComment } from "./coach-comments";
 
 type StatDef = {
@@ -411,6 +412,9 @@ export default async function MemberDetailPage({
             }}
           />
         )}
+
+        {/* 푸시 알림 설정 — 본인 프로필에서만 노출 */}
+        {isSelf && <PushToggle />}
 
         {/* 감독&코치 코멘트 — 주발 정보 아래 */}
         {showCoachComments && (
