@@ -263,9 +263,9 @@ export async function createComment(
     }
   }
 
+  // 리스트 인라인/상세 모두 "제자리" 갱신 — 상세 페이지로 강제 이동하지 않는다.
   revalidatePath(`/board/${postId}`);
   revalidatePath("/board");
-  redirect(`/board/${postId}`);
 }
 
 export async function updateComment(
@@ -286,7 +286,7 @@ export async function updateComment(
     redirect(`/board/${postId}?error=${encodeURIComponent(error.message)}`);
   }
   revalidatePath(`/board/${postId}`);
-  redirect(`/board/${postId}`);
+  revalidatePath("/board");
 }
 
 export async function deleteComment(commentId: string, postId: string) {
@@ -299,5 +299,5 @@ export async function deleteComment(commentId: string, postId: string) {
     redirect(`/board/${postId}?error=${encodeURIComponent(error.message)}`);
   }
   revalidatePath(`/board/${postId}`);
-  redirect(`/board/${postId}`);
+  revalidatePath("/board");
 }

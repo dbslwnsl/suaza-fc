@@ -93,6 +93,7 @@ function CommentForm({
   autoFocus,
   onCancel,
   submitLabel = "등록",
+  onDone,
 }: {
   postId: string;
   parentId: string | null;
@@ -100,12 +101,17 @@ function CommentForm({
   autoFocus?: boolean;
   onCancel?: () => void;
   submitLabel?: string;
+  /** 등록 성공 후 호출 — 답글 폼은 이걸로 닫아 새 댓글이 입력창 자리에 보이게 한다 */
+  onDone?: () => void;
 }) {
   const [content, setContent] = useState("");
   return (
     <form
-      action={createComment.bind(null, postId, parentId)}
-      onSubmit={() => setContent("")}
+      action={async (formData) => {
+        await createComment(postId, parentId, formData);
+        setContent("");
+        onDone?.();
+      }}
       className="flex flex-col gap-2"
     >
       <textarea
@@ -297,6 +303,7 @@ function CommentItem({
             placeholder={`${comment.author?.name ?? "댓글"}에게 답글`}
             autoFocus
             onCancel={() => setReplying(false)}
+            onDone={() => setReplying(false)}
             submitLabel="답글 등록"
           />
         </div>
