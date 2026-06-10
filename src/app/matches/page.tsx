@@ -27,10 +27,14 @@ export default async function MatchesPage({
       .from("matches")
       .select("*")
       .order("match_date", { ascending: true }),
-    supabase.from("profiles").select("role").eq("id", user.id).single(),
+    supabase.from("profiles").select("role, title").eq("id", user.id).single(),
   ]);
 
-  const isStaff = me?.role === "manager" || me?.role === "coach";
+  const isStaff =
+    me?.role === "manager" ||
+    me?.role === "coach" ||
+    me?.title === "president" ||
+    me?.title === "head_coach";
   const all = (matches ?? []) as Match[];
 
   const live = all
