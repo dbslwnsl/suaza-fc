@@ -96,18 +96,6 @@ export default function ProfileEditForm({
     foot != null;
   const canSave = isDirty && requiredValid;
 
-  const handleCancel = () => {
-    setNickname(initial.nickname ?? "");
-    setJersey(initial.jersey_number != null ? String(initial.jersey_number) : "");
-    setBirth(initial.birth_date ?? "");
-    setPrimary(initial.positions[0] ?? null);
-    setSecondary(initial.positions[1] ?? null);
-    setActiveSlot("primary");
-    setFoot(initial.preferred_foot);
-    setInjured(initial.is_injured);
-    setOnLeave(initial.on_leave);
-  };
-
   // 카드 클릭 → 현재 단계(주/부)에 배정. 같은 칸 재선택 시 해제.
   const pickPosition = (p: Position) => {
     if (activeSlot === "primary") {
@@ -366,7 +354,17 @@ export default function ProfileEditForm({
 
   // 읽기 전용: 폼/저장 없이 동일 레이아웃만 렌더
   if (readonly) {
-    return <div className="flex flex-col gap-6">{sections}</div>;
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center gap-3">
+          <UsersIcon className="w-9 h-9 text-suaza-ink shrink-0" />
+          <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
+            프로필
+          </h1>
+        </div>
+        {sections}
+      </div>
+    );
   }
 
   return (
@@ -385,6 +383,23 @@ export default function ProfileEditForm({
       <input type="hidden" name="is_injured" value={injured ? "1" : "0"} />
       <input type="hidden" name="on_leave" value={onLeave ? "1" : "0"} />
 
+      {/* 제목 + 저장 — 같은 라인 (카드 밖 상단) */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <UsersIcon className="w-9 h-9 text-suaza-ink shrink-0" />
+          <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
+            프로필
+          </h1>
+        </div>
+        <button
+          type="submit"
+          disabled={!canSave}
+          className="text-xs font-medium px-3 py-1.5 rounded-md bg-suaza-ink text-white hover:opacity-90 transition shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          저장
+        </button>
+      </div>
+
       {sections}
 
       {/* 필수 누락 안내 */}
@@ -394,24 +409,6 @@ export default function ProfileEditForm({
         </p>
       )}
 
-      {/* 저장 / 취소 */}
-      <div className="flex gap-2 mt-2">
-        <button
-          type="button"
-          onClick={handleCancel}
-          disabled={!isDirty}
-          className="flex-1 h-[52px] rounded-lg bg-gray-100 text-suaza-ink-muted text-base font-medium hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
-        >
-          취소
-        </button>
-        <button
-          type="submit"
-          disabled={!canSave}
-          className="flex-1 h-[52px] rounded-lg bg-suaza-accent text-white text-base font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:opacity-50"
-        >
-          저장
-        </button>
-      </div>
     </form>
   );
 }
@@ -612,6 +609,27 @@ const FOOT_IMAGE: Record<PreferredFoot, { src: string; ratio: string }> = {
   right: { src: "/foot-right.png", ratio: "aspect-[3/4]" },
   both: { src: "/foot-both.png", ratio: "aspect-[3/2]" },
 };
+
+// 회원명단 탭과 동일한 사람 아이콘 — "프로필" 제목 앞에 표시
+function UsersIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      viewBox="0 0 24 24"
+      aria-hidden
+    >
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
 
 function FootIcon({
   variant,

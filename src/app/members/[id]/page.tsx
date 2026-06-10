@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -344,13 +343,6 @@ export default async function MemberDetailPage({
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[600px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
-        <Link
-          href="/members"
-          className="text-sm text-suaza-ink-muted hover:underline self-start"
-        >
-          ← 회원 명단
-        </Link>
-
         {message && (
           <p className="-mt-2 p-3 bg-green-50 text-green-700 rounded-lg text-sm">
             {message}
