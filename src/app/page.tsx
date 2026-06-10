@@ -486,37 +486,17 @@ export default async function Home() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <Link
-              href="/settings/notifications"
-              aria-label="알림 설정"
-              title="알림 설정"
-              className="inline-flex items-center justify-center w-[34px] h-[34px] border border-suaza-border rounded-md text-suaza-ink hover:bg-gray-100 transition"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="w-[18px] h-[18px]"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-              </svg>
-            </Link>
             {(profile?.title === "president" ||
               profile?.title === "head_coach") && (
               <Link
                 href="/settings"
                 aria-label="감독 설정"
                 title="감독 설정"
-                className="inline-flex items-center justify-center w-[34px] h-[34px] border border-suaza-border rounded-md text-suaza-ink hover:bg-gray-100 transition"
+                className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 border border-suaza-border rounded-md text-suaza-ink hover:bg-gray-100 transition"
               >
                 <svg
                   viewBox="0 0 24 24"
-                  className="w-[18px] h-[18px]"
+                  className="w-[13px] h-[13px] sm:w-[15px] sm:h-[15px]"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth={2}
@@ -532,7 +512,7 @@ export default async function Home() {
             <form action={logout}>
               <button
                 type="submit"
-                className="text-[13px] border border-suaza-border rounded-md px-3 py-1.5 text-suaza-ink hover:bg-gray-100 transition"
+                className="inline-flex items-center h-6 sm:h-7 px-2.5 text-xs border border-suaza-border rounded-md text-suaza-ink hover:bg-gray-100 transition"
               >
                 로그아웃
               </button>
@@ -627,26 +607,48 @@ export default async function Home() {
             </div>
 
             {profile && (
-              <Link
-                href={`/members/${user!.id}`}
-                aria-label="프로필 수정"
-                title="프로필 수정"
-                className="shrink-0 inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-md text-suaza-accent bg-red-50 hover:bg-red-100 transition"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  className="w-[13px] h-[13px] sm:w-[15px] sm:h-[15px]"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Link
+                  href="/settings/notifications"
+                  aria-label="알림 설정"
+                  title="알림 설정"
+                  className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-md border border-suaza-border text-suaza-ink hover:bg-gray-100 transition"
                 >
-                  <path d="M12 20h9" />
-                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                </svg>
-              </Link>
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="w-[13px] h-[13px] sm:w-[15px] sm:h-[15px]"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
+                </Link>
+                <Link
+                  href={`/members/${user!.id}`}
+                  aria-label="프로필 수정"
+                  title="프로필 수정"
+                  className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-md text-suaza-accent bg-red-50 hover:bg-red-100 transition"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="w-[13px] h-[13px] sm:w-[15px] sm:h-[15px]"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  </svg>
+                </Link>
+              </div>
             )}
           </div>
 
