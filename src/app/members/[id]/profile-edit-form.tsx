@@ -117,26 +117,26 @@ export default function ProfileEditForm({
                 type="number"
                 value={jersey}
                 onCommit={setJersey}
-                readonly={readonly}
+                readonly
                 min={0}
                 max={99}
-                ariaLabel="등번호 수정"
+                ariaLabel="등번호"
                 renderDisplay={(v) => (
                   <span className="font-bold" style={{ color: "#338CF2" }}>
                     #{v || "--"}
                   </span>
                 )}
-                displayClassName="text-sm hover:opacity-70 transition"
+                displayClassName="text-sm"
                 inputClassName={`${inlineInputCls} w-[60px] text-center`}
               />
               <InlineEditable
                 type="date"
                 value={birth}
                 onCommit={setBirth}
-                readonly={readonly}
-                ariaLabel="생년월일 수정"
-                renderDisplay={(v) => (v ? formatBirth(v) : "생년월일 입력")}
-                displayClassName="ml-auto text-xs text-suaza-ink-faint hover:text-suaza-ink-muted transition whitespace-nowrap"
+                readonly
+                ariaLabel="생년월일"
+                renderDisplay={(v) => (v ? formatBirth(v) : "생년월일 미설정")}
+                displayClassName="ml-auto text-xs text-suaza-ink-faint whitespace-nowrap"
                 inputClassName={`${inlineInputCls} w-[150px] ml-auto`}
               />
             </div>
