@@ -183,7 +183,7 @@ export default function NewsInbox({ initial }: { initial: NewsItem[] }) {
               return (
                 <li
                   key={n.id}
-                  className={`flex items-center gap-3 pl-4 transition ${
+                  className={`flex items-center gap-3 pl-4 pr-4 transition ${
                     unread ? "bg-red-50/40" : "bg-white"
                   } hover:bg-gray-50`}
                 >
@@ -235,7 +235,7 @@ export default function NewsInbox({ initial }: { initial: NewsItem[] }) {
                       onClick={() => handleMarkOne(n.id)}
                       aria-label="읽음 처리"
                       title="읽음 처리"
-                      className="shrink-0 mr-3 inline-flex items-center justify-center w-7 h-7 rounded-full border border-suaza-border text-suaza-ink-muted hover:bg-suaza-bg hover:text-suaza-ink transition"
+                      className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full border border-suaza-border text-suaza-ink-muted hover:bg-suaza-bg hover:text-suaza-ink transition"
                     >
                       <svg
                         viewBox="0 0 24 24"
