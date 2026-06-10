@@ -262,7 +262,7 @@ function FilterChip({
     >
       {color && (
         <span
-          className="w-1.5 h-1.5 rounded-full"
+          className="hidden desktop:block w-1.5 h-1.5 rounded-full"
           style={{ backgroundColor: color }}
         />
       )}

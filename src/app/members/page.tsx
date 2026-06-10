@@ -78,7 +78,7 @@ export default async function MembersPage({
               <Link
                 key={t}
                 href={href}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${
+                className={`flex-1 text-center px-2 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${
                   active
                     ? "border-suaza-button text-suaza-ink"
                     : "border-transparent text-suaza-ink-muted hover:text-suaza-ink"
