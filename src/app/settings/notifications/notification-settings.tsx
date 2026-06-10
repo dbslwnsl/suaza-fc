@@ -68,16 +68,28 @@ const DEFAULT_PREFS: Record<string, boolean> = {
 
 // 카테고리별 on/off 는 아직 서버 발송에 반영되지 않는 UI 상태 — 기기 로컬에 저장만 한다.
 const PREFS_KEY = "suaza:notif-prefs";
+// 마스터 토글의 직전 상태 캐시 — 재진입 시 스피너 없이 즉시 표시하기 위함.
+const MASTER_KEY = "suaza:notif-master";
 
 function Toggle({
   checked,
   onChange,
   disabled,
+  loading,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   disabled?: boolean;
+  /** 현재 상태 확인 중 — on/off 대신 스피너를 표시해 잘못된 상태가 깜빡이지 않게 한다 */
+  loading?: boolean;
 }) {
+  if (loading) {
+    return (
+      <span className="relative inline-flex h-[31px] w-[51px] shrink-0 items-center justify-center rounded-full bg-gray-100">
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-500" />
+      </span>
+    );
+  }
   return (
     <button
       type="button"
@@ -109,6 +121,7 @@ function SettingRow({
   last,
   charDark,
   comingSoon,
+  loading,
 }: {
   char: string;
   color: string;
@@ -120,6 +133,7 @@ function SettingRow({
   last?: boolean;
   charDark?: boolean;
   comingSoon?: boolean;
+  loading?: boolean;
 }) {
   return (
     <div className="flex items-center gap-3 pl-4 bg-white">
@@ -153,6 +167,7 @@ function SettingRow({
           checked={comingSoon ? false : checked}
           onChange={onToggle}
           disabled={disabled || comingSoon}
+          loading={loading}
         />
       </div>
     </div>
@@ -160,20 +175,35 @@ function SettingRow({
 }
 
 export default function NotificationSettings() {
-  const [pushState, setPushState] = useState<PushState>("loading");
+  // 이 컴포넌트는 ssr:false 로 클라이언트에서만 렌더된다(아래 wrapper 참고).
+  // 따라서 초기 state 를 localStorage 에서 "동기적으로" 읽어, 첫 페인트부터
+  // 올바른 상태를 표시한다 → OFF→ON 깜빡임 없음. (서버 기본값 HTML 자체가 없음)
+  const [pushState, setPushState] = useState<PushState>(() => {
+    if (typeof window === "undefined") return "loading";
+    try {
+      const c = localStorage.getItem(MASTER_KEY);
+      if (c === "on") return "subscribed";
+      if (c === "off") return "unsubscribed";
+    } catch {
+      // 무시
+    }
+    return "loading";
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [prefs, setPrefs] = useState<Record<string, boolean>>(DEFAULT_PREFS);
-
-  // 저장된 카테고리 설정 로드
-  useEffect(() => {
+  // 마스터 토글 낙관 상태 — 탭 즉시 스위치를 움직이고, 비동기 구독 완료/실패 후 실제값으로 정리.
+  const [optimisticMaster, setOptimisticMaster] = useState<boolean | null>(
+    null,
+  );
+  const [prefs, setPrefs] = useState<Record<string, boolean>>(() => {
+    if (typeof window === "undefined") return DEFAULT_PREFS;
     try {
       const raw = localStorage.getItem(PREFS_KEY);
-      if (raw) setPrefs({ ...DEFAULT_PREFS, ...JSON.parse(raw) });
+      return raw ? { ...DEFAULT_PREFS, ...JSON.parse(raw) } : DEFAULT_PREFS;
     } catch {
-      // 무시 — 기본값 사용
+      return DEFAULT_PREFS;
     }
-  }, []);
+  });
 
   // 푸시 지원 여부 / 현재 구독 상태 확인
   useEffect(() => {
@@ -190,6 +220,9 @@ export default function NotificationSettings() {
     }
     if (Notification.permission === "denied") {
       setPushState("denied");
+      try {
+        localStorage.setItem(MASTER_KEY, "off");
+      } catch {}
       return;
     }
 
@@ -201,17 +234,27 @@ export default function NotificationSettings() {
         });
         const sub = await reg.pushManager.getSubscription();
         if (sub) {
+          // 표시는 즉시 반영하고, DB 재동기화는 백그라운드로 (네트워크 대기로 스피너가 남지 않게).
+          setPushState("subscribed");
+          try {
+            localStorage.setItem(MASTER_KEY, "on");
+          } catch {}
           const json = sub.toJSON() as {
             endpoint: string;
             keys: { p256dh: string; auth: string };
           };
-          const r = await subscribeUser(json, navigator.userAgent);
-          if (!r.success) {
-            setError(`구독 저장 실패: ${r.error ?? "알 수 없는 오류"}`);
-          }
-          setPushState("subscribed");
+          subscribeUser(json, navigator.userAgent)
+            .then((r) => {
+              if (!r.success) {
+                setError(`구독 저장 실패: ${r.error ?? "알 수 없는 오류"}`);
+              }
+            })
+            .catch(() => {});
         } else {
           setPushState("unsubscribed");
+          try {
+            localStorage.setItem(MASTER_KEY, "off");
+          } catch {}
         }
       } catch {
         setPushState("unsupported");
@@ -250,13 +293,20 @@ export default function NotificationSettings() {
         await sub.unsubscribe();
         setError(res.error ?? "구독 저장에 실패했습니다");
         setPushState("unsubscribed");
+        try {
+          localStorage.setItem(MASTER_KEY, "off");
+        } catch {}
         return;
       }
       setPushState("subscribed");
+      try {
+        localStorage.setItem(MASTER_KEY, "on");
+      } catch {}
     } catch (e) {
       setError(e instanceof Error ? e.message : "알림 설정에 실패했습니다");
     } finally {
       setBusy(false);
+      setOptimisticMaster(null); // 실제 상태로 정리(실패 시 자동 되돌림)
     }
   }
 
@@ -271,10 +321,14 @@ export default function NotificationSettings() {
         await sub.unsubscribe();
       }
       setPushState("unsubscribed");
+      try {
+        localStorage.setItem(MASTER_KEY, "off");
+      } catch {}
     } catch (e) {
       setError(e instanceof Error ? e.message : "알림 해제에 실패했습니다");
     } finally {
       setBusy(false);
+      setOptimisticMaster(null); // 실제 상태로 정리(실패 시 자동 되돌림)
     }
   }
 
@@ -290,13 +344,18 @@ export default function NotificationSettings() {
     });
   }
 
+  const loading = pushState === "loading";
   const masterAvailable =
     pushState === "subscribed" || pushState === "unsubscribed";
   const masterOn = pushState === "subscribed";
-  const categoriesDisabled = !masterOn || busy;
+  // 스위치 표시값 — 낙관 상태가 있으면 그걸 우선(탭 즉시 이동), 없으면 실제 구독 상태.
+  const masterChecked = optimisticMaster ?? masterOn;
+  // 상태 확인 중에는 카테고리를 흐리게 하지 않는다 (마스터와 같은 깜빡임 방지)
+  const categoriesDisabled = !loading && (!masterOn || busy);
 
   function onMasterToggle(v: boolean) {
     if (busy || !masterAvailable) return;
+    setOptimisticMaster(v); // 스위치 즉시 이동
     if (v) enable();
     else disable();
   }
@@ -329,9 +388,10 @@ export default function NotificationSettings() {
           charDark
           title="알람"
           desc="모든 알람을 켜거나 끕니다"
-          checked={masterOn}
+          checked={masterChecked}
           onToggle={onMasterToggle}
           disabled={!masterAvailable || busy}
+          loading={loading}
           last
         />
       </div>

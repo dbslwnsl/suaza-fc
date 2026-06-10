@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import BackButton from "@/components/back-button";
-import NotificationSettings from "./notification-settings";
+import NotificationSettings from "./notification-settings-client";
 
 // 알림(푸시) 설정 전용 페이지 — 모든 로그인 회원 대상.
 // 홈 헤더의 종 아이콘에서 진입한다.
