@@ -1,7 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { quarterShortLabel } from "@/lib/matches/helpers";
+
+// 터치 기기 여부 — SSR 안전하게 읽기 (마운트 후 클라이언트 값). 변하지 않으므로 구독은 no-op.
+const subscribeNoop = () => () => {};
+const getTouchSnapshot = () =>
+  typeof window !== "undefined" &&
+  ("ontouchstart" in window || navigator.maxTouchPoints > 0);
+const getTouchServerSnapshot = () => false;
 
 export type Member = {
   id: string;
@@ -24,6 +31,10 @@ type ByStatus = {
   undecided: Member[];
 };
 
+// data-drop-status 인코딩: null(미투표) → "none"
+const encodeStatus = (s: Status) => (s == null ? "none" : s);
+const decodeStatus = (s: string): Status => (s === "none" ? null : (s as Status));
+
 export default function AttendanceManagerBoard({
   byStatus,
   nonVoters,
@@ -44,10 +55,114 @@ export default function AttendanceManagerBoard({
 }) {
   const [dragging, setDragging] = useState(false);
 
+  // 터치 기기 여부 — 터치에서는 네이티브 HTML5 드래그가 동작하지 않으므로
+  // 포인터 기반 롱프레스 드래그를 사용한다. (마우스는 기존 네이티브 DnD 유지)
+  const isTouch = useSyncExternalStore(
+    subscribeNoop,
+    getTouchSnapshot,
+    getTouchServerSnapshot,
+  );
+
+  // 포인터 드래그(터치) 상태 — 손가락 따라다니는 고스트 + 현재 올라간 섹션
+  const [pdrag, setPdrag] = useState<{
+    name: string;
+    x: number;
+    y: number;
+    overStatus?: Status;
+  } | null>(null);
+  const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lpStart = useRef<{ x: number; y: number } | null>(null);
+  const dragMember = useRef<Member | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (lpTimer.current) clearTimeout(lpTimer.current);
+    };
+  }, []);
+
   const handleDrop = (playerId: string, status: Status) => {
     if (readonly) return;
     onDrop?.(playerId, status);
   };
+
+  // 손가락 좌표 아래의 드롭 섹션 status 를 찾는다. 섹션 위가 아니면 undefined.
+  function statusFromPoint(x: number, y: number): Status | undefined {
+    let el = document.elementFromPoint(x, y) as HTMLElement | null;
+    while (el) {
+      const s = el.dataset?.dropStatus;
+      if (s != null) return decodeStatus(s);
+      el = el.parentElement;
+    }
+    return undefined;
+  }
+
+  function cancelLongPress() {
+    if (lpTimer.current) {
+      clearTimeout(lpTimer.current);
+      lpTimer.current = null;
+    }
+  }
+
+  function startPointerDrag(member: Member, e: React.PointerEvent) {
+    if (readonly) return;
+    lpStart.current = { x: e.clientX, y: e.clientY };
+    const target = e.currentTarget as HTMLElement;
+    const ptrId = e.pointerId;
+    const sx = e.clientX;
+    const sy = e.clientY;
+    cancelLongPress();
+    lpTimer.current = setTimeout(() => {
+      dragMember.current = member;
+      setDragging(true);
+      setPdrag({ name: member.name, x: sx, y: sy, overStatus: undefined });
+      try {
+        target.setPointerCapture(ptrId);
+      } catch {}
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        try {
+          navigator.vibrate(30);
+        } catch {}
+      }
+    }, 250);
+  }
+
+  function movePointerDrag(e: React.PointerEvent) {
+    // 드래그 시작 전 일정 이상 움직이면 = 스크롤 의도 → 롱프레스 취소
+    if (lpTimer.current && lpStart.current) {
+      const dx = e.clientX - lpStart.current.x;
+      const dy = e.clientY - lpStart.current.y;
+      if (dx * dx + dy * dy > 100) cancelLongPress();
+    }
+    if (dragMember.current) {
+      const s = statusFromPoint(e.clientX, e.clientY);
+      setPdrag((prev) =>
+        prev ? { ...prev, x: e.clientX, y: e.clientY, overStatus: s } : prev,
+      );
+    }
+  }
+
+  function endPointerDrag(e: React.PointerEvent) {
+    if (dragMember.current) {
+      const s = statusFromPoint(e.clientX, e.clientY);
+      const m = dragMember.current;
+      if (s !== undefined) handleDrop(m.id, s);
+      dragMember.current = null;
+      setPdrag(null);
+      setDragging(false);
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+    }
+    cancelLongPress();
+  }
+
+  const pointerDrag = isTouch && !readonly
+    ? {
+        onStart: startPointerDrag,
+        onMove: movePointerDrag,
+        onEnd: endPointerDrag,
+      }
+    : null;
 
   // 참석을 전체/일부로 분리
   const isFull = (m: Member) =>
@@ -67,6 +182,7 @@ export default function AttendanceManagerBoard({
         hoverClass="ring-2 ring-green-400"
         onDrop={handleDrop}
         readonly={readonly}
+        pointerOver={pdrag?.overStatus === "attending"}
       >
         {full.length === 0 ? (
           <span className="text-sm text-suaza-ink-faint">—</span>
@@ -78,6 +194,8 @@ export default function AttendanceManagerBoard({
               chipClass="border-green-300 text-suaza-ink"
               onDragStateChange={setDragging}
               readonly={readonly}
+              isTouch={isTouch}
+              pointerDrag={pointerDrag}
             />
           ))
         )}
@@ -105,6 +223,8 @@ export default function AttendanceManagerBoard({
                   chipClass="border-green-300 text-suaza-ink"
                   onDragStateChange={setDragging}
                   readonly={readonly}
+                  isTouch={isTouch}
+                  pointerDrag={pointerDrag}
                 />
                 <QuarterDots
                   quarters={m.attending_quarters ?? null}
@@ -126,6 +246,7 @@ export default function AttendanceManagerBoard({
         hoverClass="ring-2 ring-red-400"
         onDrop={handleDrop}
         readonly={readonly}
+        pointerOver={pdrag?.overStatus === "absent"}
       >
         {byStatus.absent.length === 0 ? (
           <span className="text-sm text-suaza-ink-faint">—</span>
@@ -136,6 +257,8 @@ export default function AttendanceManagerBoard({
               member={m}
               onDragStateChange={setDragging}
               readonly={readonly}
+              isTouch={isTouch}
+              pointerDrag={pointerDrag}
             />
           ))
         )}
@@ -150,6 +273,7 @@ export default function AttendanceManagerBoard({
         hoverClass="ring-2 ring-gray-400"
         onDrop={handleDrop}
         readonly={readonly}
+        pointerOver={pdrag?.overStatus === "undecided"}
       >
         {byStatus.undecided.length === 0 ? (
           <span className="text-sm text-suaza-ink-faint">—</span>
@@ -160,6 +284,8 @@ export default function AttendanceManagerBoard({
               member={m}
               onDragStateChange={setDragging}
               readonly={readonly}
+              isTouch={isTouch}
+              pointerDrag={pointerDrag}
             />
           ))
         )}
@@ -176,6 +302,7 @@ export default function AttendanceManagerBoard({
         hoverClass="ring-2 ring-gray-400"
         onDrop={handleDrop}
         readonly={readonly}
+        pointerOver={pdrag?.overStatus === null}
       >
         {nonVoters.length === 0 ? (
           <span className="text-sm text-suaza-ink-faint">—</span>
@@ -187,13 +314,31 @@ export default function AttendanceManagerBoard({
               onDragStateChange={setDragging}
               muted
               readonly={readonly}
+              isTouch={isTouch}
+              pointerDrag={pointerDrag}
             />
           ))
         )}
       </DropSection>
+
+      {/* 포인터 드래그 고스트 — 손가락을 따라다님 */}
+      {pdrag && (
+        <div
+          className="fixed z-50 pointer-events-none -translate-x-1/2 -translate-y-1/2 px-2.5 py-0.5 rounded-full text-xs border border-suaza-button bg-white shadow-lg font-medium text-suaza-ink"
+          style={{ left: pdrag.x, top: pdrag.y }}
+        >
+          {pdrag.name}
+        </div>
+      )}
     </div>
   );
 }
+
+type PointerDrag = {
+  onStart: (member: Member, e: React.PointerEvent) => void;
+  onMove: (e: React.PointerEvent) => void;
+  onEnd: (e: React.PointerEvent) => void;
+} | null;
 
 function DropSection({
   label,
@@ -204,6 +349,7 @@ function DropSection({
   hoverClass,
   onDrop,
   readonly,
+  pointerOver = false,
   children,
 }: {
   label: string;
@@ -215,11 +361,15 @@ function DropSection({
   hoverClass: string;
   onDrop: (playerId: string, status: Status) => void;
   readonly?: boolean;
+  /** 포인터(터치) 드래그가 이 섹션 위에 올라온 상태 */
+  pointerOver?: boolean;
   children: React.ReactNode;
 }) {
   const [over, setOver] = useState(false);
+  const highlight = over || pointerOver;
   return (
     <div
+      data-drop-status={encodeStatus(status)}
       onDragOver={
         readonly
           ? undefined
@@ -242,7 +392,7 @@ function DropSection({
       }
       className={`flex flex-col gap-1.5 p-1.5 rounded-md border border-dashed transition ${
         dragging ? "border-suaza-border" : "border-transparent"
-      } ${over ? hoverClass + " bg-blue-50" : ""}`}
+      } ${highlight ? hoverClass + " bg-blue-50" : ""}`}
     >
       <span className="self-start inline-flex items-center gap-1.5 text-xs font-bold text-suaza-ink">
         {dotColor && (
@@ -291,26 +441,41 @@ function Chip({
   onDragStateChange,
   muted,
   readonly,
+  isTouch,
+  pointerDrag,
 }: {
   member: Member;
   chipClass?: string;
   onDragStateChange: (dragging: boolean) => void;
   muted?: boolean;
   readonly?: boolean;
+  /** 터치 기기 여부 — 네이티브 draggable 을 끄고 포인터 드래그를 사용 */
+  isTouch?: boolean;
+  pointerDrag?: PointerDrag;
 }) {
+  const usePointer = !!isTouch && !readonly && !!pointerDrag;
+  // 마우스(비터치)에서만 네이티브 HTML5 드래그 사용
+  const nativeDraggable = !readonly && !isTouch;
   return (
     <span
-      draggable={!readonly}
+      draggable={nativeDraggable}
       onDragStart={
-        readonly
-          ? undefined
-          : (e) => {
+        nativeDraggable
+          ? (e) => {
               e.dataTransfer.setData("text/plain", member.id);
               e.dataTransfer.effectAllowed = "move";
               setTimeout(() => onDragStateChange(true), 0);
             }
+          : undefined
       }
-      onDragEnd={readonly ? undefined : () => onDragStateChange(false)}
+      onDragEnd={nativeDraggable ? () => onDragStateChange(false) : undefined}
+      onPointerDown={
+        usePointer ? (e) => pointerDrag!.onStart(member, e) : undefined
+      }
+      onPointerMove={usePointer ? pointerDrag!.onMove : undefined}
+      onPointerUp={usePointer ? pointerDrag!.onEnd : undefined}
+      onPointerCancel={usePointer ? pointerDrag!.onEnd : undefined}
+      style={usePointer ? { touchAction: "none" } : undefined}
       className={`select-none ${
         readonly ? "cursor-default" : "cursor-grab active:cursor-grabbing"
       } inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs border bg-white ${
