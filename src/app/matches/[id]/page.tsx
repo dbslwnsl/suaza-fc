@@ -317,19 +317,21 @@ export default async function MatchDetailPage({
             ) : null}
             <div className="flex items-center gap-3">
               {m.status !== "done" && m.status !== "canceled" && (
-                <Link
-                  href="/"
-                  aria-label="홈으로"
-                  className="relative w-9 h-9 rounded-full overflow-hidden block hover:opacity-80 transition shrink-0"
+                <svg
+                  className="w-9 h-9 text-suaza-ink shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  viewBox="0 0 24 24"
+                  aria-hidden
                 >
-                  <Image
-                    src="/suaza-emblem.png"
-                    alt="홈"
-                    fill
-                    sizes="36px"
-                    className="object-cover"
-                  />
-                </Link>
+                  <rect x="3" y="4" width="18" height="18" rx="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
               )}
               <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
                 {m.status === "done" || m.status === "canceled"
@@ -337,11 +339,11 @@ export default async function MatchDetailPage({
                   : "경기 정보 수정"}
               </h1>
             </div>
-            <p className="text-sm text-suaza-ink-muted">
-              {m.status === "done" || m.status === "canceled"
-                ? "종료된 경기는 정보 조회만 가능합니다"
-                : "경기 정보를 수정합니다"}
-            </p>
+            {(m.status === "done" || m.status === "canceled") && (
+              <p className="text-sm text-suaza-ink-muted">
+                종료된 경기는 정보 조회만 가능합니다
+              </p>
+            )}
           </header>
 
           {error && (
@@ -380,17 +382,48 @@ export default async function MatchDetailPage({
     );
   }
 
+  // 달력 배지에 표시할 상태 글자 (예정/진행중/완료/취소)
+  const detailStatusLabel =
+    matchStatus === "in_progress"
+      ? "진행중"
+      : matchStatus === "done"
+        ? "완료"
+        : matchStatus === "canceled"
+          ? "취소"
+          : "예정";
+
   return (
     <main className="flex-1 bg-white desktop:bg-suaza-bg px-6 desktop:px-8 py-6 desktop:py-12">
       <div className="max-w-[600px] desktop:max-w-[1400px] mx-auto flex flex-col gap-4">
-        {/* Header: 경기 목록 */}
-        <header className="flex items-center">
-          <Link
-            href="/matches"
-            className="text-sm text-suaza-ink-muted hover:underline"
+        {/* Header: 일정&결과와 동일한 달력 아이콘 + 본문 가운데 상태 글자 */}
+        <header className="flex items-center gap-3">
+          <span
+            className="relative inline-flex items-center justify-center w-9 h-9 shrink-0"
+            aria-label={`${detailStatusLabel} 경기`}
           >
-            ← 경기 목록
-          </Link>
+            <svg
+              className="w-9 h-9 text-suaza-ink"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              viewBox="0 0 24 24"
+              aria-hidden
+            >
+              <rect x="3" y="4" width="18" height="18" rx="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            {/* 달력 본문(가로선 아래) 가운데에 상태 글자 */}
+            <span className="absolute inset-x-0 top-[42%] bottom-0 flex items-center justify-center text-[9px] font-bold text-suaza-ink leading-none">
+              {detailStatusLabel}
+            </span>
+          </span>
+          <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
+            경기상세
+          </h1>
         </header>
 
         {message && (
@@ -766,8 +799,8 @@ function VSCard({
             className="text-sm font-bold text-suaza-accent bg-red-50 hover:bg-red-100 transition px-4 py-1.5 rounded-lg"
           >
             {m.status === "done" || m.status === "canceled"
-              ? "경기 정보 조회 ›"
-              : "경기 정보 수정 ›"}
+              ? "경기 정보 조회"
+              : "경기 정보 수정"}
           </Link>
         </div>
       )}

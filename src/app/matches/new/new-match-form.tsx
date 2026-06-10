@@ -529,25 +529,6 @@ export default function NewMatchForm({
           </div>
         </div>
 
-        {/* 쿼터 인디케이터 (1..maxQuarters) */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {Array.from({ length: maxQuarters }, (_, i) => {
-            const active = i + 1 <= totalQuarters;
-            return (
-              <span
-                key={i}
-                className={`w-7 h-7 rounded-full inline-flex items-center justify-center text-xs font-bold ${
-                  active
-                    ? "bg-suaza-button text-white"
-                    : "bg-gray-100 text-suaza-ink-faint"
-                }`}
-              >
-                {i + 1}
-              </span>
-            );
-          })}
-        </div>
-
         {/* 쿼터별 활동 선택 — 1..maxQuarters 까지 행으로 표시.
             활성 쿼터(≤ totalQuarters)만 클릭 가능. */}
         <div className="flex flex-col gap-2">
@@ -560,7 +541,7 @@ export default function NewMatchForm({
                 className="flex items-center gap-2 py-1"
               >
                 <span
-                  className={`shrink-0 inline-flex items-center justify-center w-12 py-1 rounded-lg text-xs font-bold ${
+                  className={`shrink-0 inline-flex items-center justify-center w-12 py-2 rounded-lg text-xs font-bold ${
                     enabled
                       ? "bg-suaza-button text-white"
                       : "bg-gray-200 text-suaza-ink-faint"
@@ -569,8 +550,8 @@ export default function NewMatchForm({
                   {enabled ? computeQuarterLabel(i) : `Q${i + 1}`}
                 </span>
                 {enabled ? (
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {QUARTER_ACTIONS.map((a) => {
+                  <div className="flex-1 grid grid-cols-3 gap-1.5">
+                    {QUARTER_ACTIONS.filter((a) => a !== "warmup").map((a) => {
                       const active = selected === a;
                       const color = QUARTER_ACTION_COLOR[a];
                       return (
@@ -579,7 +560,7 @@ export default function NewMatchForm({
                           type="button"
                           onClick={() => setQuarterAction(i, a)}
                           aria-pressed={active}
-                          className="text-xs font-medium px-3 py-1 rounded-lg border transition"
+                          className="w-full text-xs font-medium py-2 rounded-lg border transition"
                           style={
                             active
                               ? {
@@ -600,7 +581,7 @@ export default function NewMatchForm({
                     })}
                   </div>
                 ) : (
-                  <span className="text-xs text-suaza-ink-faint">
+                  <span className="flex-1 text-xs text-suaza-ink-faint">
                     쿼터 수를 늘리면 활성화됩니다
                   </span>
                 )}
