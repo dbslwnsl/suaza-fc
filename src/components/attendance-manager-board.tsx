@@ -35,6 +35,11 @@ type ByStatus = {
 const encodeStatus = (s: Status) => (s == null ? "none" : s);
 const decodeStatus = (s: string): Status => (s === "none" ? null : (s as Status));
 
+// 드래그가 "실제로 시작된" 동안에만 페이지 스크롤을 막는다.
+// 칩은 touch-action: pan-y 라서 롱프레스 전에는 세로 스크롤이 정상 동작하고,
+// 롱프레스로 드래그가 시작되면 이 리스너(passive:false)로만 스크롤을 차단한다.
+const preventTouchScroll = (e: TouchEvent) => e.preventDefault();
+
 export default function AttendanceManagerBoard({
   byStatus,
   nonVoters,
@@ -77,6 +82,7 @@ export default function AttendanceManagerBoard({
   useEffect(() => {
     return () => {
       if (lpTimer.current) clearTimeout(lpTimer.current);
+      document.removeEventListener("touchmove", preventTouchScroll);
     };
   }, []);
 
@@ -115,6 +121,10 @@ export default function AttendanceManagerBoard({
       dragMember.current = member;
       setDragging(true);
       setPdrag({ name: member.name, x: sx, y: sy, overStatus: undefined });
+      // 드래그 시작 시점부터 페이지 스크롤 차단 (그 전까지는 pan-y 로 스크롤 허용)
+      document.addEventListener("touchmove", preventTouchScroll, {
+        passive: false,
+      });
       try {
         target.setPointerCapture(ptrId);
       } catch {}
@@ -149,6 +159,7 @@ export default function AttendanceManagerBoard({
       dragMember.current = null;
       setPdrag(null);
       setDragging(false);
+      document.removeEventListener("touchmove", preventTouchScroll);
       try {
         (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
       } catch {}
@@ -475,7 +486,9 @@ function Chip({
       onPointerMove={usePointer ? pointerDrag!.onMove : undefined}
       onPointerUp={usePointer ? pointerDrag!.onEnd : undefined}
       onPointerCancel={usePointer ? pointerDrag!.onEnd : undefined}
-      style={usePointer ? { touchAction: "none" } : undefined}
+      // touch-action: pan-y — 롱프레스 전엔 세로 스크롤 허용(스크롤 의도 시 바로 스크롤),
+      // 드래그가 실제 시작되면 preventTouchScroll 리스너로만 스크롤을 막는다.
+      style={usePointer ? { touchAction: "pan-y" } : undefined}
       className={`select-none ${
         readonly ? "cursor-default" : "cursor-grab active:cursor-grabbing"
       } inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs border bg-white ${
