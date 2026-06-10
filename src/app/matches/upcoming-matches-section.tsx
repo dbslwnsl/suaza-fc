@@ -6,7 +6,7 @@ import { getTeamName, type Match } from "@/lib/matches/helpers";
 import type { WeatherInfo } from "@/lib/weather";
 
 const MOBILE_LIMIT = 2;
-const DESKTOP_LIMIT = 3;
+const DESKTOP_LIMIT = 4;
 
 export default function UpcomingMatchesSection({
   matches,
@@ -26,14 +26,14 @@ export default function UpcomingMatchesSection({
         <h2 className="text-lg font-bold text-suaza-ink">예정된 경기</h2>
         <span className="text-sm text-suaza-ink-muted">· {matches.length}경기</span>
       </div>
-      <div className="grid grid-cols-1 gap-4 desktop:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {matches.map((m, i) => {
           let hideCls = "";
           if (!expanded) {
             if (i >= DESKTOP_LIMIT) {
               hideCls = "hidden";
             } else if (i >= MOBILE_LIMIT) {
-              hideCls = "hidden desktop:block";
+              hideCls = "hidden sm:block";
             }
           }
           return (
@@ -46,7 +46,7 @@ export default function UpcomingMatchesSection({
       {showButton && (
         <div
           className={`flex justify-center mt-2 ${
-            moreOnDesktop ? "" : "desktop:hidden"
+            moreOnDesktop ? "" : "sm:hidden"
           }`}
         >
           <button

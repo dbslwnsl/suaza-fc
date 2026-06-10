@@ -122,20 +122,20 @@ export default function NewsInbox({ initial }: { initial: NewsItem[] }) {
 
   return (
     <>
-      {/* 상단: 제목 + 모두 읽음 + 카테고리 필터 (스크롤해도 고정) */}
-      <div className="sticky top-0 z-10 bg-white border-b border-suaza-border">
-        <header className="relative flex items-center justify-center h-14">
+      {/* 제목 + 모두 읽음 + 카테고리 필터 */}
+      <div className="flex flex-col gap-3">
+        <header className="relative flex items-center justify-center">
           <h1 className="text-lg font-bold text-suaza-ink">새소식</h1>
           <button
             type="button"
             onClick={handleMarkAll}
             disabled={unreadCount === 0}
-            className="absolute right-3 text-[13px] font-medium text-suaza-ink-muted hover:text-suaza-ink disabled:opacity-40 disabled:cursor-not-allowed transition"
+            className="absolute right-0 text-[13px] font-medium text-suaza-ink-muted hover:text-suaza-ink disabled:opacity-40 disabled:cursor-not-allowed transition"
           >
             모두 읽음
           </button>
         </header>
-        <div className="max-w-[600px] mx-auto w-full flex gap-2 px-4 pb-3 overflow-x-auto">
+        <div className="flex gap-2 overflow-x-auto -mx-1 px-1">
           {FILTERS.map((f) => {
             const active = filter === f.key;
             return (
@@ -156,9 +156,9 @@ export default function NewsInbox({ initial }: { initial: NewsItem[] }) {
         </div>
       </div>
 
-      <div className="max-w-[600px] mx-auto pb-12">
+      <div>
         {visible.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 px-6 py-24 text-center">
+          <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
             <span className="text-5xl" aria-hidden>
               🔔
             </span>
@@ -176,7 +176,7 @@ export default function NewsInbox({ initial }: { initial: NewsItem[] }) {
             )}
           </div>
         ) : (
-          <ul className="mt-3 mx-4 bg-white rounded-2xl overflow-hidden border border-suaza-border/60">
+          <ul className="rounded-2xl overflow-hidden border border-suaza-border/60">
             {visible.map((n, i) => {
               const badge = badgeFor(n.type);
               const unread = n.read_at == null;

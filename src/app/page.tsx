@@ -467,7 +467,7 @@ export default async function Home() {
 
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
-      <div className="max-w-[600px] mx-auto flex flex-col gap-4">
+      <div className="max-w-[800px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-4">
         {/* Top bar */}
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">

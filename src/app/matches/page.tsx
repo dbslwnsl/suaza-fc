@@ -94,8 +94,8 @@ export default async function MatchesPage({
     );
 
   return (
-    <main className="flex-1 bg-white desktop:bg-suaza-bg px-6 desktop:px-8 py-8 desktop:py-12">
-      <div className="max-w-[800px] desktop:max-w-[1200px] mx-auto flex flex-col gap-8 desktop:gap-10">
+    <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
+      <div className="max-w-[800px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
         {/* Header */}
         <header className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3">
