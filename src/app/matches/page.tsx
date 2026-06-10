@@ -97,10 +97,10 @@ export default async function MatchesPage({
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[800px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
         {/* Header */}
-        <header className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-start gap-3">
+        <header className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
             <svg
-              className="w-9 h-9 desktop:w-12 desktop:h-12 shrink-0 desktop:mt-1 text-suaza-ink"
+              className="w-9 h-9 shrink-0 text-suaza-ink"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
@@ -114,19 +114,14 @@ export default async function MatchesPage({
               <line x1="8" y1="2" x2="8" y2="6" />
               <line x1="3" y1="10" x2="21" y2="10" />
             </svg>
-            <div className="flex flex-col gap-1">
-              <h1 className="text-2xl desktop:text-[32px] font-bold text-suaza-ink leading-tight">
-                일정 & 결과
-              </h1>
-              <p className="hidden desktop:block text-sm text-suaza-ink-muted">
-                진행 중인 경기, 다가오는 일정, 지난 결과를 한눈에 확인하세요.
-              </p>
-            </div>
+            <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink leading-tight">
+              일정 & 결과
+            </h1>
           </div>
           {isStaff && (
             <Link
               href="/matches/new"
-              className="text-xs desktop:text-sm bg-suaza-ink text-white rounded-lg px-2.5 desktop:px-4 py-1 desktop:py-2.5 font-medium hover:opacity-90 transition shrink-0 whitespace-nowrap self-center"
+              className="text-xs font-medium px-3 py-1.5 rounded-md bg-suaza-ink text-white hover:opacity-90 transition shrink-0 whitespace-nowrap self-center"
             >
               + 새 경기
             </Link>

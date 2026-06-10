@@ -124,13 +124,30 @@ export default function NewsInbox({ initial }: { initial: NewsItem[] }) {
     <>
       {/* 제목 + 모두 읽음 + 카테고리 필터 */}
       <div className="flex flex-col gap-3">
-        <header className="relative flex items-center justify-center">
-          <h1 className="text-lg font-bold text-suaza-ink">새소식</h1>
+        <header className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <svg
+              className="w-9 h-9 text-suaza-ink shrink-0"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              viewBox="0 0 24 24"
+              aria-hidden
+            >
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
+              새소식
+            </h1>
+          </div>
           <button
             type="button"
             onClick={handleMarkAll}
             disabled={unreadCount === 0}
-            className="absolute right-0 text-[13px] font-medium text-suaza-ink-muted hover:text-suaza-ink disabled:opacity-40 disabled:cursor-not-allowed transition"
+            className="shrink-0 text-[13px] font-medium text-suaza-ink-muted hover:text-suaza-ink disabled:opacity-40 disabled:cursor-not-allowed transition"
           >
             모두 읽음
           </button>

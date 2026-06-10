@@ -470,7 +470,7 @@ export default async function Home() {
       <div className="max-w-[800px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-4">
         {/* Top bar */}
         <header className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-3">
             <div className="relative w-9 h-9 rounded-full overflow-hidden">
               <Image
                 src="/suaza-emblem.png"
@@ -481,7 +481,9 @@ export default async function Home() {
                 className="object-cover"
               />
             </div>
-            <span className="font-bold text-suaza-ink text-xl">수아자FC</span>
+            <span className="font-bold text-suaza-ink text-2xl sm:text-[28px]">
+              수아자FC
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <Link

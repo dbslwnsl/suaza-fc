@@ -114,7 +114,7 @@ export default async function BoardPage({
           </div>
           <Link
             href="/board/new"
-            className="text-xs desktop:text-sm bg-suaza-ink text-white rounded-lg px-2.5 desktop:px-4 py-1 desktop:py-2.5 font-medium hover:opacity-90 transition shrink-0 whitespace-nowrap self-center"
+            className="text-xs font-medium px-3 py-1.5 rounded-md bg-suaza-ink text-white hover:opacity-90 transition shrink-0 whitespace-nowrap self-center"
           >
             + 새 글
           </Link>
