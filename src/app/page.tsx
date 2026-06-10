@@ -27,8 +27,12 @@ import {
   type PostCategory,
 } from "@/lib/board/helpers";
 import {
+  aggregateSeason,
   pointsForParticipation,
   pointValueMap,
+  yearRange,
+  type ParticipationRow as SeasonPartRow,
+  type PlayerSeasonStat,
   type StatDef,
 } from "@/lib/stats/helpers";
 import { AttendanceVote } from "./matches/[id]/page";
@@ -173,6 +177,14 @@ export default async function Home() {
   // 시각이 지난 경기 자동 진행/완료 처리 (조회 전)
   await supabase.rpc("auto_progress_due_matches");
 
+  // 시즌(달력 연도) 순위 산정용 — 홈 통계 카드 메달/순위 뱃지
+  const seasonYear = new Date().getFullYear();
+  const { from: seasonFrom, to: seasonTo } = yearRange(seasonYear);
+  // 출석 마감 판정용 현재 시각 — 서버 컴포넌트라 요청당 1회 실행이라 안전.
+  // (react-hooks/purity 는 클라이언트 재렌더를 가정한 규칙이라 여기선 예외 처리)
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now();
+
   const [
     { data: profile },
     { data: latestNotice },
@@ -180,6 +192,7 @@ export default async function Home() {
     { data: lastMatch },
     { data: partsRaw },
     { data: statDefsRaw },
+    { data: seasonMatchesRaw },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -220,6 +233,12 @@ export default async function Home() {
       .from("stat_definitions")
       .select("key, label, sort_order, point_value")
       .is("hidden_at", null),
+    supabase
+      .from("matches")
+      .select("id, match_date")
+      .eq("status", "done")
+      .gte("match_date", seasonFrom)
+      .lt("match_date", seasonTo),
   ]);
 
   const upcoming = upcomingMatch as Match | null;
@@ -336,16 +355,100 @@ export default async function Home() {
   // 포인트: 경기별 계산 (기준일 이전 = 수동 입력, 이후 = 항목 기준점수)
   const statDefs = (statDefsRaw ?? []) as StatDef[];
   const pvMap = pointValueMap(statDefs);
-  const homeStats: { label: string; value: number }[] = [
-    { label: "출전", value: done.length },
-    { label: "골", value: done.reduce((a, p) => a + (p.goals ?? 0), 0) },
-    { label: "어시", value: done.reduce((a, p) => a + (p.assists ?? 0), 0) },
+
+  // ── 시즌 순위 (메달/순위 뱃지/포인트 강조) — 프로필 카드와 동일 로직 ──
+  const seasonMatchRows = (seasonMatchesRaw ?? []) as {
+    id: string;
+    match_date: string;
+  }[];
+  const seasonMatchIds = seasonMatchRows.map((m) => m.id);
+  const seasonMatchDateById = new Map(
+    seasonMatchRows.map((m) => [m.id, m.match_date]),
+  );
+  const { data: seasonPartsRaw } = seasonMatchIds.length
+    ? await supabase
+        .from("match_participations")
+        .select(
+          "match_id, player_id, goals, assists, custom_stats, player:profiles(id, name, jersey_number)",
+        )
+        .in("match_id", seasonMatchIds)
+        .is("archived_at", null)
+    : { data: [] as SeasonPartRow[] };
+  const seasonParts = (seasonPartsRaw ?? []) as unknown as SeasonPartRow[];
+  const seasonStatsMap = new Map<string, PlayerSeasonStat>(
+    aggregateSeason(seasonParts, statDefs).map((s) => [s.player_id, s]),
+  );
+  const myId = user!.id;
+  // Dense ranking: 동률은 같은 순위. 본인 값이 0 이하면 순위 없음(null).
+  const rankInCategory = (
+    getter: (s: PlayerSeasonStat) => number,
+  ): number | null => {
+    const myStat = seasonStatsMap.get(myId);
+    if (!myStat) return null;
+    const my = getter(myStat);
+    if (my <= 0) return null;
+    const distinct = Array.from(
+      new Set(
+        Array.from(seasonStatsMap.values())
+          .map(getter)
+          .filter((v) => v > 0),
+      ),
+    ).sort((a, b) => b - a);
+    const idx = distinct.indexOf(my);
+    return idx >= 0 ? idx + 1 : null;
+  };
+  const attendanceRank = rankInCategory((s) => s.appearances ?? 0);
+  const goalRank = rankInCategory((s) => s.goals ?? 0);
+  const assistRank = rankInCategory((s) => s.assists ?? 0);
+  const cleanSheetRank = rankInCategory((s) => s.custom?.clean_sheets ?? 0);
+
+  // 포인트는 경기별 가중치 계산 → 별도 맵으로 집계 후 순위 산정
+  const seasonPointsByPlayer = new Map<string, number>();
+  for (const p of seasonParts) {
+    const pts = pointsForParticipation(
+      p,
+      seasonMatchDateById.get(p.match_id),
+      pvMap,
+    );
+    seasonPointsByPlayer.set(
+      p.player_id,
+      (seasonPointsByPlayer.get(p.player_id) ?? 0) + pts,
+    );
+  }
+  const pointsMine = seasonPointsByPlayer.get(myId) ?? 0;
+  const pointsRank =
+    pointsMine > 0
+      ? Array.from(
+          new Set(
+            Array.from(seasonPointsByPlayer.values()).filter((v) => v > 0),
+          ),
+        )
+          .sort((a, b) => b - a)
+          .indexOf(pointsMine) + 1
+      : null;
+
+  const homeStats: {
+    label: string;
+    value: number;
+    tone?: "primary";
+    rank?: number | null;
+    alwaysShowRank?: boolean;
+  }[] = [
+    { label: "출전", value: done.length, rank: attendanceRank },
+    {
+      label: "골",
+      value: done.reduce((a, p) => a + (p.goals ?? 0), 0),
+      rank: goalRank,
+    },
+    {
+      label: "어시",
+      value: done.reduce((a, p) => a + (p.assists ?? 0), 0),
+      rank: assistRank,
+    },
     {
       label: "클린시트",
-      value: done.reduce(
-        (a, p) => a + (p.custom_stats?.clean_sheets ?? 0),
-        0,
-      ),
+      value: done.reduce((a, p) => a + (p.custom_stats?.clean_sheets ?? 0), 0),
+      rank: cleanSheetRank,
     },
     {
       label: "포인트",
@@ -353,6 +456,9 @@ export default async function Home() {
         (a, p) => a + pointsForParticipation(p, p.match?.match_date, pvMap),
         0,
       ),
+      tone: "primary",
+      rank: pointsRank,
+      alwaysShowRank: true,
     },
   ];
 
@@ -434,33 +540,42 @@ export default async function Home() {
 
         {/* Profile Card */}
         <section className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-6 rounded-xl border sm:border-0 border-suaza-border flex flex-col gap-4">
-          <div className="flex items-start gap-4">
-            <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden shrink-0 bg-gray-100 flex items-center justify-center">
-              {profile?.avatar_url ? (
-                <Image
-                  src={profile.avatar_url}
-                  alt={profile?.name ?? "프로필"}
-                  fill
-                  sizes="(min-width: 640px) 96px, 80px"
-                  className="object-cover"
-                />
-              ) : (
-                <span className="text-2xl sm:text-3xl font-bold text-suaza-ink">
-                  {profile?.name?.charAt(0) ?? "?"}
+          <div className="flex items-start gap-3 sm:gap-4">
+            <div className="relative shrink-0">
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
+                {profile?.avatar_url ? (
+                  <Image
+                    src={profile.avatar_url}
+                    alt={profile?.name ?? "프로필"}
+                    fill
+                    sizes="(min-width: 640px) 96px, 80px"
+                    className="object-cover"
+                  />
+                ) : (
+                  <span className="text-2xl sm:text-3xl font-bold text-suaza-ink">
+                    {profile?.name?.charAt(0) ?? "?"}
+                  </span>
+                )}
+              </div>
+              {profile && (
+                <span
+                  className={`absolute left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 z-10 whitespace-nowrap text-[11px] leading-none px-2 py-1 rounded-full ring-2 ring-white shadow-sm ${TITLE_BADGE[(profile.title as MemberTitle) ?? "player"]}`}
+                >
+                  {TITLE_LABEL[(profile.title as MemberTitle) ?? "player"]}
                 </span>
               )}
             </div>
 
-            <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+            <div className="flex-1 self-stretch flex flex-col justify-between gap-1 min-w-0">
               {profile ? (
                 <>
-                  <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
+                  <div className="flex items-center gap-x-1.5 gap-y-1 flex-wrap">
                     <span className="font-bold text-suaza-ink text-lg leading-tight">
                       {profile.name}
                     </span>
                     {profile.jersey_number != null && (
                       <span
-                        className="font-bold text-lg leading-tight"
+                        className="font-bold text-sm leading-tight"
                         style={{ color: "#338CF2" }}
                       >
                         #{profile.jersey_number}
@@ -471,11 +586,6 @@ export default async function Home() {
                         ({profile.nickname})
                       </span>
                     )}
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full font-medium ${TITLE_BADGE[(profile.title as MemberTitle) ?? "player"]}`}
-                    >
-                      {TITLE_LABEL[(profile.title as MemberTitle) ?? "player"]}
-                    </span>
                   </div>
 
                   {(positions.length > 0 || foot) && (
@@ -517,12 +627,23 @@ export default async function Home() {
             {profile && (
               <Link
                 href={`/members/${user!.id}`}
-                className="text-xs sm:text-sm font-bold text-suaza-accent bg-red-50 hover:bg-red-100 transition px-3 py-1.5 rounded-lg whitespace-nowrap shrink-0"
+                aria-label="프로필 수정"
+                title="프로필 수정"
+                className="shrink-0 inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-md text-suaza-accent bg-red-50 hover:bg-red-100 transition"
               >
-                <span className="pointer-fine:hidden">수정</span>
-                <span className="hidden pointer-fine:inline">
-                  프로필 수정 ›
-                </span>
+                <svg
+                  viewBox="0 0 24 24"
+                  className="w-[13px] h-[13px] sm:w-[15px] sm:h-[15px]"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
               </Link>
             )}
           </div>
@@ -531,21 +652,61 @@ export default async function Home() {
             <>
               <div className="h-px bg-suaza-border" />
               <div className="grid grid-cols-5">
-                {homeStats.map((s, i) => (
-                  <div
-                    key={s.label}
-                    className={`flex flex-col items-center gap-1 ${
-                      i > 0 ? "border-l border-suaza-border" : ""
-                    }`}
-                  >
-                    <span className="text-xl sm:text-2xl font-bold text-suaza-ink">
-                      {s.value}
-                    </span>
-                    <span className="text-[11px] sm:text-xs text-suaza-ink-muted">
-                      {s.label}
-                    </span>
-                  </div>
-                ))}
+                {homeStats.map((s, i) => {
+                  const medal =
+                    s.rank === 1
+                      ? "🥇"
+                      : s.rank === 2
+                        ? "🥈"
+                        : s.rank === 3
+                          ? "🥉"
+                          : null;
+                  const showTextBadge =
+                    !medal && s.alwaysShowRank && s.rank != null;
+                  const valueCls =
+                    s.tone === "primary" ? "text-blue-700" : "text-suaza-ink";
+                  const labelCls =
+                    s.tone === "primary"
+                      ? "text-blue-600"
+                      : "text-suaza-ink-muted";
+                  return (
+                    <div
+                      key={s.label}
+                      className={`relative flex flex-col items-center gap-1 ${
+                        i > 0 ? "border-l border-suaza-border" : ""
+                      }`}
+                    >
+                      {medal && (
+                        <span
+                          className="absolute -top-3 right-0.5 text-sm leading-none"
+                          aria-label={`${s.label} 시즌 ${s.rank}위`}
+                          title={`${s.label} 시즌 ${s.rank}위`}
+                        >
+                          {medal}
+                        </span>
+                      )}
+                      {showTextBadge && (
+                        <span
+                          className={`absolute -top-3 right-0 px-1 py-0.5 rounded-full text-[9px] font-bold leading-none text-suaza-ink ${
+                            s.tone === "primary" ? "bg-blue-100" : "bg-gray-200"
+                          }`}
+                          aria-label={`${s.label} 시즌 ${s.rank}위`}
+                          title={`${s.label} 시즌 ${s.rank}위`}
+                        >
+                          {s.rank}위
+                        </span>
+                      )}
+                      <span
+                        className={`text-xl sm:text-2xl font-bold tabular-nums ${valueCls}`}
+                      >
+                        {s.value}
+                      </span>
+                      <span className={`text-[11px] sm:text-xs ${labelCls}`}>
+                        {s.label}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}
@@ -638,7 +799,7 @@ export default async function Home() {
                 isMatchStarted(upcoming) ||
                 ((upcoming.vote_closed_at != null ||
                   (!!upcoming.vote_deadline &&
-                    Date.now() >
+                    nowMs >
                       new Date(upcoming.vote_deadline).getTime())) &&
                   profile?.role !== "manager")
               }

@@ -1,13 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   FOOT_LABEL,
-  MEMBER_TITLES,
   POSITIONS,
   POSITION_LABEL,
   PREFERRED_FEET,
+  TITLE_BADGE,
   TITLE_LABEL,
   type MemberTitle,
   type Position,
@@ -30,14 +30,24 @@ type Initial = {
 export default function ProfileEditForm({
   profileId,
   initial,
-  isManager,
+  email,
+  avatar,
+  stats,
+  readonly = false,
 }: {
   profileId: string;
   initial: Initial;
-  isManager: boolean;
+  /** 표시용 이메일 (수정 불가) */
+  email: string | null;
+  /** 상단 카드 아바타 (AvatarUpload) — 서버에서 주입 */
+  avatar: React.ReactNode;
+  /** 상단 카드 하단 통계 그리드 — 서버에서 주입 */
+  stats?: React.ReactNode;
+  /** true 면 동일 레이아웃을 비편집(읽기 전용)으로 렌더 — 다른 회원이 볼 때 */
+  readonly?: boolean;
 }) {
-  const formRef = useRef<HTMLFormElement>(null);
-  const [name, setName] = useState(initial.name);
+  // 별명/등번호/생년월일/상태는 상단 카드에서 인라인 편집(본인만).
+  // 이름·직책은 표시 전용.
   const [nickname, setNickname] = useState(initial.nickname ?? "");
   const [jersey, setJersey] = useState(
     initial.jersey_number != null ? String(initial.jersey_number) : "",
@@ -57,15 +67,15 @@ export default function ProfileEditForm({
     () => [primary, secondary].filter((p): p is Position => p != null),
     [primary, secondary],
   );
-  const [title, setTitle] = useState<MemberTitle>(initial.title);
   const [foot, setFoot] = useState<PreferredFoot | null>(
     initial.preferred_foot,
   );
   const [injured, setInjured] = useState(initial.is_injured);
   const [onLeave, setOnLeave] = useState(initial.on_leave);
 
+  const title = initial.title;
+
   const isDirty = useMemo(() => {
-    if (name.trim() !== initial.name) return true;
     if (nickname.trim() !== (initial.nickname ?? "")) return true;
     if (jersey.trim() !== String(initial.jersey_number ?? "")) return true;
     if (birth.trim() !== (initial.birth_date ?? "")) return true;
@@ -75,13 +85,11 @@ export default function ProfileEditForm({
     // 순서(주/부)가 의미를 가지므로 정렬 없이 비교
     if (positions.length !== initial.positions.length) return true;
     if (positions.some((p, i) => p !== initial.positions[i])) return true;
-    if (isManager && title !== initial.title) return true;
     return false;
-  }, [name, nickname, jersey, birth, foot, injured, onLeave, positions, title, isManager, initial]);
+  }, [nickname, jersey, birth, foot, injured, onLeave, positions, initial]);
 
-  // 필수: 이름, 등번호, 생년월일, 주포지션, 주발
+  // 필수: 등번호, 생년월일, 주포지션, 주발 (이름은 가입 시 값 유지)
   const requiredValid =
-    name.trim().length > 0 &&
     jersey.trim().length > 0 &&
     birth.trim().length > 0 &&
     primary != null &&
@@ -89,14 +97,12 @@ export default function ProfileEditForm({
   const canSave = isDirty && requiredValid;
 
   const handleCancel = () => {
-    setName(initial.name);
     setNickname(initial.nickname ?? "");
     setJersey(initial.jersey_number != null ? String(initial.jersey_number) : "");
     setBirth(initial.birth_date ?? "");
     setPrimary(initial.positions[0] ?? null);
     setSecondary(initial.positions[1] ?? null);
     setActiveSlot("primary");
-    setTitle(initial.title);
     setFoot(initial.preferred_foot);
     setInjured(initial.is_injured);
     setOnLeave(initial.on_leave);
@@ -118,163 +124,155 @@ export default function ProfileEditForm({
     }
   };
 
-  return (
-    <form
-      ref={formRef}
-      action={updateProfile.bind(null, profileId)}
-      className="flex flex-col gap-6"
-    >
-      <input type="hidden" name="name" value={name} />
-      <input type="hidden" name="nickname" value={nickname} />
-      <input type="hidden" name="jersey_number" value={jersey} />
-      <input type="hidden" name="birth_date" value={birth} />
-      {positions.map((p) => (
-        <input key={p} type="hidden" name="positions" value={p} />
-      ))}
-      {isManager && <input type="hidden" name="title" value={title} />}
-      {foot && <input type="hidden" name="preferred_foot" value={foot} />}
-      <input type="hidden" name="is_injured" value={injured ? "1" : "0"} />
-      <input type="hidden" name="on_leave" value={onLeave ? "1" : "0"} />
+  // 카드 + 포지션 + 주발 (편집/읽기 공통 레이아웃)
+  const sections = (
+    <>
+      {/* 상단 신원 카드 */}
+      <section className="rounded-2xl border border-suaza-border p-4 sm:p-5 flex flex-col gap-4">
+        <div className="flex items-start gap-3 sm:gap-5 min-w-0">
+          {/* 아바타 + 직책(아바타 중앙 하단 뱃지) */}
+          <div className="relative shrink-0">
+            {avatar}
+            <span
+              className={`absolute left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 z-10 whitespace-nowrap text-[11px] leading-none px-2 py-1 rounded-full ring-2 ring-white shadow-sm ${TITLE_BADGE[title] ?? TITLE_BADGE.player}`}
+            >
+              {TITLE_LABEL[title] ?? title}
+            </span>
+          </div>
+          <div className="flex-1 min-w-0 flex flex-col gap-2">
+            {/* 1행: 이름 + 생년월일 / 등번호(우측) — 좁으면 줄바꿈 */}
+            <div className="flex items-baseline gap-x-2 gap-y-1 flex-wrap">
+              <h1 className="text-lg sm:text-xl font-bold text-suaza-ink">
+                {initial.name}
+              </h1>
+              <InlineEditable
+                type="number"
+                value={jersey}
+                onCommit={setJersey}
+                readonly={readonly}
+                min={0}
+                max={99}
+                ariaLabel="등번호 수정"
+                renderDisplay={(v) => (
+                  <span className="font-bold" style={{ color: "#338CF2" }}>
+                    #{v || "--"}
+                  </span>
+                )}
+                displayClassName="text-sm hover:opacity-70 transition"
+                inputClassName={`${inlineInputCls} w-[60px] text-center`}
+              />
+              <InlineEditable
+                type="date"
+                value={birth}
+                onCommit={setBirth}
+                readonly={readonly}
+                ariaLabel="생년월일 수정"
+                renderDisplay={(v) => (v ? formatBirth(v) : "생년월일 입력")}
+                displayClassName="ml-auto text-xs text-suaza-ink-faint hover:text-suaza-ink-muted transition whitespace-nowrap"
+                inputClassName={`${inlineInputCls} w-[150px] ml-auto`}
+              />
+            </div>
 
-      {/* 이름 / 별명 + 상태 (선택사항) — 같은 카드로 묶고 디바이더로 구분 */}
-      <div className="flex flex-col gap-4 rounded-2xl border border-suaza-border p-4">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="이름" required>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="송영훈"
-              required
-              className={textInputCls}
-            />
-          </Field>
-          <Field label="별명">
-            <input
-              type="text"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value.slice(0, 6))}
-              placeholder="해리"
-              maxLength={6}
-              className={textInputCls}
-            />
-          </Field>
-        </div>
-        <div className="border-t border-suaza-border pt-4 flex flex-col gap-2">
-          <span className="text-suaza-ink-muted text-sm">
-            상태 (선택사항)
-          </span>
-          <div className="flex items-center gap-2">
-            <StatusPill
-              label="부상"
-              active={injured}
-              onColor="#EF3E3E"
-              onBg="rgba(239,62,62,0.10)"
-              onClick={() => setInjured((v) => !v)}
-            />
-            <StatusPill
-              label="장기불참"
-              active={onLeave}
-              onColor="#1F2937"
-              onBg="rgba(31,41,55,0.08)"
-              onClick={() => setOnLeave((v) => !v)}
-            />
+            {/* 2행: 이메일 */}
+            {email && (
+              <p className="text-xs sm:text-sm text-suaza-ink-muted truncate">
+                {email}
+              </p>
+            )}
+
+            {/* 3행: 별명 위 / 부상·장기불참 아래 (본인만 편집) */}
+            <div className="flex flex-col items-start gap-2">
+              <InlineEditable
+                type="text"
+                value={nickname}
+                onCommit={(v) => setNickname(v.slice(0, 6))}
+                readonly={readonly}
+                maxLength={6}
+                placeholder="별명"
+                ariaLabel="별명 수정"
+                renderDisplay={(v) => (
+                  <span className="inline-flex items-center gap-1 font-medium text-suaza-ink">
+                    {v || (readonly ? "—" : "별명 추가")}
+                    {!readonly && <span aria-hidden>✏️</span>}
+                  </span>
+                )}
+                displayClassName="px-2.5 py-1 rounded-full border border-suaza-border text-xs hover:bg-gray-50 transition"
+                inputClassName={`${inlineInputCls} w-[120px]`}
+              />
+              <div className="flex items-center gap-2">
+                <StatusPill
+                  label="부상"
+                  active={injured}
+                  onColor="#EF3E3E"
+                  onBg="rgba(239,62,62,0.10)"
+                  readonly={readonly}
+                  onClick={() => setInjured((v) => !v)}
+                />
+                <StatusPill
+                  label="장기불참"
+                  active={onLeave}
+                  onColor="#1F2937"
+                  onBg="rgba(31,41,55,0.08)"
+                  readonly={readonly}
+                  onClick={() => setOnLeave((v) => !v)}
+                />
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* 등번호 / 생년월일 */}
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="등번호" hint="0-99 사이 숫자" required>
-          <input
-            type="number"
-            value={jersey}
-            onChange={(e) => setJersey(e.target.value)}
-            min={0}
-            max={99}
-            placeholder="40"
-            required
-            className={textInputCls}
-          />
-        </Field>
-        <Field label="생년월일" hint="YYYY-MM-DD" required>
-          <input
-            type="date"
-            value={birth}
-            onChange={(e) => setBirth(e.target.value)}
-            placeholder="1987-01-26"
-            required
-            className={textInputCls}
-          />
-        </Field>
-      </div>
-
-      {/* 직책 (manager 만) */}
-      {isManager && (
-        <div className="flex flex-col gap-2">
-          <span className="text-suaza-ink text-base font-medium">직책</span>
-          <div className="flex flex-wrap gap-2">
-            {MEMBER_TITLES.map((t) => {
-              const on = title === t;
-              return (
-                <button
-                  type="button"
-                  key={t}
-                  onClick={() => setTitle(t)}
-                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${
-                    on
-                      ? "bg-suaza-accent text-white"
-                      : "bg-white border border-suaza-border text-suaza-ink-muted hover:bg-gray-50"
-                  }`}
-                >
-                  {TITLE_LABEL[t]}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+        {stats && (
+          <>
+            <div className="h-px bg-suaza-border" />
+            {stats}
+          </>
+        )}
+      </section>
 
       {/* 포지션 (주/부 각각 선택) */}
       <div className="flex flex-col gap-2.5">
         <div className="flex items-baseline gap-2">
           <span className="text-suaza-ink text-base font-medium">포지션</span>
-          <span className="text-suaza-accent text-xs font-medium">*</span>
+          {!readonly && (
+            <span className="text-suaza-accent text-xs font-medium">*</span>
+          )}
         </div>
 
-        {/* 단계 탭: 주포지션 / 부포지션 */}
-        <div className="flex items-center gap-2">
-          <StepTab
-            n={1}
-            label="주포지션"
-            value={primary}
-            active={activeSlot === "primary"}
-            onClick={() => setActiveSlot("primary")}
-          />
-          <span className="text-suaza-ink-faint shrink-0">›</span>
-          <StepTab
-            n={2}
-            label="부포지션"
-            value={secondary}
-            active={activeSlot === "secondary"}
-            onClick={() => setActiveSlot("secondary")}
-          />
-        </div>
-
-        {/* 안내 문구 */}
-        <p
-          className={`text-xs ${
-            primary && secondary
-              ? "text-emerald-600 font-medium"
-              : "text-suaza-ink-muted"
-          }`}
-        >
-          {primary && secondary
-            ? "포지션 선택이 완료되었습니다"
-            : activeSlot === "primary"
-              ? "주포지션을 선택하세요"
-              : "부포지션을 선택하세요 (선택 사항)"}
-        </p>
+        {/* 단계 탭 + 안내 — 편집 모드에서만 */}
+        {!readonly && (
+          <>
+            <div className="flex items-center gap-2">
+              <StepTab
+                n={1}
+                label="주포지션"
+                value={primary}
+                active={activeSlot === "primary"}
+                onClick={() => setActiveSlot("primary")}
+              />
+              <span className="text-suaza-ink-faint shrink-0">›</span>
+              <StepTab
+                n={2}
+                label="부포지션"
+                value={secondary}
+                active={activeSlot === "secondary"}
+                onClick={() => setActiveSlot("secondary")}
+              />
+            </div>
+            <p
+              className={`text-xs ${
+                primary && secondary
+                  ? "text-emerald-600 font-medium"
+                  : "text-suaza-ink-muted"
+              }`}
+            >
+              {primary && secondary
+                ? "포지션 선택이 완료되었습니다"
+                : activeSlot === "primary"
+                  ? "주포지션을 선택하세요"
+                  : "부포지션을 선택하세요 (선택 사항)"}
+            </p>
+          </>
+        )}
 
         {/* 포지션 카드 */}
         <div className="grid grid-cols-4 gap-2">
@@ -282,21 +280,23 @@ export default function ProfileEditForm({
             const role =
               p === primary ? "primary" : p === secondary ? "secondary" : null;
             const isActiveSlotEmptyTarget =
-              (activeSlot === "primary" && p === primary) ||
-              (activeSlot === "secondary" && p === secondary);
+              !readonly &&
+              ((activeSlot === "primary" && p === primary) ||
+                (activeSlot === "secondary" && p === secondary));
             return (
               <button
                 type="button"
                 key={p}
-                onClick={() => pickPosition(p)}
+                disabled={readonly}
+                onClick={readonly ? undefined : () => pickPosition(p)}
                 aria-pressed={role != null}
                 className={`relative flex flex-col items-center justify-center gap-0.5 py-3 rounded-xl border-2 transition ${
                   role === "primary"
                     ? "bg-suaza-button border-suaza-button text-white"
                     : role === "secondary"
                       ? "bg-white border-emerald-500 text-emerald-600"
-                      : "border-suaza-border bg-white text-suaza-ink-faint hover:bg-gray-50"
-                } ${
+                      : "border-suaza-border bg-white text-suaza-ink-faint"
+                } ${readonly ? "cursor-default" : "hover:bg-gray-50"} ${
                   isActiveSlotEmptyTarget ? "ring-2 ring-offset-1 ring-suaza-ink/20" : ""
                 }`}
               >
@@ -330,7 +330,9 @@ export default function ProfileEditForm({
       <div className="flex flex-col gap-2">
         <div className="flex items-baseline gap-2">
           <span className="text-suaza-ink text-base font-medium">주발</span>
-          <span className="text-suaza-accent text-xs font-medium">*</span>
+          {!readonly && (
+            <span className="text-suaza-accent text-xs font-medium">*</span>
+          )}
         </div>
         <div className="grid grid-cols-3 gap-2">
           {PREFERRED_FEET.map((f) => {
@@ -339,12 +341,13 @@ export default function ProfileEditForm({
               <button
                 type="button"
                 key={f}
-                onClick={() => setFoot(on ? null : f)}
+                disabled={readonly}
+                onClick={readonly ? undefined : () => setFoot(on ? null : f)}
                 className={`flex flex-col items-center gap-2 py-4 rounded-lg border-2 transition ${
                   on
                     ? "border-suaza-accent bg-red-50 text-suaza-accent"
-                    : "border-suaza-border bg-white text-suaza-ink-faint hover:bg-gray-50"
-                }`}
+                    : "border-suaza-border bg-white text-suaza-ink-faint"
+                } ${readonly ? "cursor-default" : "hover:bg-gray-50"}`}
               >
                 <FootIcon variant={f} className="h-12" />
                 <span className="text-sm font-medium">{FOOT_LABEL[f]}</span>
@@ -352,7 +355,37 @@ export default function ProfileEditForm({
             );
           })}
         </div>
+        {readonly && !foot && (
+          <span className="text-xs text-suaza-ink-faint">
+            선택된 주발이 없습니다
+          </span>
+        )}
       </div>
+    </>
+  );
+
+  // 읽기 전용: 폼/저장 없이 동일 레이아웃만 렌더
+  if (readonly) {
+    return <div className="flex flex-col gap-6">{sections}</div>;
+  }
+
+  return (
+    <form
+      action={updateProfile.bind(null, profileId)}
+      className="flex flex-col gap-6"
+    >
+      <input type="hidden" name="name" value={initial.name} />
+      <input type="hidden" name="nickname" value={nickname} />
+      <input type="hidden" name="jersey_number" value={jersey} />
+      <input type="hidden" name="birth_date" value={birth} />
+      {positions.map((p) => (
+        <input key={p} type="hidden" name="positions" value={p} />
+      ))}
+      {foot && <input type="hidden" name="preferred_foot" value={foot} />}
+      <input type="hidden" name="is_injured" value={injured ? "1" : "0"} />
+      <input type="hidden" name="on_leave" value={onLeave ? "1" : "0"} />
+
+      {sections}
 
       {/* 필수 누락 안내 */}
       {isDirty && !requiredValid && (
@@ -382,6 +415,94 @@ export default function ProfileEditForm({
     </form>
   );
 }
+
+// 클릭하면 인라인 입력으로 전환되는 편집 필드 (별명/등번호/생년월일 공용).
+// readonly 면 클릭 불가한 정적 표시.
+function InlineEditable({
+  type,
+  value,
+  onCommit,
+  renderDisplay,
+  displayClassName,
+  inputClassName,
+  placeholder,
+  min,
+  max,
+  maxLength,
+  ariaLabel,
+  readonly = false,
+}: {
+  type: "text" | "number" | "date";
+  value: string;
+  onCommit: (v: string) => void;
+  renderDisplay: (v: string) => React.ReactNode;
+  displayClassName?: string;
+  inputClassName?: string;
+  placeholder?: string;
+  min?: number;
+  max?: number;
+  maxLength?: number;
+  ariaLabel?: string;
+  readonly?: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  if (readonly) {
+    return <span className={displayClassName}>{renderDisplay(value)}</span>;
+  }
+
+  if (editing) {
+    return (
+      <input
+        type={type}
+        value={draft}
+        autoFocus
+        placeholder={placeholder}
+        min={min}
+        max={max}
+        maxLength={maxLength}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          onCommit(draft);
+          setEditing(false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            onCommit(draft);
+            setEditing(false);
+          } else if (e.key === "Escape") {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        className={inputClassName}
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setDraft(value);
+        setEditing(true);
+      }}
+      className={displayClassName}
+      aria-label={ariaLabel}
+    >
+      {renderDisplay(value)}
+    </button>
+  );
+}
+
+// "1985-11-30" → "1985.11.30"
+function formatBirth(iso: string): string {
+  return iso.replaceAll("-", ".");
+}
+
+const inlineInputCls =
+  "px-2 py-1 rounded-md border border-suaza-button text-sm text-suaza-ink focus:outline-none";
 
 function StepTab({
   n,
@@ -442,13 +563,14 @@ function RoleChip({
   );
 }
 
-// 상태 선택 칩 (부상/장기불참) — 좌측 컬러 닷 + 라벨, 토글 형태.
+// 상태 칩 (부상/장기불참) — 좌측 컬러 닷 + 라벨. readonly 면 정적 표시.
 function StatusPill({
   label,
   active,
   onColor,
   onBg,
   onClick,
+  readonly = false,
 }: {
   label: string;
   active: boolean;
@@ -457,59 +579,31 @@ function StatusPill({
   /** 활성화 시 배경색 (반투명) */
   onBg: string;
   onClick: () => void;
+  readonly?: boolean;
 }) {
+  const cls = `inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition ${
+    active ? "" : `bg-gray-100 text-suaza-ink-muted${readonly ? "" : " hover:bg-gray-200"}`
+  }`;
+  const style = active ? { backgroundColor: onBg, color: onColor } : undefined;
+  const inner = label;
+  if (readonly) {
+    return (
+      <span className={cls} style={style}>
+        {inner}
+      </span>
+    );
+  }
   return (
     <button
       type="button"
       role="switch"
       aria-checked={active}
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition ${
-        active
-          ? ""
-          : "bg-gray-100 text-suaza-ink-muted hover:bg-gray-200"
-      }`}
-      style={active ? { backgroundColor: onBg, color: onColor } : undefined}
+      className={cls}
+      style={style}
     >
-      <span
-        className="inline-block w-2 h-2 rounded-full"
-        style={{ backgroundColor: active ? onColor : "#9CA3AF" }}
-      />
-      {label}
+      {inner}
     </button>
-  );
-}
-
-const textInputCls =
-  "w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button";
-
-function Field({
-  label,
-  hint,
-  required,
-  action,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  required?: boolean;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="flex items-center justify-between gap-2 min-h-[28px]">
-        <span className="text-suaza-ink text-base font-medium inline-flex items-baseline gap-1">
-          {label}
-          {required && (
-            <span className="text-suaza-accent text-xs font-medium">*</span>
-          )}
-        </span>
-        {action}
-      </span>
-      {hint && <span className="text-suaza-ink-faint text-xs">{hint}</span>}
-      {children}
-    </label>
   );
 }
 

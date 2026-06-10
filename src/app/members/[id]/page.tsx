@@ -1,16 +1,8 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  FOOT_LABEL,
-  POSITIONS,
-  POSITION_COLOR,
-  POSITION_LABEL,
-  PREFERRED_FEET,
-  TITLE_BADGE,
-  TITLE_LABEL,
   type MemberTitle,
   type Position,
   type PreferredFoot,
@@ -167,7 +159,8 @@ export default async function MemberDetailPage({
     }
   }
   const isManager = me?.role === "manager";
-  const canEdit = isSelf || isManager;
+  // 프로필 편집은 본인만 (회장의 타인 편집 권한은 추후 추가). 다른 회원은 동일 레이아웃의 읽기 전용.
+  const canEdit = isSelf;
   const positions = (profile.positions ?? []) as Position[];
   const title = (profile.title ?? "player") as MemberTitle;
 
@@ -317,6 +310,37 @@ export default async function MemberDetailPage({
 
   const avatarSrc = profile.avatar_url ?? null;
 
+  // 아바타·통계 그리드는 보기 카드와 편집 폼(상단 카드)에서 공용으로 사용.
+  const avatarNode = (
+    <AvatarUpload
+      profileId={profile.id}
+      src={avatarSrc}
+      name={profile.name}
+      canEdit={canEdit}
+      titleBadges={[]}
+      awardBadges={getMemberBadges({ title, role: profile.role }).awardBadges}
+    />
+  );
+  // 홈 화면과 동일한 한 줄(5칸) 레이아웃: 출전 | 골 | 어시 | 클린시트 | 포인트.
+  // (심판횟수는 제외 — totals 의 0,1,2,3,5 번째)
+  // 메달(시즌 1~3위)·순위 뱃지·포인트 강조 기능은 그대로 유지한다.
+  const cardStats = [totals[0], totals[1], totals[2], totals[3], totals[5]];
+  const statsGrid = (
+    <div className="grid grid-cols-5">
+      {cardStats.map((t, i) => (
+        <Stat
+          key={t.label}
+          label={t.label}
+          value={t.value}
+          tone={t.tone}
+          rank={t.rank ?? null}
+          alwaysShowRank={t.alwaysShowRank}
+          showDivider={i > 0}
+        />
+      ))}
+    </div>
+  );
+
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[600px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
@@ -326,60 +350,6 @@ export default async function MemberDetailPage({
         >
           ← 회원 명단
         </Link>
-
-        {/* 프로필 카드 — 아바타 + 이름/배지/이메일 + 통계 3×2 그리드 */}
-        <section className="rounded-2xl border border-suaza-border p-4 sm:p-5 flex flex-col gap-4">
-          <div className="flex items-center gap-4 min-w-0">
-            {/* 아바타는 좌측 정렬 */}
-            <div className="shrink-0">
-              {/* 프로필 페이지에서는 이미 이름 옆에 직책 배지(예: '회원')가 있으므로
-                  아바타에는 직책 뱃지를 표시하지 않는다. 수상 뱃지(득점왕 등)는 유지. */}
-              <AvatarUpload
-                profileId={profile.id}
-                src={avatarSrc}
-                name={profile.name}
-                canEdit={canEdit}
-                titleBadges={[]}
-                awardBadges={
-                  getMemberBadges({ title, role: profile.role }).awardBadges
-                }
-              />
-            </div>
-            {/* 이름·직책·이메일을 하나의 덩어리로 묶어 가운데 정렬 */}
-            <div className="flex-1 min-w-0 flex flex-col items-center text-center gap-1">
-              <div className="flex items-center justify-center gap-2 flex-wrap max-w-full">
-                <h1 className="text-xl sm:text-2xl font-bold text-suaza-ink truncate">
-                  {profile.name}
-                </h1>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded ${TITLE_BADGE[title] ?? TITLE_BADGE.player}`}
-                >
-                  {TITLE_LABEL[title] ?? title}
-                </span>
-              </div>
-              {profileEmail && (
-                <p className="text-xs sm:text-sm text-suaza-ink-muted truncate max-w-full">
-                  {profileEmail}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="h-px bg-suaza-border" />
-
-          <div className="grid grid-cols-3 gap-2">
-            {totals.slice(0, 6).map((t) => (
-              <Stat
-                key={t.label}
-                label={t.label}
-                value={t.value}
-                tone={t.tone}
-                rank={t.rank ?? null}
-                alwaysShowRank={t.alwaysShowRank}
-              />
-            ))}
-          </div>
-        </section>
 
         {message && (
           <p className="-mt-2 p-3 bg-green-50 text-green-700 rounded-lg text-sm">
@@ -392,25 +362,24 @@ export default async function MemberDetailPage({
           </p>
         )}
 
-        {!canEdit ? (
-          <ReadOnlyView profile={profile} positions={positions} />
-        ) : (
-          <ProfileEditForm
-            profileId={profile.id}
-            isManager={isManager}
-            initial={{
-              name: profile.name,
-              nickname: profile.nickname ?? null,
-              positions,
-              jersey_number: profile.jersey_number ?? null,
-              birth_date: profile.birth_date ?? null,
-              preferred_foot: (profile.preferred_foot ?? null) as PreferredFoot | null,
-              is_injured: profile.is_injured ?? false,
-              on_leave: profile.on_leave ?? false,
-              title,
-            }}
-          />
-        )}
+        <ProfileEditForm
+          profileId={profile.id}
+          readonly={!canEdit}
+          email={profileEmail}
+          avatar={avatarNode}
+          stats={statsGrid}
+          initial={{
+            name: profile.name,
+            nickname: profile.nickname ?? null,
+            positions,
+            jersey_number: profile.jersey_number ?? null,
+            birth_date: profile.birth_date ?? null,
+            preferred_foot: (profile.preferred_foot ?? null) as PreferredFoot | null,
+            is_injured: profile.is_injured ?? false,
+            on_leave: profile.on_leave ?? false,
+            title,
+          }}
+        />
 
         {/* 감독&코치 코멘트 — 주발 정보 아래 */}
         {showCoachComments && (
@@ -436,12 +405,16 @@ export default async function MemberDetailPage({
   );
 }
 
+// 기록 한 칸 — 홈 화면과 동일한 한 줄(5칸) 레이아웃.
+// 시즌 카테고리 순위가 1~3위면 메달, 그 외 포인트는 "N위" 뱃지로 강조,
+// 포인트는 tone="primary" 로 파란색 강조 표기.
 function Stat({
   label,
   value,
   tone,
   rank,
   alwaysShowRank = false,
+  showDivider = false,
 }: {
   label: string;
   value: number;
@@ -450,30 +423,23 @@ function Stat({
   rank?: number | null;
   /** true 면 4위 이상도 "N위" 뱃지로 표기 (포인트용). */
   alwaysShowRank?: boolean;
+  /** 좌측 세로 구분선 (첫 칸 제외) */
+  showDivider?: boolean;
 }) {
-  // tone="primary" 는 포인트 강조용 — 파란색 배경/텍스트
-  const cls =
-    tone === "primary"
-      ? "bg-blue-50"
-      : "bg-suaza-bg/60";
-  const valueCls =
-    tone === "primary"
-      ? "text-blue-700"
-      : "text-suaza-ink";
-  const labelCls =
-    tone === "primary"
-      ? "text-blue-600"
-      : "text-suaza-ink-muted";
+  const valueCls = tone === "primary" ? "text-blue-700" : "text-suaza-ink";
+  const labelCls = tone === "primary" ? "text-blue-600" : "text-suaza-ink-muted";
   const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
-  // 메달이 없는데 alwaysShowRank 이면 "N위" 텍스트 뱃지로 코너 표기 (포인트 박스 전용)
+  // 메달이 없는데 alwaysShowRank 이면 "N위" 텍스트 뱃지 (포인트 전용)
   const showTextBadge = !medal && alwaysShowRank && rank != null;
   return (
     <div
-      className={`relative flex flex-col items-center justify-center gap-1 py-3 sm:py-4 rounded-xl ${cls}`}
+      className={`relative flex flex-col items-center justify-center gap-1 py-1 ${
+        showDivider ? "border-l border-suaza-border" : ""
+      }`}
     >
       {medal && (
         <span
-          className="absolute top-1 right-1 text-base leading-none"
+          className="absolute -top-3 right-0.5 text-sm leading-none"
           aria-label={`${label} 시즌 ${rank}위`}
           title={`${label} 시즌 ${rank}위`}
         >
@@ -482,7 +448,7 @@ function Stat({
       )}
       {showTextBadge && (
         <span
-          className={`absolute top-1 right-1 px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold leading-none text-suaza-ink ${
+          className={`absolute -top-3 right-0 px-1 py-0.5 rounded-full text-[9px] font-bold leading-none text-suaza-ink ${
             tone === "primary" ? "bg-blue-100" : "bg-gray-200"
           }`}
           aria-label={`${label} 시즌 ${rank}위`}
@@ -491,169 +457,13 @@ function Stat({
           {rank}위
         </span>
       )}
-      <span
-        className={`text-xl sm:text-2xl font-bold tabular-nums ${valueCls}`}
-      >
+      <span className={`text-xl sm:text-2xl font-bold tabular-nums ${valueCls}`}>
         {value}
       </span>
-      <span
-        className={`text-[11px] sm:text-xs whitespace-nowrap ${labelCls}`}
-      >
+      <span className={`text-[11px] sm:text-xs whitespace-nowrap ${labelCls}`}>
         {label}
       </span>
     </div>
   );
 }
 
-function ReadOnlyView({
-  profile,
-  positions,
-}: {
-  profile: {
-    nickname: string | null;
-    jersey_number: number | null;
-    birth_date: string | null;
-    preferred_foot: PreferredFoot | null;
-  };
-  positions: Position[];
-}) {
-  const dash = "—";
-  return (
-    <div className="flex flex-col gap-6">
-      {/* 별명 */}
-      <ReadField label="별명">
-        <p className={profile.nickname ? "text-suaza-ink" : "text-suaza-ink-faint"}>
-          {profile.nickname || dash}
-        </p>
-      </ReadField>
-
-      {/* 등번호 / 생년월일 */}
-      <div className="grid grid-cols-2 gap-3">
-        <ReadField label="등번호">
-          <p
-            className={
-              profile.jersey_number != null
-                ? "text-suaza-ink font-medium"
-                : "text-suaza-ink-faint"
-            }
-          >
-            {profile.jersey_number != null
-              ? `#${profile.jersey_number}`
-              : dash}
-          </p>
-        </ReadField>
-        <ReadField label="생년월일">
-          <p className={profile.birth_date ? "text-suaza-ink" : "text-suaza-ink-faint"}>
-            {profile.birth_date || dash}
-          </p>
-        </ReadField>
-      </div>
-
-      {/* 포지션 */}
-      <div className="flex flex-col gap-2">
-        <span className="text-suaza-ink text-base font-medium">포지션</span>
-        <div className="grid grid-cols-4 gap-2">
-          {POSITIONS.map((p) => {
-            const on = positions.includes(p);
-            const color = POSITION_COLOR[p];
-            return (
-              <div
-                key={p}
-                style={
-                  on
-                    ? {
-                        borderColor: color,
-                        backgroundColor: `${color}1A`,
-                        color,
-                      }
-                    : undefined
-                }
-                className={`flex flex-col items-center justify-center gap-0.5 py-3 rounded-lg border-2 ${
-                  on
-                    ? ""
-                    : "border-suaza-border bg-white text-suaza-ink-faint"
-                }`}
-              >
-                <span className="text-lg font-bold">{p}</span>
-                <span className="text-[11px]">{POSITION_LABEL[p]}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 주발 */}
-      <div className="flex flex-col gap-2">
-        <span className="text-suaza-ink text-base font-medium">주발</span>
-        <div className="grid grid-cols-3 gap-2">
-          {PREFERRED_FEET.map((f) => {
-            const on = profile.preferred_foot === f;
-            return (
-              <div
-                key={f}
-                className={`flex flex-col items-center gap-2 py-4 rounded-lg border-2 ${
-                  on
-                    ? "border-suaza-accent bg-red-50 text-suaza-accent"
-                    : "border-suaza-border bg-white text-suaza-ink-faint"
-                }`}
-              >
-                <ReadFootIcon variant={f} className="h-12" />
-                <span className="text-sm font-medium">{FOOT_LABEL[f]}</span>
-              </div>
-            );
-          })}
-        </div>
-        {!profile.preferred_foot && (
-          <span className="text-xs text-suaza-ink-faint">선택된 주발이 없습니다</span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ReadField({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-suaza-ink text-base font-medium">{label}</span>
-      <div className="w-full px-4 py-3 rounded-lg border border-suaza-border bg-suaza-bg/40 text-base min-h-[48px] flex items-center">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-const READ_FOOT_IMAGE: Record<
-  PreferredFoot,
-  { src: string; ratio: string }
-> = {
-  left: { src: "/foot-left.png", ratio: "aspect-[3/4]" },
-  right: { src: "/foot-right.png", ratio: "aspect-[3/4]" },
-  both: { src: "/foot-both.png", ratio: "aspect-[3/2]" },
-};
-
-function ReadFootIcon({
-  variant,
-  className = "",
-}: {
-  variant: PreferredFoot;
-  className?: string;
-}) {
-  const { src, ratio } = READ_FOOT_IMAGE[variant];
-  return (
-    <div className={`relative ${ratio} ${className}`}>
-      <Image
-        src={src}
-        alt={FOOT_LABEL[variant]}
-        fill
-        sizes="80px"
-        className="object-contain"
-      />
-    </div>
-  );
-}
