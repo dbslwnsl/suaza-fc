@@ -9,15 +9,15 @@ type TabDef = {
   href: string;
   label: string;
   Icon: (props: { className?: string }) => React.JSX.Element;
-  disabled?: boolean;
+  /** 안읽음 개수 뱃지 (0 또는 미지정이면 표시 안 함) */
+  badge?: number;
 };
 
 export default function BottomTabs({
-  isManager,
-  canOpenSettings = false,
+  newsBadge = 0,
 }: {
-  isManager: boolean;
-  canOpenSettings?: boolean;
+  /** 새소식 탭 안읽음 알림 개수 */
+  newsBadge?: number;
 }) {
   const pathname = usePathname();
   if (HIDE_ON.some((p) => pathname.startsWith(p))) return null;
@@ -27,13 +27,7 @@ export default function BottomTabs({
     { href: "/matches", label: "일정&결과", Icon: IconCalendar },
     { href: "/", label: "홈", Icon: IconHome },
     { href: "/board", label: "게시판", Icon: IconBoard },
-    {
-      href: "/settings",
-      label: isManager ? "감독설정" : "선수설정",
-      Icon: IconGear,
-      // 회장/감독만 활성화, 그 외는 비활성(준비 중)
-      disabled: !canOpenSettings,
-    },
+    { href: "/news", label: "새소식", Icon: IconBell, badge: newsBadge },
   ];
 
   const isActive = (href: string) => {
@@ -49,20 +43,6 @@ export default function BottomTabs({
         <ul className="grid grid-cols-5 max-w-[600px] mx-auto">
           {tabs.map((t) => {
             const active = isActive(t.href);
-            if (t.disabled) {
-              return (
-                <li key={t.href}>
-                  <span
-                    aria-disabled
-                    title="준비 중"
-                    className="flex flex-col items-center justify-center gap-1 py-2.5 text-suaza-ink-faint opacity-50 cursor-not-allowed"
-                  >
-                    <t.Icon className="w-5 h-5" />
-                    <span className="text-[11px] font-medium">{t.label}</span>
-                  </span>
-                </li>
-              );
-            }
             return (
               <li key={t.href}>
                 <Link
@@ -73,7 +53,14 @@ export default function BottomTabs({
                       : "text-suaza-ink-muted hover:text-suaza-ink"
                   }`}
                 >
-                  <t.Icon className="w-5 h-5" />
+                  <span className="relative">
+                    <t.Icon className="w-5 h-5" />
+                    {t.badge && t.badge > 0 ? (
+                      <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-suaza-accent text-white text-[10px] font-bold leading-none flex items-center justify-center">
+                        {t.badge > 99 ? "99+" : t.badge}
+                      </span>
+                    ) : null}
+                  </span>
                   <span className="text-[11px] font-medium">{t.label}</span>
                 </Link>
               </li>
@@ -159,7 +146,7 @@ function IconBoard({ className }: { className?: string }) {
   );
 }
 
-function IconGear({ className }: { className?: string }) {
+function IconBell({ className }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -170,8 +157,8 @@ function IconGear({ className }: { className?: string }) {
       strokeLinejoin="round"
       viewBox="0 0 24 24"
     >
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
   );
 }

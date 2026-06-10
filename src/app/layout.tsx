@@ -31,18 +31,15 @@ export default async function RootLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
-  let isManager = false;
-  // 감독 설정 탭 활성화 대상: 회장(president) / 감독(head_coach)
-  let canOpenSettings = false;
+  // 새소식 탭 안읽음 알림 개수 (뱃지용)
+  let newsBadge = 0;
   if (user) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("role, title")
-      .eq("id", user.id)
-      .single();
-    isManager = data?.role === "manager";
-    canOpenSettings =
-      data?.title === "president" || data?.title === "head_coach";
+    const { count } = await supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .is("read_at", null);
+    newsBadge = count ?? 0;
   }
 
   return (
@@ -52,7 +49,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {children}
-        <BottomTabs isManager={isManager} canOpenSettings={canOpenSettings} />
+        <BottomTabs newsBadge={newsBadge} />
       </body>
     </html>
   );
