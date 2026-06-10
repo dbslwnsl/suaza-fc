@@ -23,7 +23,7 @@ export default function BottomTabs({
   if (HIDE_ON.some((p) => pathname.startsWith(p))) return null;
 
   const tabs: TabDef[] = [
-    { href: "/members", label: "회원명단", Icon: IconUsers },
+    { href: "/members", label: "회원&기록", Icon: IconUsers },
     { href: "/matches", label: "일정&결과", Icon: IconCalendar },
     { href: "/", label: "홈", Icon: IconHome },
     { href: "/board", label: "게시판", Icon: IconBoard },

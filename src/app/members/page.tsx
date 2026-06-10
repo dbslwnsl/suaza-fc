@@ -8,9 +8,9 @@ const TABS = ["roster", "season", "matches"] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABEL: Record<Tab, string> = {
-  roster: "명단",
+  roster: "회원명단",
   season: "시즌기록",
-  matches: "경기별",
+  matches: "경기기록",
 };
 
 export default async function MembersPage({
@@ -66,7 +66,7 @@ export default async function MembersPage({
             <path d="M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
           <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
-            회원 명단
+            회원&기록
           </h1>
         </header>
 
