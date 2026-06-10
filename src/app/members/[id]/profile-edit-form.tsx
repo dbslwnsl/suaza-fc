@@ -1,11 +1,10 @@
 "use client";
 
-import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FOOT_LABEL,
   POSITIONS,
-  POSITION_LABEL,
+  POSITION_COLOR,
   PREFERRED_FEET,
   TITLE_BADGE,
   TITLE_LABEL,
@@ -60,9 +59,6 @@ export default function ProfileEditForm({
   const [secondary, setSecondary] = useState<Position | null>(
     initial.positions[1] ?? null,
   );
-  const [activeSlot, setActiveSlot] = useState<"primary" | "secondary">(
-    "primary",
-  );
   const positions = useMemo(
     () => [primary, secondary].filter((p): p is Position => p != null),
     [primary, secondary],
@@ -95,22 +91,6 @@ export default function ProfileEditForm({
     primary != null &&
     foot != null;
   const canSave = isDirty && requiredValid;
-
-  // 카드 클릭 → 현재 단계(주/부)에 배정. 같은 칸 재선택 시 해제.
-  const pickPosition = (p: Position) => {
-    if (activeSlot === "primary") {
-      if (primary === p) {
-        setPrimary(null);
-        return;
-      }
-      setPrimary(p);
-      if (secondary === p) setSecondary(null); // 주·부 중복 방지
-      if (!secondary || secondary === p) setActiveSlot("secondary");
-    } else {
-      if (primary === p) return; // 주포지션과 동일 선택 불가
-      setSecondary((cur) => (cur === p ? null : p));
-    }
-  };
 
   // 카드 + 포지션 + 주발 (편집/읽기 공통 레이아웃)
   const sections = (
@@ -217,137 +197,61 @@ export default function ProfileEditForm({
         )}
       </section>
 
-      {/* 포지션 (주/부 각각 선택) */}
-      <div className="flex flex-col gap-2.5">
-        <div className="flex items-baseline gap-2">
-          <span className="text-suaza-ink text-base font-medium">포지션</span>
-          {!readonly && (
-            <span className="text-suaza-accent text-xs font-medium">*</span>
-          )}
-        </div>
-
-        {/* 단계 탭 + 안내 — 편집 모드에서만 */}
-        {!readonly && (
-          <>
-            <div className="flex items-center gap-2">
-              <StepTab
-                n={1}
-                label="주포지션"
-                value={primary}
-                active={activeSlot === "primary"}
-                onClick={() => setActiveSlot("primary")}
-              />
-              <span className="text-suaza-ink-faint shrink-0">›</span>
-              <StepTab
-                n={2}
-                label="부포지션"
-                value={secondary}
-                active={activeSlot === "secondary"}
-                onClick={() => setActiveSlot("secondary")}
-              />
-            </div>
-            <p
-              className={`text-xs ${
-                primary && secondary
-                  ? "text-emerald-600 font-medium"
-                  : "text-suaza-ink-muted"
-              }`}
-            >
-              {primary && secondary
-                ? "포지션 선택이 완료되었습니다"
-                : activeSlot === "primary"
-                  ? "주포지션을 선택하세요"
-                  : "부포지션을 선택하세요 (선택 사항)"}
-            </p>
-          </>
-        )}
-
-        {/* 포지션 카드 */}
-        <div className="grid grid-cols-4 gap-2">
-          {POSITIONS.map((p) => {
-            const role =
-              p === primary ? "primary" : p === secondary ? "secondary" : null;
-            const isActiveSlotEmptyTarget =
-              !readonly &&
-              ((activeSlot === "primary" && p === primary) ||
-                (activeSlot === "secondary" && p === secondary));
-            return (
-              <button
-                type="button"
-                key={p}
-                disabled={readonly}
-                onClick={readonly ? undefined : () => pickPosition(p)}
-                aria-pressed={role != null}
-                className={`relative flex flex-col items-center justify-center gap-0.5 py-3 rounded-xl border-2 transition ${
-                  role === "primary"
-                    ? "bg-suaza-button border-suaza-button text-white"
-                    : role === "secondary"
-                      ? "bg-white border-emerald-500 text-emerald-600"
-                      : "border-suaza-border bg-white text-suaza-ink-faint"
-                } ${readonly ? "cursor-default" : "hover:bg-gray-50"} ${
-                  isActiveSlotEmptyTarget ? "ring-2 ring-offset-1 ring-suaza-ink/20" : ""
-                }`}
-              >
-                {role && (
-                  <span
-                    className={`absolute -top-2 -right-2 w-5 h-5 rounded-full text-[11px] font-bold text-white flex items-center justify-center shadow ring-2 ring-white ${
-                      role === "primary" ? "bg-orange-500" : "bg-emerald-500"
-                    }`}
-                  >
-                    {role === "primary" ? "주" : "부"}
-                  </span>
-                )}
-                <span className="text-lg font-bold">{p}</span>
-                <span className="text-[11px]">{POSITION_LABEL[p]}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* 선택 요약 */}
-        <div className="flex items-center gap-2 flex-wrap rounded-lg bg-suaza-bg/60 px-3 py-2 text-sm">
-          <span className="text-suaza-ink-muted">주포지션</span>
-          <RoleChip value={primary} role="primary" />
-          <span className="text-suaza-ink-faint">/</span>
-          <span className="text-suaza-ink-muted">부포지션</span>
-          <RoleChip value={secondary} role="secondary" />
-        </div>
-      </div>
-
-      {/* 주발 */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-baseline gap-2">
-          <span className="text-suaza-ink text-base font-medium">주발</span>
-          {!readonly && (
-            <span className="text-suaza-accent text-xs font-medium">*</span>
-          )}
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {PREFERRED_FEET.map((f) => {
-            const on = foot === f;
-            return (
-              <button
-                type="button"
-                key={f}
-                disabled={readonly}
-                onClick={readonly ? undefined : () => setFoot(on ? null : f)}
-                className={`flex flex-col items-center gap-2 py-4 rounded-lg border-2 transition ${
-                  on
-                    ? "border-suaza-accent bg-red-50 text-suaza-accent"
-                    : "border-suaza-border bg-white text-suaza-ink-faint"
-                } ${readonly ? "cursor-default" : "hover:bg-gray-50"}`}
-              >
-                <FootIcon variant={f} className="h-12" />
-                <span className="text-sm font-medium">{FOOT_LABEL[f]}</span>
-              </button>
-            );
-          })}
-        </div>
-        {readonly && !foot && (
-          <span className="text-xs text-suaza-ink-faint">
-            선택된 주발이 없습니다
+      {/* 주포지션 · 부포지션 · 주발 — 드롭다운 (가로 3등분) */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-suaza-ink-muted">
+            주포지션
           </span>
-        )}
+          <Dropdown
+            value={primary}
+            placeholder="선택"
+            readonly={readonly}
+            options={POSITIONS.map((p) => ({
+              value: p,
+              label: p,
+              color: POSITION_COLOR[p],
+            }))}
+            onChange={(v) => {
+              const next = v as Position | null;
+              setPrimary(next);
+              if (next && secondary === next) setSecondary(null);
+            }}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-suaza-ink-muted">
+            부포지션
+          </span>
+          <Dropdown
+            value={secondary}
+            placeholder="없음"
+            readonly={readonly}
+            allowClear
+            clearLabel="없음"
+            options={POSITIONS.filter((p) => p !== primary).map((p) => ({
+              value: p,
+              label: p,
+              color: POSITION_COLOR[p],
+            }))}
+            onChange={(v) => setSecondary(v as Position | null)}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-suaza-ink-muted">주발</span>
+          <Dropdown
+            value={foot}
+            placeholder="선택"
+            readonly={readonly}
+            options={PREFERRED_FEET.map((f) => ({
+              value: f,
+              label: FOOT_LABEL[f],
+            }))}
+            onChange={(v) => setFoot(v as PreferredFoot | null)}
+          />
+        </div>
       </div>
     </>
   );
@@ -501,62 +405,123 @@ function formatBirth(iso: string): string {
 const inlineInputCls =
   "px-2 py-1 rounded-md border border-suaza-button text-sm text-suaza-ink focus:outline-none";
 
-function StepTab({
-  n,
-  label,
+// 색 점 + 텍스트 + ▾ 형태의 커스텀 드롭다운. readonly 면 정적 박스로 표시.
+function Dropdown<T extends string>({
   value,
-  active,
-  onClick,
+  options,
+  onChange,
+  placeholder = "선택",
+  readonly = false,
+  allowClear = false,
+  clearLabel = "없음",
 }: {
-  n: number;
-  label: string;
-  value: Position | null;
-  active: boolean;
-  onClick: () => void;
+  value: T | null;
+  options: { value: T; label: string; color?: string }[];
+  onChange: (v: T | null) => void;
+  placeholder?: string;
+  readonly?: boolean;
+  allowClear?: boolean;
+  clearLabel?: string;
 }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border-2 transition ${
-        active
-          ? "bg-suaza-button border-suaza-button text-white"
-          : "bg-white border-suaza-border text-suaza-ink-muted hover:bg-gray-50"
-      }`}
-    >
-      <span
-        className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-bold ${
-          active ? "bg-white/20 text-white" : "bg-gray-100 text-suaza-ink-muted"
-        }`}
-      >
-        {n}
-      </span>
-      <span>{label}</span>
-      {value && <span className="font-bold">{value}</span>}
-    </button>
-  );
-}
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
-function RoleChip({
-  value,
-  role,
-}: {
-  value: Position | null;
-  role: "primary" | "secondary";
-}) {
-  if (!value) {
-    return <span className="text-suaza-ink-faint text-xs">미선택</span>;
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  const selected = options.find((o) => o.value === value) ?? null;
+  const label = selected ? selected.label : readonly ? "미설정" : placeholder;
+
+  const inner = (
+    <>
+      {selected?.color ? (
+        <span
+          className="w-2.5 h-2.5 rounded-full shrink-0"
+          style={{ backgroundColor: selected.color }}
+        />
+      ) : null}
+      <span className={selected ? "" : "text-suaza-ink-faint font-normal"}>
+        {label}
+      </span>
+    </>
+  );
+
+  if (readonly) {
+    return (
+      <span className="flex w-full items-center gap-2 rounded-xl border border-suaza-border bg-white px-2.5 py-1.5 text-xs font-bold text-suaza-ink">
+        {inner}
+      </span>
+    );
   }
+
   return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${
-        role === "primary"
-          ? "bg-suaza-button text-white"
-          : "border border-emerald-500 text-emerald-600"
-      }`}
-    >
-      {value}
-    </span>
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 rounded-xl border border-suaza-border bg-white px-2.5 py-1.5 text-xs font-bold text-suaza-ink hover:bg-gray-50 transition"
+      >
+        {inner}
+        <span aria-hidden className="ml-auto text-[10px] text-suaza-ink-faint">
+          ▾
+        </span>
+      </button>
+      {open && (
+        <ul
+          role="listbox"
+          className="absolute z-20 left-0 mt-1 min-w-full whitespace-nowrap rounded-xl border border-suaza-border bg-white shadow-lg py-1"
+        >
+          {allowClear && (
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(null);
+                  setOpen(false);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left text-suaza-ink-muted hover:bg-gray-50"
+              >
+                {clearLabel}
+              </button>
+            </li>
+          )}
+          {options.map((o) => (
+            <li key={o.value}>
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-sm text-left hover:bg-gray-50 ${
+                  o.value === value
+                    ? "bg-gray-50 font-bold text-suaza-ink"
+                    : "text-suaza-ink"
+                }`}
+              >
+                {o.color ? (
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: o.color }}
+                  />
+                ) : null}
+                {o.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -604,12 +569,6 @@ function StatusPill({
   );
 }
 
-const FOOT_IMAGE: Record<PreferredFoot, { src: string; ratio: string }> = {
-  left: { src: "/foot-left.png", ratio: "aspect-[3/4]" },
-  right: { src: "/foot-right.png", ratio: "aspect-[3/4]" },
-  both: { src: "/foot-both.png", ratio: "aspect-[3/2]" },
-};
-
 // 회원명단 탭과 동일한 사람 아이콘 — "프로필" 제목 앞에 표시
 function UsersIcon({ className }: { className?: string }) {
   return (
@@ -631,23 +590,3 @@ function UsersIcon({ className }: { className?: string }) {
   );
 }
 
-function FootIcon({
-  variant,
-  className = "",
-}: {
-  variant: PreferredFoot;
-  className?: string;
-}) {
-  const { src, ratio } = FOOT_IMAGE[variant];
-  return (
-    <div className={`relative ${ratio} ${className}`}>
-      <Image
-        src={src}
-        alt={FOOT_LABEL[variant]}
-        fill
-        sizes="80px"
-        className="object-contain"
-      />
-    </div>
-  );
-}
