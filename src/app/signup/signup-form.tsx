@@ -148,7 +148,7 @@ export default function SignupForm() {
             ))}
           </ul>
         ) : (
-          <span className="mt-1.5 block text-xs text-suaza-ink-muted">
+          <span className="mt-2.5 block px-1 text-[11px] font-medium text-suaza-accent">
             영문, 숫자, 특수문자 조합 8자 이상
           </span>
         )}
@@ -247,7 +247,7 @@ export default function SignupForm() {
         disabled={!allValid}
         className="h-[52px] rounded-xl bg-[#15224A] text-white text-[16px] font-semibold hover:brightness-125 transition mt-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100"
       >
-        회원가입
+        다음
       </button>
     </form>
   );

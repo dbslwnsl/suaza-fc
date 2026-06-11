@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   MEMBER_TITLES,
   POSITIONS,
@@ -238,8 +239,8 @@ export async function uploadAvatar(profileId: string, formData: FormData) {
 /**
  * 회원 Soft Delete.
  * - profiles.deleted_at 세팅 → 목록에선 숨겨지지만 row 자체는 남아 경기 기록(FK) 보존
- * - auth.users 는 건드리지 않음 (profile FK 가 cascade 라 삭제 시 기록까지 날아감)
- *   → 동일 이메일 재가입이 필요하면 Supabase 대시보드에서 수동 처리
+ * - auth.users 는 삭제하지 않고(기록 cascade 방지), 이메일만 텀스톤으로 변경해
+ *   원래 이메일을 풀어준다 → 같은 이메일로 재가입 가능. (재가입은 새 계정/프로필)
  * - 매니저 권한자만 호출 가능, 본인 자신은 삭제 불가
  */
 export async function softDeleteMember(profileId: string) {
@@ -274,6 +275,29 @@ export async function softDeleteMember(profileId: string) {
   if (updateError) {
     redirect(
       `/members/${profileId}?error=${encodeURIComponent(updateError.message)}`,
+    );
+  }
+
+  // auth 계정의 이메일을 텀스톤으로 바꿔 원래 이메일을 해제(재가입 가능하게) 한다.
+  // 계정 자체는 남겨 기록을 보존하고, 로그인은 deleted_at 으로 이미 차단됨.
+  // email_confirm:true 로 즉시 반영(확인 메일 없이)해야 원래 이메일이 풀린다.
+  try {
+    const admin = createAdminClient();
+    const tombstone = `deleted-${profileId}@deleted.invalid`;
+    const { error: authError } = await admin.auth.admin.updateUserById(
+      profileId,
+      { email: tombstone, email_confirm: true },
+    );
+    if (authError) {
+      console.error(
+        "[member delete] auth 이메일 해제 실패 — 같은 이메일 재가입이 막힐 수 있습니다.",
+        authError.message,
+      );
+    }
+  } catch (e) {
+    console.error(
+      "[member delete] admin 이메일 해제 처리 실패 (SUPABASE_SERVICE_ROLE_KEY 확인)",
+      e instanceof Error ? e.message : e,
     );
   }
 

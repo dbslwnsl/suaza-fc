@@ -20,14 +20,23 @@ export async function login(formData: FormData) {
     redirect(`/login?error=${encodeURIComponent(error.message)}`);
   }
 
-  // 프로필 미완성 시 본인 프로필 수정 페이지로 강제 이동
   const userId = data.user?.id;
   if (userId) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("profile_completed")
+      .select("profile_completed, deleted_at")
       .eq("id", userId)
       .single();
+    // 삭제(탈퇴 처리)된 계정은 로그인 차단 — 세션 즉시 해제 후 안내
+    if (profile?.deleted_at) {
+      await supabase.auth.signOut();
+      redirect(
+        `/login?error=${encodeURIComponent(
+          "삭제된 계정입니다. 관리자에게 문의해 주세요.",
+        )}`,
+      );
+    }
+    // 프로필 미완성 시 본인 프로필 수정 페이지로 강제 이동
     if (!profile?.profile_completed) {
       revalidatePath("/", "layout");
       redirect(
@@ -105,7 +114,7 @@ export async function signup(formData: FormData) {
     revalidatePath("/", "layout");
     redirect(
       `/members/${data.user.id}?message=${encodeURIComponent(
-        "프로필 정보를 채워 주세요",
+        "마지막 단계예요. 프로필을 완성하면 가입이 완료됩니다.",
       )}`,
     );
   }

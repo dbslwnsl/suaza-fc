@@ -36,6 +36,19 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // 삭제(탈퇴 처리)된 계정은 세션이 남아 있어도 차단 — 보호 경로에서 로그인으로 보낸다.
+  // (auth.users 는 남지만 profiles.deleted_at 으로 비활성 판정)
+  let isDeleted = false;
+  if (user) {
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("deleted_at")
+      .eq("id", user.id)
+      .maybeSingle();
+    isDeleted = !!prof?.deleted_at;
+  }
+  const activeUser = user && !isDeleted ? user : null;
+
   const { pathname } = request.nextUrl;
   const isPublicRoute =
     pathname.startsWith("/login") ||
@@ -46,13 +59,13 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/forgot-password") ||
     pathname.startsWith("/reset-password");
 
-  if (!user && !isPublicRoute) {
+  if (!activeUser && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  if (user && (pathname === "/login" || pathname === "/signup")) {
+  if (activeUser && (pathname === "/login" || pathname === "/signup")) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
