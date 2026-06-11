@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import Dropdown from "@/components/dot-dropdown";
 import {
   FOOT_LABEL,
   POSITIONS,
@@ -13,7 +14,7 @@ import {
   type PreferredFoot,
 } from "@/lib/members/positions";
 import DatePicker from "../../matches/new/date-picker";
-import { updateProfile } from "./actions";
+import { setMemberStatus, updateProfile } from "./actions";
 
 // 등번호 드롭다운 옵션 (0~99)
 const JERSEY_OPTIONS = Array.from({ length: 100 }, (_, i) => ({
@@ -43,6 +44,7 @@ export default function ProfileEditForm({
   hideStatus = false,
   setupMode = false,
   hasAvatar = false,
+  canEditStatus = false,
 }: {
   profileId: string;
   initial: Initial;
@@ -60,6 +62,8 @@ export default function ProfileEditForm({
   setupMode?: boolean;
   /** 프로필 사진(아바타) 등록 여부 — 가입 단계에선 사진까지 등록해야 회원가입 활성화 */
   hasAvatar?: boolean;
+  /** 읽기 전용(타인 조회)이라도 부상/장기불참만 변경 가능 — 회장/매니저용 */
+  canEditStatus?: boolean;
 }) {
   // 별명/등번호/생년월일/상태는 상단 카드에서 인라인 편집(본인만).
   // 이름·직책은 표시 전용.
@@ -108,6 +112,33 @@ export default function ProfileEditForm({
     foot != null;
   // 가입 입력 단계에선 사진(아바타) 등록까지 완료해야 저장(회원가입) 가능
   const canSave = isDirty && requiredValid && (!setupMode || hasAvatar);
+
+  // 부상/장기불참 토글. 본인/편집 모드에선 폼 저장으로 반영되고,
+  // 타인 조회(readonly)인데 회장/매니저(canEditStatus)면 즉시 서버에 반영한다.
+  const [, startStatusTransition] = useTransition();
+  const statusEditable = !readonly || canEditStatus;
+  const toggleInjured = () => {
+    const prev = injured;
+    const next = !prev;
+    setInjured(next);
+    if (readonly && canEditStatus) {
+      startStatusTransition(async () => {
+        const r = await setMemberStatus(profileId, next, onLeave);
+        if (!r?.ok) setInjured(prev); // 권한/저장 실패 시 원상복구
+      });
+    }
+  };
+  const toggleOnLeave = () => {
+    const prev = onLeave;
+    const next = !prev;
+    setOnLeave(next);
+    if (readonly && canEditStatus) {
+      startStatusTransition(async () => {
+        const r = await setMemberStatus(profileId, injured, next);
+        if (!r?.ok) setOnLeave(prev); // 권한/저장 실패 시 원상복구
+      });
+    }
+  };
 
   // 카드 + 포지션 + 주발 (편집/읽기 공통 레이아웃)
   const sections = (
@@ -202,16 +233,16 @@ export default function ProfileEditForm({
                     active={injured}
                     onColor="#EF3E3E"
                     onBg="rgba(239,62,62,0.10)"
-                    readonly={readonly}
-                    onClick={() => setInjured((v) => !v)}
+                    readonly={!statusEditable}
+                    onClick={toggleInjured}
                   />
                   <StatusPill
                     label="장기불참"
                     active={onLeave}
                     onColor="#1F2937"
                     onBg="rgba(31,41,55,0.08)"
-                    readonly={readonly}
-                    onClick={() => setOnLeave((v) => !v)}
+                    readonly={!statusEditable}
+                    onClick={toggleOnLeave}
                   />
                 </div>
               )}
@@ -484,129 +515,6 @@ function formatBirth(iso: string): string {
 
 const inlineInputCls =
   "px-2 py-1 rounded-md border border-suaza-button text-sm text-suaza-ink focus:outline-none";
-
-// 색 점 + 텍스트 + ▾ 형태의 커스텀 드롭다운. readonly 면 정적 박스로 표시.
-function Dropdown<T extends string>({
-  value,
-  options,
-  onChange,
-  placeholder = "선택",
-  readonly = false,
-  allowClear = false,
-  clearLabel = "없음",
-  rounded = "rounded-xl",
-}: {
-  value: T | null;
-  options: { value: T; label: string; color?: string }[];
-  onChange: (v: T | null) => void;
-  placeholder?: string;
-  readonly?: boolean;
-  allowClear?: boolean;
-  clearLabel?: string;
-  /** 박스 모서리 둥글기 클래스 (기본 rounded-xl) */
-  rounded?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [open]);
-
-  const selected = options.find((o) => o.value === value) ?? null;
-  const label = selected ? selected.label : readonly ? "미설정" : placeholder;
-
-  const inner = (
-    <>
-      {selected?.color ? (
-        <span
-          className="w-2.5 h-2.5 rounded-full shrink-0"
-          style={{ backgroundColor: selected.color }}
-        />
-      ) : null}
-      <span className={selected ? "" : "text-suaza-ink-faint font-normal"}>
-        {label}
-      </span>
-    </>
-  );
-
-  if (readonly) {
-    return (
-      <span className={`flex w-full items-center gap-2 ${rounded} border border-suaza-border bg-white px-2.5 py-1.5 text-xs font-bold text-suaza-ink`}>
-        {inner}
-      </span>
-    );
-  }
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        className={`flex w-full items-center gap-2 ${rounded} border border-suaza-border bg-white px-2.5 py-1.5 text-xs font-bold text-suaza-ink hover:bg-gray-50 transition`}
-      >
-        {inner}
-        <span aria-hidden className="ml-auto text-[10px] text-suaza-ink-faint">
-          ▾
-        </span>
-      </button>
-      {open && (
-        <ul
-          role="listbox"
-          className="absolute z-20 left-0 mt-1 max-h-60 min-w-full overflow-y-auto whitespace-nowrap rounded-xl border border-suaza-border bg-white shadow-lg py-1"
-        >
-          {allowClear && (
-            <li>
-              <button
-                type="button"
-                onClick={() => {
-                  onChange(null);
-                  setOpen(false);
-                }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left text-suaza-ink-muted hover:bg-gray-50"
-              >
-                {clearLabel}
-              </button>
-            </li>
-          )}
-          {options.map((o) => (
-            <li key={o.value}>
-              <button
-                type="button"
-                onClick={() => {
-                  onChange(o.value);
-                  setOpen(false);
-                }}
-                className={`flex w-full items-center gap-2 px-3 py-2 text-sm text-left hover:bg-gray-50 ${
-                  o.value === value
-                    ? "bg-gray-50 font-bold text-suaza-ink"
-                    : "text-suaza-ink"
-                }`}
-              >
-                {o.color ? (
-                  <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: o.color }}
-                  />
-                ) : null}
-                {o.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
 // 상태 칩 (부상/장기불참) — 좌측 컬러 닷 + 라벨. readonly 면 정적 표시.
 function StatusPill({

@@ -148,6 +148,48 @@ export async function updateProfile(profileId: string, formData: FormData) {
   );
 }
 
+/**
+ * 회원의 부상/장기불참 상태만 변경. 본인 외 타인 변경은 매니저·회장만 허용.
+ * 회장(title=president, role=player)은 profiles RLS 로 타인 수정이 막혀 있어
+ * 권한을 서버에서 확인한 뒤 service_role 로 두 필드만 갱신한다.
+ */
+export async function setMemberStatus(
+  profileId: string,
+  isInjured: boolean,
+  onLeave: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "로그인이 필요합니다" };
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role, title")
+    .eq("id", user.id)
+    .single();
+  const canManage =
+    me?.role === "manager" ||
+    me?.title === "president" ||
+    me?.title === "head_coach";
+  if (!canManage && user.id !== profileId) {
+    return { ok: false, error: "권한이 없습니다" };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("profiles")
+    .update({ is_injured: isInjured, on_leave: onLeave })
+    .eq("id", profileId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/members/${profileId}`);
+  revalidatePath("/members");
+  revalidatePath("/");
+  return { ok: true };
+}
+
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME = new Set([
   "image/jpeg",

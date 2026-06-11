@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import {
+  POSITIONS,
+  PREFERRED_FEET,
+  type PreferredFoot,
+} from "@/lib/members/positions";
 import { isValidEmail, validatePassword } from "./validation";
 
 export async function login(formData: FormData) {
@@ -52,13 +57,31 @@ export async function login(formData: FormData) {
 }
 
 export async function signup(formData: FormData) {
-  const email = String(formData.get("email") ?? "");
+  // 1단계: 계정 기본 정보
+  const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const passwordConfirm = String(formData.get("passwordConfirm") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const terms = formData.get("terms") === "on";
   const privacy = formData.get("privacy") === "on";
 
+  // 2단계: 프로필 (등번호·생년월일·포지션·주발·별명)
+  const validPos = new Set<string>(POSITIONS);
+  const positions = formData
+    .getAll("positions")
+    .map(String)
+    .filter((p) => validPos.has(p))
+    .filter((p, i, arr) => arr.indexOf(p) === i)
+    .slice(0, 2);
+  const jerseyRaw = String(formData.get("jersey_number") ?? "").trim();
+  const birthRaw = String(formData.get("birth_date") ?? "").trim();
+  const nickname = String(formData.get("nickname") ?? "").trim().slice(0, 6);
+  const footRaw = String(formData.get("preferred_foot") ?? "");
+  const preferred_foot = (PREFERRED_FEET as readonly string[]).includes(footRaw)
+    ? (footRaw as PreferredFoot)
+    : null;
+
+  // 1단계 검증
   if (!name) {
     redirect(`/signup?error=${encodeURIComponent("이름을 입력해 주세요")}`);
   }
@@ -75,9 +98,23 @@ export async function signup(formData: FormData) {
   if (!terms || !privacy) {
     redirect(`/signup?error=${encodeURIComponent("필수 약관에 동의해 주세요")}`);
   }
+  // 2단계(프로필) 검증 — 모두 채워야 최종 가입
+  if (!jerseyRaw) {
+    redirect(`/signup?error=${encodeURIComponent("등번호를 입력해 주세요")}`);
+  }
+  if (!birthRaw) {
+    redirect(`/signup?error=${encodeURIComponent("생년월일을 입력해 주세요")}`);
+  }
+  if (positions.length === 0) {
+    redirect(`/signup?error=${encodeURIComponent("주포지션을 선택해 주세요")}`);
+  }
+  if (!preferred_foot) {
+    redirect(`/signup?error=${encodeURIComponent("주발을 선택해 주세요")}`);
+  }
 
   const supabase = await createClient();
   const now = new Date().toISOString();
+  // 모든 검증을 통과한 마지막 단계에서만 계정을 생성한다.
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -108,18 +145,36 @@ export async function signup(formData: FormData) {
     );
   }
 
-  // 이메일 확인이 비활성화된 경우 signUp 응답에 세션이 함께 옴 → 즉시 로그인 상태.
-  // 이때는 프로필 작성 페이지로 바로 보냄.
+  // 이메일 확인 OFF: 세션이 함께 와 즉시 로그인 상태 → 프로필을 곧바로 저장해 가입 확정.
   if (data.session && data.user) {
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({
+        name,
+        nickname: nickname || null,
+        positions,
+        jersey_number: Number(jerseyRaw),
+        birth_date: birthRaw,
+        preferred_foot,
+        profile_completed: true,
+      })
+      .eq("id", data.user.id);
     revalidatePath("/", "layout");
+    if (profileError) {
+      // 계정은 생성됐지만 프로필 저장만 실패 → 프로필 편집 페이지에서 마저 완성
+      redirect(
+        `/members/${data.user.id}?error=${encodeURIComponent(
+          profileError.message,
+        )}`,
+      );
+    }
     redirect(
-      `/members/${data.user.id}?message=${encodeURIComponent(
-        "마지막 단계예요. 프로필을 완성하면 가입이 완료됩니다.",
-      )}`,
+      `/?message=${encodeURIComponent("환영합니다! 가입이 완료되었습니다")}`,
     );
   }
 
-  // 이메일 확인이 필요한 경우(기본값) — 메일 발송 안내 화면으로
+  // 이메일 확인이 필요한 경우(기본 설정 아님) — 메일 발송 안내 화면으로.
+  // (이 경우 프로필은 최초 로그인 후 완성)
   redirect(`/signup?completed=1&email=${encodeURIComponent(email)}`);
 }
 

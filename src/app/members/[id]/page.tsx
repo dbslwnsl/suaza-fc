@@ -159,8 +159,13 @@ export default async function MemberDetailPage({
     }
   }
   const isManager = me?.role === "manager";
-  // 프로필 편집은 본인만 (회장의 타인 편집 권한은 추후 추가). 다른 회원은 동일 레이아웃의 읽기 전용.
+  // 프로필 편집은 본인만. 다른 회원은 동일 레이아웃의 읽기 전용.
   const canEdit = isSelf;
+  // 단, 회장(president)·감독(head_coach)·매니저는 타인의 부상/장기불참만 변경 가능.
+  const canEditOthersStatus =
+    isManager ||
+    (me?.title ?? "player") === "president" ||
+    (me?.title ?? "player") === "head_coach";
   // 가입 직후 첫 프로필 입력 단계 — 본인 + 아직 프로필 미완성.
   // 이때는 기록/코멘트 없이 입력 전용 화면("프로필 입력")으로 보여준다.
   const isProfileSetup =
@@ -356,6 +361,7 @@ export default async function MemberDetailPage({
           hideStatus={isProfileSetup}
           setupMode={isProfileSetup}
           hasAvatar={avatarSrc != null}
+          canEditStatus={canEditOthersStatus}
           initial={{
             name: profile.name,
             nickname: profile.nickname ?? null,
