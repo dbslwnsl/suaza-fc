@@ -14,6 +14,7 @@ export default function AvatarUpload({
   src,
   name,
   canEdit,
+  setupMode = false,
   titleBadges = [],
   awardBadges = [],
 }: {
@@ -21,6 +22,8 @@ export default function AvatarUpload({
   src: string | null;
   name: string;
   canEdit: boolean;
+  /** true 면 가입 첫 프로필 입력 단계 — 이름 첫글자 미표시, 카메라 뱃지 중앙 배치 */
+  setupMode?: boolean;
   titleBadges?: MemberBadge[];
   awardBadges?: MemberBadge[];
 }) {
@@ -99,7 +102,7 @@ export default function AvatarUpload({
         aria-label="프로필 이미지 변경"
         className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-gray-100 group disabled:opacity-50 transition flex items-center justify-center"
       >
-        <AvatarContent src={src} name={name} />
+        <AvatarContent src={src} name={name} setupMode={setupMode} />
         <span
           className={`absolute inset-0 bg-black/40 flex items-center justify-center text-white text-xs font-medium transition ${
             isPending || menuOpen
@@ -111,10 +114,14 @@ export default function AvatarUpload({
         </span>
       </button>
 
-      {/* 카메라 어포던스 배지 — 우하단으로, 아바타와 최대한 안 겹치게 살짝 바깥쪽으로 배치 */}
+      {/* 카메라 어포던스 배지 — 기본은 우하단, 가입 입력 단계(setupMode)에선 아바타 중앙 */}
       <span
         aria-hidden
-        className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-suaza-button text-white flex items-center justify-center shadow-md ring-2 ring-white pointer-events-none"
+        className={`absolute w-6 h-6 rounded-full bg-suaza-button text-white flex items-center justify-center shadow-md ring-2 ring-white pointer-events-none ${
+          setupMode
+            ? "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+            : "-bottom-1 -right-1"
+        }`}
       >
         <svg
           width="12"
@@ -167,9 +174,11 @@ export default function AvatarUpload({
 function AvatarContent({
   src,
   name,
+  setupMode = false,
 }: {
   src: string | null;
   name: string;
+  setupMode?: boolean;
 }) {
   if (src) {
     return (
@@ -182,6 +191,8 @@ function AvatarContent({
       />
     );
   }
+  // 가입 첫 프로필 입력 단계에선 이름 첫글자를 표시하지 않음 (빈 원형 + 중앙 카메라 뱃지)
+  if (setupMode) return null;
   return (
     <span className="text-2xl sm:text-3xl font-bold text-suaza-ink">
       {name.charAt(0) || "?"}

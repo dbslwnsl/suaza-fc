@@ -79,7 +79,7 @@ export default async function MemberDetailPage({
     supabase
       .from("profiles")
       .select(
-        "id, name, nickname, role, title, positions, jersey_number, birth_date, avatar_url, preferred_foot, is_injured, on_leave",
+        "id, name, nickname, role, title, positions, jersey_number, birth_date, avatar_url, preferred_foot, is_injured, on_leave, profile_completed",
       )
       .eq("id", id)
       .is("deleted_at", null)
@@ -161,6 +161,10 @@ export default async function MemberDetailPage({
   const isManager = me?.role === "manager";
   // 프로필 편집은 본인만 (회장의 타인 편집 권한은 추후 추가). 다른 회원은 동일 레이아웃의 읽기 전용.
   const canEdit = isSelf;
+  // 가입 직후 첫 프로필 입력 단계 — 본인 + 아직 프로필 미완성.
+  // 이때는 기록/코멘트 없이 입력 전용 화면("프로필 입력")으로 보여준다.
+  const isProfileSetup =
+    isSelf && !(profile as { profile_completed?: boolean }).profile_completed;
   const positions = (profile.positions ?? []) as Position[];
   const title = (profile.title ?? "player") as MemberTitle;
 
@@ -304,6 +308,7 @@ export default async function MemberDetailPage({
       src={avatarSrc}
       name={profile.name}
       canEdit={canEdit}
+      setupMode={isProfileSetup}
       titleBadges={[]}
       awardBadges={getMemberBadges({ title, role: profile.role }).awardBadges}
     />
@@ -347,7 +352,10 @@ export default async function MemberDetailPage({
           readonly={!canEdit}
           email={profileEmail}
           avatar={avatarNode}
-          stats={statsGrid}
+          stats={isProfileSetup ? undefined : statsGrid}
+          hideStatus={isProfileSetup}
+          setupMode={isProfileSetup}
+          hasAvatar={avatarSrc != null}
           initial={{
             name: profile.name,
             nickname: profile.nickname ?? null,
@@ -361,8 +369,8 @@ export default async function MemberDetailPage({
           }}
         />
 
-        {/* 감독&코치 코멘트 — 주발 정보 아래 */}
-        {showCoachComments && (
+        {/* 감독&코치 코멘트 — 가입 입력 단계에선 숨김 */}
+        {!isProfileSetup && showCoachComments && (
           <CoachCommentSection
             memberId={profile.id}
             memberName={profile.name}
@@ -377,7 +385,7 @@ export default async function MemberDetailPage({
           />
         )}
 
-        {isManager && !isSelf && (
+        {!isProfileSetup && isManager && !isSelf && (
           <DeleteMemberButton profileId={profile.id} name={profile.name} />
         )}
       </div>

@@ -12,7 +12,14 @@ import {
   type Position,
   type PreferredFoot,
 } from "@/lib/members/positions";
+import DatePicker from "../../matches/new/date-picker";
 import { updateProfile } from "./actions";
+
+// 등번호 드롭다운 옵션 (0~99)
+const JERSEY_OPTIONS = Array.from({ length: 100 }, (_, i) => ({
+  value: String(i),
+  label: String(i),
+}));
 
 type Initial = {
   name: string;
@@ -33,6 +40,9 @@ export default function ProfileEditForm({
   avatar,
   stats,
   readonly = false,
+  hideStatus = false,
+  setupMode = false,
+  hasAvatar = false,
 }: {
   profileId: string;
   initial: Initial;
@@ -44,6 +54,12 @@ export default function ProfileEditForm({
   stats?: React.ReactNode;
   /** true 면 동일 레이아웃을 비편집(읽기 전용)으로 렌더 — 다른 회원이 볼 때 */
   readonly?: boolean;
+  /** true 면 부상/장기불참 토글 숨김 (가입 첫 입력 단계) */
+  hideStatus?: boolean;
+  /** true 면 가입 첫 프로필 입력 단계 — 제목 "프로필입력", 상단 저장 버튼 숨김, 하단 회원가입 버튼 표시 */
+  setupMode?: boolean;
+  /** 프로필 사진(아바타) 등록 여부 — 가입 단계에선 사진까지 등록해야 회원가입 활성화 */
+  hasAvatar?: boolean;
 }) {
   // 별명/등번호/생년월일/상태는 상단 카드에서 인라인 편집(본인만).
   // 이름·직책은 표시 전용.
@@ -90,7 +106,8 @@ export default function ProfileEditForm({
     birth.trim().length > 0 &&
     primary != null &&
     foot != null;
-  const canSave = isDirty && requiredValid;
+  // 가입 입력 단계에선 사진(아바타) 등록까지 완료해야 저장(회원가입) 가능
+  const canSave = isDirty && requiredValid && (!setupMode || hasAvatar);
 
   // 카드 + 포지션 + 주발 (편집/읽기 공통 레이아웃)
   const sections = (
@@ -98,47 +115,58 @@ export default function ProfileEditForm({
       {/* 상단 신원 카드 */}
       <section className="rounded-2xl border border-suaza-border p-4 sm:p-5 flex flex-col gap-4">
         <div className="flex items-start gap-3 sm:gap-5 min-w-0">
-          {/* 아바타 + 직책(아바타 중앙 하단 뱃지) */}
+          {/* 아바타 + 중앙 하단 뱃지 — 가입 입력 단계엔 "사진필수", 그 외엔 직책 */}
           <div className="relative shrink-0">
             {avatar}
-            <span
-              className={`absolute left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 z-10 whitespace-nowrap text-[11px] leading-none px-2 py-1 rounded-full ring-2 ring-white shadow-sm ${TITLE_BADGE[title] ?? TITLE_BADGE.player}`}
-            >
-              {TITLE_LABEL[title] ?? title}
-            </span>
+            {setupMode ? (
+              <span className="absolute left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 z-10 whitespace-nowrap text-[11px] leading-none px-2 py-1 rounded-full ring-2 ring-white shadow-sm bg-suaza-accent text-white">
+                사진*
+              </span>
+            ) : (
+              <span
+                className={`absolute left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 z-10 whitespace-nowrap text-[11px] leading-none px-2 py-1 rounded-full ring-2 ring-white shadow-sm ${TITLE_BADGE[title] ?? TITLE_BADGE.player}`}
+              >
+                {TITLE_LABEL[title] ?? title}
+              </span>
+            )}
           </div>
-          <div className="flex-1 min-w-0 flex flex-col gap-2">
+          <div className={`flex-1 min-w-0 flex flex-col ${setupMode ? "gap-3.5" : "gap-2"}`}>
             {/* 1행: 이름 + 생년월일 / 등번호(우측) — 좁으면 줄바꿈 */}
             <div className="flex items-baseline gap-x-2 gap-y-1 flex-wrap">
               <h1 className="text-lg sm:text-xl font-bold text-suaza-ink">
                 {initial.name}
               </h1>
-              <InlineEditable
-                type="number"
-                value={jersey}
-                onCommit={setJersey}
-                readonly
-                min={0}
-                max={99}
-                ariaLabel="등번호"
-                renderDisplay={(v) => (
-                  <span className="font-bold" style={{ color: "#338CF2" }}>
-                    #{v || "--"}
-                  </span>
-                )}
-                displayClassName="text-sm"
-                inputClassName={`${inlineInputCls} w-[60px] text-center`}
-              />
-              <InlineEditable
-                type="date"
-                value={birth}
-                onCommit={setBirth}
-                readonly
-                ariaLabel="생년월일"
-                renderDisplay={(v) => (v ? formatBirth(v) : "생년월일 미설정")}
-                displayClassName="ml-auto text-xs text-suaza-ink-faint whitespace-nowrap"
-                inputClassName={`${inlineInputCls} w-[150px] ml-auto`}
-              />
+              {/* 가입 입력 단계에선 등번호·생년월일을 아래 전용 입력으로 받으므로 카드 인라인 표시는 숨김 */}
+              {!setupMode && (
+                <InlineEditable
+                  type="number"
+                  value={jersey}
+                  onCommit={setJersey}
+                  readonly
+                  min={0}
+                  max={99}
+                  ariaLabel="등번호"
+                  renderDisplay={(v) => (
+                    <span className="font-bold" style={{ color: "#338CF2" }}>
+                      #{v || "--"}
+                    </span>
+                  )}
+                  displayClassName="text-sm"
+                  inputClassName={`${inlineInputCls} w-[60px] text-center`}
+                />
+              )}
+              {!setupMode && (
+                <InlineEditable
+                  type="date"
+                  value={birth}
+                  onCommit={setBirth}
+                  readonly
+                  ariaLabel="생년월일"
+                  renderDisplay={(v) => (v ? formatBirth(v) : "생년월일 미설정")}
+                  displayClassName="ml-auto text-xs text-suaza-ink-faint whitespace-nowrap"
+                  inputClassName={`${inlineInputCls} w-[150px] ml-auto`}
+                />
+              )}
             </div>
 
             {/* 2행: 이메일 */}
@@ -160,31 +188,33 @@ export default function ProfileEditForm({
                 ariaLabel="별명 수정"
                 renderDisplay={(v) => (
                   <span className="inline-flex items-center gap-1 font-medium text-suaza-ink">
-                    {v || (readonly ? "—" : "별명 추가")}
+                    {v || (readonly ? "—" : "별명입력")}
                     {!readonly && <span aria-hidden>✏️</span>}
                   </span>
                 )}
                 displayClassName="px-2.5 py-1 rounded-full border border-suaza-border text-xs hover:bg-gray-50 transition"
                 inputClassName={`${inlineInputCls} w-[120px]`}
               />
-              <div className="flex items-center gap-2">
-                <StatusPill
-                  label="부상"
-                  active={injured}
-                  onColor="#EF3E3E"
-                  onBg="rgba(239,62,62,0.10)"
-                  readonly={readonly}
-                  onClick={() => setInjured((v) => !v)}
-                />
-                <StatusPill
-                  label="장기불참"
-                  active={onLeave}
-                  onColor="#1F2937"
-                  onBg="rgba(31,41,55,0.08)"
-                  readonly={readonly}
-                  onClick={() => setOnLeave((v) => !v)}
-                />
-              </div>
+              {!hideStatus && (
+                <div className="flex items-center gap-2">
+                  <StatusPill
+                    label="부상"
+                    active={injured}
+                    onColor="#EF3E3E"
+                    onBg="rgba(239,62,62,0.10)"
+                    readonly={readonly}
+                    onClick={() => setInjured((v) => !v)}
+                  />
+                  <StatusPill
+                    label="장기불참"
+                    active={onLeave}
+                    onColor="#1F2937"
+                    onBg="rgba(31,41,55,0.08)"
+                    readonly={readonly}
+                    onClick={() => setOnLeave((v) => !v)}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -197,16 +227,49 @@ export default function ProfileEditForm({
         )}
       </section>
 
+      {/* 가입 입력 단계: 생년월일(커스텀 달력) + 등번호(커스텀 드롭다운 0~99) */}
+      {setupMode && (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-suaza-ink-muted">
+              생년월일 <span className="text-suaza-accent">*</span>
+            </span>
+            <DatePicker
+              value={birth}
+              onChange={setBirth}
+              defaultView="1987-01-01"
+              placeholder="생년월일 선택"
+              rounded="rounded-2xl"
+              textSize="text-xs"
+              padding="px-2.5 py-1.5"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-suaza-ink-muted">
+              등번호 <span className="text-suaza-accent">*</span>
+            </span>
+            <Dropdown
+              value={jersey || null}
+              placeholder="선택"
+              options={JERSEY_OPTIONS}
+              onChange={(v) => setJersey(v ?? "")}
+              rounded="rounded-2xl"
+            />
+          </div>
+        </div>
+      )}
+
       {/* 주포지션 · 부포지션 · 주발 — 드롭다운 (가로 3등분) */}
       <div className="grid grid-cols-3 gap-2">
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-suaza-ink-muted">
-            주포지션
+            주포지션 {setupMode && <span className="text-suaza-accent">*</span>}
           </span>
           <Dropdown
             value={primary}
             placeholder="선택"
             readonly={readonly}
+            rounded={setupMode ? "rounded-2xl" : "rounded-xl"}
             options={POSITIONS.map((p) => ({
               value: p,
               label: p,
@@ -228,6 +291,7 @@ export default function ProfileEditForm({
             value={secondary}
             placeholder="없음"
             readonly={readonly}
+            rounded={setupMode ? "rounded-2xl" : "rounded-xl"}
             allowClear
             clearLabel="없음"
             options={POSITIONS.filter((p) => p !== primary).map((p) => ({
@@ -240,11 +304,14 @@ export default function ProfileEditForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-suaza-ink-muted">주발</span>
+          <span className="text-xs font-medium text-suaza-ink-muted">
+            주발 {setupMode && <span className="text-suaza-accent">*</span>}
+          </span>
           <Dropdown
             value={foot}
             placeholder="선택"
             readonly={readonly}
+            rounded={setupMode ? "rounded-2xl" : "rounded-xl"}
             options={PREFERRED_FEET.map((f) => ({
               value: f,
               label: FOOT_LABEL[f],
@@ -292,16 +359,18 @@ export default function ProfileEditForm({
         <div className="flex items-center gap-3">
           <UsersIcon className="w-9 h-9 text-suaza-ink shrink-0" />
           <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
-            프로필
+            {setupMode ? "프로필입력" : "프로필"}
           </h1>
         </div>
-        <button
-          type="submit"
-          disabled={!canSave}
-          className="text-xs font-medium px-3 py-1.5 rounded-md bg-suaza-ink text-white hover:opacity-90 transition shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          저장
-        </button>
+        {!setupMode && (
+          <button
+            type="submit"
+            disabled={!canSave}
+            className="text-xs font-medium px-3 py-1.5 rounded-md bg-suaza-ink text-white hover:opacity-90 transition shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            저장
+          </button>
+        )}
       </div>
 
       {sections}
@@ -311,6 +380,17 @@ export default function ProfileEditForm({
         <p className="text-xs text-suaza-accent">
           * 등번호, 생년월일, 주포지션, 주발은 필수 항목입니다
         </p>
+      )}
+
+      {/* 가입 첫 입력 단계 — 하단 회원가입 버튼 (이전 "다음" 버튼과 동일 스타일) */}
+      {setupMode && (
+        <button
+          type="submit"
+          disabled={!canSave}
+          className="h-[52px] rounded-2xl bg-[#15224A] text-white text-[16px] font-semibold hover:brightness-125 transition mt-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100"
+        >
+          회원가입
+        </button>
       )}
 
     </form>
@@ -414,6 +494,7 @@ function Dropdown<T extends string>({
   readonly = false,
   allowClear = false,
   clearLabel = "없음",
+  rounded = "rounded-xl",
 }: {
   value: T | null;
   options: { value: T; label: string; color?: string }[];
@@ -422,6 +503,8 @@ function Dropdown<T extends string>({
   readonly?: boolean;
   allowClear?: boolean;
   clearLabel?: string;
+  /** 박스 모서리 둥글기 클래스 (기본 rounded-xl) */
+  rounded?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -456,7 +539,7 @@ function Dropdown<T extends string>({
 
   if (readonly) {
     return (
-      <span className="flex w-full items-center gap-2 rounded-xl border border-suaza-border bg-white px-2.5 py-1.5 text-xs font-bold text-suaza-ink">
+      <span className={`flex w-full items-center gap-2 ${rounded} border border-suaza-border bg-white px-2.5 py-1.5 text-xs font-bold text-suaza-ink`}>
         {inner}
       </span>
     );
@@ -469,7 +552,7 @@ function Dropdown<T extends string>({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex w-full items-center gap-2 rounded-xl border border-suaza-border bg-white px-2.5 py-1.5 text-xs font-bold text-suaza-ink hover:bg-gray-50 transition"
+        className={`flex w-full items-center gap-2 ${rounded} border border-suaza-border bg-white px-2.5 py-1.5 text-xs font-bold text-suaza-ink hover:bg-gray-50 transition`}
       >
         {inner}
         <span aria-hidden className="ml-auto text-[10px] text-suaza-ink-faint">
@@ -479,7 +562,7 @@ function Dropdown<T extends string>({
       {open && (
         <ul
           role="listbox"
-          className="absolute z-20 left-0 mt-1 min-w-full whitespace-nowrap rounded-xl border border-suaza-border bg-white shadow-lg py-1"
+          className="absolute z-20 left-0 mt-1 max-h-60 min-w-full overflow-y-auto whitespace-nowrap rounded-xl border border-suaza-border bg-white shadow-lg py-1"
         >
           {allowClear && (
             <li>

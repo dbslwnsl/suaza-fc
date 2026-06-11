@@ -63,19 +63,33 @@ export default function DatePicker({
   required,
   placeholder = "날짜 선택",
   className = "",
+  defaultView,
+  rounded = "rounded-lg",
+  textSize = "text-base",
+  padding = "px-4 py-3",
 }: {
   value: string;
   onChange: (v: string) => void;
   required?: boolean;
   placeholder?: string;
   className?: string;
+  /** 값이 없을 때 달력이 처음 열릴 기준 월 ("YYYY-MM-DD"). 미지정 시 오늘. */
+  defaultView?: string;
+  /** 입력창 모서리 둥글기 클래스 (기본 rounded-lg) */
+  rounded?: string;
+  /** 입력창 글자 크기 클래스 (기본 text-base) */
+  textSize?: string;
+  /** 입력창 안쪽 여백 클래스 (기본 px-4 py-3) */
+  padding?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState<View>(() => parseView(value));
+  const [view, setView] = useState<View>(() =>
+    parseView(value || defaultView || ""),
+  );
   const [mode, setMode] = useState<"days" | "years">("days");
   // 연도 선택 모드에서 보여줄 12년 묶음의 시작값
-  const [yearPageStart, setYearPageStart] = useState<number>(() =>
-    parseView(value).year - 5,
+  const [yearPageStart, setYearPageStart] = useState<number>(
+    () => parseView(value || defaultView || "").year - 5,
   );
   const ref = useRef<HTMLDivElement>(null);
 
@@ -126,7 +140,7 @@ export default function DatePicker({
             setOpen((o) => !o);
           }
         }}
-        className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink bg-white placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button cursor-pointer"
+        className={`w-full ${padding} ${rounded} border border-suaza-border ${textSize} text-suaza-ink bg-white placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button cursor-pointer`}
       />
 
       {open && (
