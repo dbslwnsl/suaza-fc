@@ -341,11 +341,18 @@ export default function AttendanceManagerBoard({
         )}
       </DropSection>
 
-      {/* 포인터 드래그 고스트 — 손가락을 따라다님 */}
+      {/* 포인터 드래그 고스트 — 손가락을 따라다님.
+          롱프레스로 "잡혔다"는 느낌을 주기 위해 살짝 확대 + 강한 그림자/하이라이트. */}
       {pdrag && (
         <div
-          className="fixed z-50 pointer-events-none -translate-x-1/2 -translate-y-1/2 px-2.5 py-0.5 rounded-full text-xs border border-suaza-button bg-white shadow-lg font-medium text-suaza-ink"
-          style={{ left: pdrag.x, top: pdrag.y }}
+          className="fixed z-50 pointer-events-none -translate-x-1/2 -translate-y-1/2 px-2.5 py-0.5 rounded-full text-xs font-medium text-suaza-ink bg-red-50 border border-suaza-border"
+          style={{
+            left: pdrag.x,
+            top: pdrag.y,
+            // 부드럽게 퍼지는 다층 그림자 (그라데이션처럼 자연스럽게)
+            boxShadow:
+              "0 12px 26px rgba(0,0,0,0.30), 0 5px 10px rgba(0,0,0,0.20), 0 2px 4px rgba(0,0,0,0.12)",
+          }}
         >
           {pdrag.name}
         </div>
