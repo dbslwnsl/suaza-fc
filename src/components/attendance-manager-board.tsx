@@ -35,11 +35,6 @@ type ByStatus = {
 const encodeStatus = (s: Status) => (s == null ? "none" : s);
 const decodeStatus = (s: string): Status => (s === "none" ? null : (s as Status));
 
-// 드래그가 "실제로 시작된" 동안에만 페이지 스크롤을 막는다.
-// 칩은 touch-action: pan-y 라서 롱프레스 전에는 세로 스크롤이 정상 동작하고,
-// 롱프레스로 드래그가 시작되면 이 리스너(passive:false)로만 스크롤을 차단한다.
-const preventTouchScroll = (e: TouchEvent) => e.preventDefault();
-
 export default function AttendanceManagerBoard({
   byStatus,
   nonVoters,
@@ -78,11 +73,14 @@ export default function AttendanceManagerBoard({
   const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lpStart = useRef<{ x: number; y: number } | null>(null);
   const dragMember = useRef<Member | null>(null);
+  // 현재 제스처 모드: 롱프레스 대기 / 수동 스크롤 / 드래그
+  const modeRef = useRef<"pending" | "scroll" | "drag" | null>(null);
+  // 수동 스크롤용 직전 Y 좌표
+  const lastYRef = useRef(0);
 
   useEffect(() => {
     return () => {
       if (lpTimer.current) clearTimeout(lpTimer.current);
-      document.removeEventListener("touchmove", preventTouchScroll);
     };
   }, []);
 
@@ -112,22 +110,23 @@ export default function AttendanceManagerBoard({
   function startPointerDrag(member: Member, e: React.PointerEvent) {
     if (readonly) return;
     lpStart.current = { x: e.clientX, y: e.clientY };
+    lastYRef.current = e.clientY;
+    modeRef.current = "pending";
     const target = e.currentTarget as HTMLElement;
     const ptrId = e.pointerId;
     const sx = e.clientX;
     const sy = e.clientY;
+    // 손가락이 칩을 벗어나도 move/up 을 계속 받도록 캡처 (수동 스크롤·드래그 추적용)
+    try {
+      target.setPointerCapture(ptrId);
+    } catch {}
     cancelLongPress();
     lpTimer.current = setTimeout(() => {
+      if (modeRef.current !== "pending") return; // 그 사이 스크롤로 전환됐으면 취소
+      modeRef.current = "drag";
       dragMember.current = member;
       setDragging(true);
       setPdrag({ name: member.name, x: sx, y: sy, overStatus: undefined });
-      // 드래그 시작 시점부터 페이지 스크롤 차단 (그 전까지는 pan-y 로 스크롤 허용)
-      document.addEventListener("touchmove", preventTouchScroll, {
-        passive: false,
-      });
-      try {
-        target.setPointerCapture(ptrId);
-      } catch {}
       if (typeof navigator !== "undefined" && "vibrate" in navigator) {
         try {
           navigator.vibrate(30);
@@ -137,13 +136,24 @@ export default function AttendanceManagerBoard({
   }
 
   function movePointerDrag(e: React.PointerEvent) {
-    // 드래그 시작 전 일정 이상 움직이면 = 스크롤 의도 → 롱프레스 취소
-    if (lpTimer.current && lpStart.current) {
+    // 롱프레스 인식 전: 일정 이상 움직이면 = 스크롤 의도 → 롱프레스 취소하고 수동 스크롤 모드로.
+    if (modeRef.current === "pending" && lpStart.current) {
       const dx = e.clientX - lpStart.current.x;
       const dy = e.clientY - lpStart.current.y;
-      if (dx * dx + dy * dy > 100) cancelLongPress();
+      if (dx * dx + dy * dy > 64) {
+        cancelLongPress();
+        modeRef.current = "scroll";
+      }
     }
-    if (dragMember.current) {
+    // 수동 스크롤: touch-action:none 이라 네이티브 스크롤이 없으므로 직접 페이지를 스크롤한다.
+    if (modeRef.current === "scroll") {
+      const delta = lastYRef.current - e.clientY;
+      lastYRef.current = e.clientY;
+      window.scrollBy(0, delta);
+      return;
+    }
+    // 드래그(롱프레스 인식 후): 고스트 위치 + 올라간 섹션 갱신 (스크롤 안 함)
+    if (modeRef.current === "drag" && dragMember.current) {
       const s = statusFromPoint(e.clientX, e.clientY);
       setPdrag((prev) =>
         prev ? { ...prev, x: e.clientX, y: e.clientY, overStatus: s } : prev,
@@ -152,19 +162,18 @@ export default function AttendanceManagerBoard({
   }
 
   function endPointerDrag(e: React.PointerEvent) {
-    if (dragMember.current) {
+    if (modeRef.current === "drag" && dragMember.current) {
       const s = statusFromPoint(e.clientX, e.clientY);
-      const m = dragMember.current;
-      if (s !== undefined) handleDrop(m.id, s);
-      dragMember.current = null;
-      setPdrag(null);
-      setDragging(false);
-      document.removeEventListener("touchmove", preventTouchScroll);
-      try {
-        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-      } catch {}
+      if (s !== undefined) handleDrop(dragMember.current.id, s);
     }
+    dragMember.current = null;
+    modeRef.current = null;
+    setPdrag(null);
+    setDragging(false);
     cancelLongPress();
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
   }
 
   const pointerDrag = isTouch && !readonly
@@ -486,9 +495,10 @@ function Chip({
       onPointerMove={usePointer ? pointerDrag!.onMove : undefined}
       onPointerUp={usePointer ? pointerDrag!.onEnd : undefined}
       onPointerCancel={usePointer ? pointerDrag!.onEnd : undefined}
-      // touch-action: pan-y — 롱프레스 전엔 세로 스크롤 허용(스크롤 의도 시 바로 스크롤),
-      // 드래그가 실제 시작되면 preventTouchScroll 리스너로만 스크롤을 막는다.
-      style={usePointer ? { touchAction: "pan-y" } : undefined}
+      // touch-action: none — 네이티브 스크롤/제스처를 끄고 포인터로 직접 제어.
+      // 롱프레스 전 손가락 이동은 보드가 window.scrollBy 로 수동 스크롤하고,
+      // 롱프레스 인식 후에는 스크롤 없이 드래그한다.
+      style={usePointer ? { touchAction: "none" } : undefined}
       className={`select-none ${
         readonly ? "cursor-default" : "cursor-grab active:cursor-grabbing"
       } inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs border bg-white ${
