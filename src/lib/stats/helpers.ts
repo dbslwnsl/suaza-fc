@@ -226,6 +226,21 @@ export function aggregateSeason(
   return [...byPlayer.values()];
 }
 
+/**
+ * 시즌 순위 — 표준 경쟁 순위(1,2,2,4 방식): "나보다 값이 큰 사람 수 + 1".
+ * 시즌기록 리더보드(season-list)와 동일한 공동순위 규칙. 값이 0 이하면 순위 없음(null).
+ * 홈/프로필 카드의 순위 뱃지·메달이 리더보드와 항상 일치하도록 공용으로 사용한다.
+ */
+export function seasonRank(
+  myValue: number,
+  allValues: Iterable<number>,
+): number | null {
+  if (myValue <= 0) return null;
+  let greater = 0;
+  for (const v of allValues) if (v > myValue) greater += 1;
+  return greater + 1;
+}
+
 export function shortDate(iso: string): string {
   // KST 기준 'M/D' (서버 타임존 무관)
   const fmt = new Intl.DateTimeFormat("en-US", {

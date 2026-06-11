@@ -30,6 +30,7 @@ import {
   aggregateSeason,
   pointsForParticipation,
   pointValueMap,
+  seasonRank,
   yearRange,
   type ParticipationRow as SeasonPartRow,
   type PlayerSeasonStat,
@@ -385,17 +386,10 @@ export default async function Home() {
   ): number | null => {
     const myStat = seasonStatsMap.get(myId);
     if (!myStat) return null;
-    const my = getter(myStat);
-    if (my <= 0) return null;
-    const distinct = Array.from(
-      new Set(
-        Array.from(seasonStatsMap.values())
-          .map(getter)
-          .filter((v) => v > 0),
-      ),
-    ).sort((a, b) => b - a);
-    const idx = distinct.indexOf(my);
-    return idx >= 0 ? idx + 1 : null;
+    return seasonRank(
+      getter(myStat),
+      Array.from(seasonStatsMap.values(), getter),
+    );
   };
   const attendanceRank = rankInCategory((s) => s.appearances ?? 0);
   const goalRank = rankInCategory((s) => s.goals ?? 0);
@@ -415,17 +409,10 @@ export default async function Home() {
       (seasonPointsByPlayer.get(p.player_id) ?? 0) + pts,
     );
   }
-  const pointsMine = seasonPointsByPlayer.get(myId) ?? 0;
-  const pointsRank =
-    pointsMine > 0
-      ? Array.from(
-          new Set(
-            Array.from(seasonPointsByPlayer.values()).filter((v) => v > 0),
-          ),
-        )
-          .sort((a, b) => b - a)
-          .indexOf(pointsMine) + 1
-      : null;
+  const pointsRank = seasonRank(
+    seasonPointsByPlayer.get(myId) ?? 0,
+    seasonPointsByPlayer.values(),
+  );
 
   const homeStats: {
     label: string;

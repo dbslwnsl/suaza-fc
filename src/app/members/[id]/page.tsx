@@ -11,6 +11,7 @@ import {
   aggregateSeason,
   pointsForParticipation,
   pointValueMap,
+  seasonRank,
   yearRange,
   type ParticipationRow as SeasonPartRow,
   type PlayerSeasonStat,
@@ -223,17 +224,10 @@ export default async function MemberDetailPage({
   ): number | null => {
     const myStat = seasonStatsMap.get(profile.id);
     if (!myStat) return null;
-    const my = getter(myStat);
-    if (my <= 0) return null;
-    const distinct = Array.from(
-      new Set(
-        Array.from(seasonStatsMap.values())
-          .map(getter)
-          .filter((v) => v > 0),
-      ),
-    ).sort((a, b) => b - a);
-    const idx = distinct.indexOf(my);
-    return idx >= 0 ? idx + 1 : null;
+    return seasonRank(
+      getter(myStat),
+      Array.from(seasonStatsMap.values(), getter),
+    );
   };
   const goalRank = rankInCategory((s) => s.goals ?? 0);
   const assistRank = rankInCategory((s) => s.assists ?? 0);
@@ -258,16 +252,10 @@ export default async function MemberDetailPage({
       (seasonPointsByPlayer.get(p.player_id) ?? 0) + pts,
     );
   }
-  const rankFromMap = (map: Map<string, number>): number | null => {
-    const my = map.get(profile.id) ?? 0;
-    if (my <= 0) return null;
-    const distinct = Array.from(
-      new Set(Array.from(map.values()).filter((v) => v > 0)),
-    ).sort((a, b) => b - a);
-    const idx = distinct.indexOf(my);
-    return idx >= 0 ? idx + 1 : null;
-  };
-  const pointsRank = rankFromMap(seasonPointsByPlayer);
+  const pointsRank = seasonRank(
+    seasonPointsByPlayer.get(profile.id) ?? 0,
+    seasonPointsByPlayer.values(),
+  );
 
   // 프로필 상단 통계 카드 6칸 순서 (요청):
   //   1줄: 출전 / 골 / 어시
