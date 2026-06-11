@@ -7,8 +7,11 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "SUAZA FC 축구 동호회 회원 전용 사이트",
     start_url: "/",
     display: "standalone",
-    background_color: "#1e293b",
-    theme_color: "#1e293b",
+    // PWA 스플래시(첫 실행 로딩) 배경색 — 앱 화면(흰색)과 이어지도록 흰색.
+    background_color: "#ffffff",
+    // 안드로이드 상태바 색 — 앱 헤더(흰색)와 자연스럽게 이어지도록 흰색.
+    // (iOS 는 매니페스트 theme_color 를 상태바에 적용하지 않음)
+    theme_color: "#ffffff",
     icons: [
       {
         src: "/icon-192.png",
