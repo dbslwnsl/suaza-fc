@@ -314,20 +314,6 @@ export default function TeamBuilder({
   };
 
   const total = attendees.length;
-  // 게이지는 가운데를 기준으로 양쪽으로 뻗어가며 한 팀이 11명일 때 절반(=영역) 가득 참.
-  // 어느 한 팀이 11명을 넘으면 그 인원에 맞춰 1명당 너비가 줄어들도록 cap 을 늘린다.
-  const cap = Math.max(11, teamA.length, teamB.length);
-  // 좌/우 절반(50%) 영역 내부에서의 채움 비율 (0~100)
-  const aFill = cap > 0 ? (teamA.length / cap) * 100 : 0;
-  const bFill = cap > 0 ? (teamB.length / cap) * 100 : 0;
-  // 게이지 색이 흰색/밝은 색이면 배경(흰색 카드)에 묻히므로 inset 으로 어두운
-  // 테두리를 그려 분리해 준다.
-  const aGaugeShadow = isLightColor(colorA)
-    ? "inset 0 0 0 1px rgba(0,0,0,0.45)"
-    : undefined;
-  const bGaugeShadow = isLightColor(colorB)
-    ? "inset 0 0 0 1px rgba(0,0,0,0.45)"
-    : undefined;
 
   return (
     <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4 desktop:h-full">
@@ -352,32 +338,6 @@ export default function TeamBuilder({
             </button>
           </div>
         )}
-      </div>
-
-      {/* 비율 바 — 가운데를 기준으로 A팀(좌)·B팀(우)이 유니폼 색으로 채워짐.
-          한 팀 기준 11명일 때 각 영역이 가득 차고, 초과 시 비율이 자동 축소된다.
-          유니폼이 흰색/밝은 색이면 inset 테두리로 외곽을 드러낸다. */}
-      <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-200">
-        <div className="w-1/2 flex justify-end">
-          <div
-            style={{
-              width: `${aFill}%`,
-              backgroundColor: colorA,
-              boxShadow: aGaugeShadow,
-            }}
-            className="h-full"
-          />
-        </div>
-        <div className="w-1/2 flex justify-start">
-          <div
-            style={{
-              width: `${bFill}%`,
-              backgroundColor: colorB,
-              boxShadow: bGaugeShadow,
-            }}
-            className="h-full"
-          />
-        </div>
       </div>
 
       {/* A팀 */}
@@ -487,17 +447,6 @@ export default function TeamBuilder({
 
     </section>
   );
-}
-
-// hex 색상의 밝기 판단 (Rec. 601 luma > 200 이면 밝은 색)
-function isLightColor(hex: string): boolean {
-  const m = hex.match(/^#([0-9A-Fa-f]{6})$/);
-  if (!m) return false;
-  const n = parseInt(m[1], 16);
-  const r = (n >> 16) & 0xff;
-  const g = (n >> 8) & 0xff;
-  const b = n & 0xff;
-  return 0.299 * r + 0.587 * g + 0.114 * b > 200;
 }
 
 function JerseyIcon({ color }: { color: string }) {
