@@ -31,6 +31,11 @@ type ByStatus = {
   undecided: Member[];
 };
 
+// 롱프레스 대기 중 이 거리(px) 이상 움직이면 스크롤 의도로 보고 롱프레스를 취소한다.
+// 캡슐 위 작은 움직임엔 너무 예민하지 않도록 여유를 둔다. (세로 스크롤은 어차피
+// 네이티브 pan-y 가 시작되며 pointercancel 로도 롱프레스가 취소된다.)
+const LP_CANCEL_DIST = 12;
+
 // data-drop-status 인코딩: null(미투표) → "none"
 const encodeStatus = (s: Status) => (s == null ? "none" : s);
 const decodeStatus = (s: string): Status => (s === "none" ? null : (s as Status));
@@ -73,13 +78,18 @@ export default function AttendanceManagerBoard({
   const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lpStart = useRef<{ x: number; y: number } | null>(null);
   const dragMember = useRef<Member | null>(null);
-  // 현재 제스처 모드: 롱프레스 대기 / 수동 스크롤 / 드래그
+  // 현재 제스처 모드: 롱프레스 대기 / 스크롤(네이티브) / 드래그
   const modeRef = useRef<"pending" | "scroll" | "drag" | null>(null);
-  // 수동 스크롤용 직전 Y 좌표
-  const lastYRef = useRef(0);
 
   useEffect(() => {
+    // 드래그(롱프레스 확정) 중에만 네이티브 스크롤을 막아 고스트만 움직이게 한다.
+    // 그 외(대기/스크롤)에는 touch-action: pan-y 로 네이티브 세로 스크롤(관성 포함)이 그대로 동작한다.
+    const onTouchMove = (e: TouchEvent) => {
+      if (modeRef.current === "drag") e.preventDefault();
+    };
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
     return () => {
+      document.removeEventListener("touchmove", onTouchMove);
       if (lpTimer.current) clearTimeout(lpTimer.current);
     };
   }, []);
@@ -110,21 +120,20 @@ export default function AttendanceManagerBoard({
   function startPointerDrag(member: Member, e: React.PointerEvent) {
     if (readonly) return;
     lpStart.current = { x: e.clientX, y: e.clientY };
-    lastYRef.current = e.clientY;
     modeRef.current = "pending";
     const target = e.currentTarget as HTMLElement;
     const ptrId = e.pointerId;
     const sx = e.clientX;
     const sy = e.clientY;
-    // 손가락이 칩을 벗어나도 move/up 을 계속 받도록 캡처 (수동 스크롤·드래그 추적용)
-    try {
-      target.setPointerCapture(ptrId);
-    } catch {}
     cancelLongPress();
     lpTimer.current = setTimeout(() => {
       if (modeRef.current !== "pending") return; // 그 사이 스크롤로 전환됐으면 취소
       modeRef.current = "drag";
       dragMember.current = member;
+      // 드래그 확정 시점에만 포인터 캡처 — 그 전엔 네이티브 스크롤(pan-y)을 방해하지 않는다.
+      try {
+        target.setPointerCapture(ptrId);
+      } catch {}
       setDragging(true);
       setPdrag({ name: member.name, x: sx, y: sy, overStatus: undefined });
       if (typeof navigator !== "undefined" && "vibrate" in navigator) {
@@ -136,21 +145,17 @@ export default function AttendanceManagerBoard({
   }
 
   function movePointerDrag(e: React.PointerEvent) {
-    // 롱프레스 인식 전: 일정 이상 움직이면 = 스크롤 의도 → 롱프레스 취소하고 수동 스크롤 모드로.
+    // 롱프레스 인식 전 손가락이 LP_CANCEL_DIST 이상 움직이면 = 스크롤 의도 → 롱프레스를 취소한다.
+    // 이후엔 손가락을 뗄 때(pointerup/cancel)까지 롱프레스가 다시 발동하지 않으며,
+    // 세로 스크롤은 네이티브(touch-action: pan-y)가 관성까지 포함해 끊김 없이 처리한다.
+    // (네이티브 스크롤이 시작되면 브라우저가 pointercancel 을 보내 endPointerDrag 로도 취소된다.)
     if (modeRef.current === "pending" && lpStart.current) {
       const dx = e.clientX - lpStart.current.x;
       const dy = e.clientY - lpStart.current.y;
-      if (dx * dx + dy * dy > 64) {
+      if (dx * dx + dy * dy > LP_CANCEL_DIST * LP_CANCEL_DIST) {
         cancelLongPress();
         modeRef.current = "scroll";
       }
-    }
-    // 수동 스크롤: touch-action:none 이라 네이티브 스크롤이 없으므로 직접 페이지를 스크롤한다.
-    if (modeRef.current === "scroll") {
-      const delta = lastYRef.current - e.clientY;
-      lastYRef.current = e.clientY;
-      window.scrollBy(0, delta);
-      return;
     }
     // 드래그(롱프레스 인식 후): 고스트 위치 + 올라간 섹션 갱신 (스크롤 안 함)
     if (modeRef.current === "drag" && dragMember.current) {
@@ -502,10 +507,10 @@ function Chip({
       onPointerMove={usePointer ? pointerDrag!.onMove : undefined}
       onPointerUp={usePointer ? pointerDrag!.onEnd : undefined}
       onPointerCancel={usePointer ? pointerDrag!.onEnd : undefined}
-      // touch-action: none — 네이티브 스크롤/제스처를 끄고 포인터로 직접 제어.
-      // 롱프레스 전 손가락 이동은 보드가 window.scrollBy 로 수동 스크롤하고,
-      // 롱프레스 인식 후에는 스크롤 없이 드래그한다.
-      style={usePointer ? { touchAction: "none" } : undefined}
+      // touch-action: pan-y — 세로 스크롤은 네이티브(관성 포함)에 맡긴다.
+      // 스크롤이 시작되면 브라우저가 pointercancel 을 보내 롱프레스가 취소되고,
+      // 롱프레스가 확정된(드래그) 동안에만 touchmove 를 preventDefault 해 스크롤을 막는다.
+      style={usePointer ? { touchAction: "pan-y" } : undefined}
       className={`select-none ${
         readonly ? "cursor-default" : "cursor-grab active:cursor-grabbing"
       } inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs border bg-white ${
