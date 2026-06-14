@@ -70,9 +70,18 @@ export default function SeasonList({
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("points");
   const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
+  // Safari 가 같은 클릭에 대해 이벤트를 2번 발사하는 케이스가 있어서
+  // 짧은 시간(100ms) 내 같은 핸들러 재호출은 무시한다.
+  // Safari 가 클릭 1회에 대해 ~150-200ms 간격으로 click 이벤트를 2번 발사하는
+  // 케이스가 있어서, 같은 핸들러의 짧은 재호출(300ms 이내)은 무시한다.
+  // 사람이 의도적으로 두 번 누르는 간격(보통 300ms+)은 통과한다.
+  const lastSortClickAt = useRef(0);
   const onSelectSort = (key: SortKey) => {
+    const now = Date.now();
+    if (now - lastSortClickAt.current < 300) return;
+    lastSortClickAt.current = now;
     if (key === sortKey) {
-      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+      setSortDir(sortDir === "desc" ? "asc" : "desc");
     } else {
       setSortKey(key);
       setSortDir(DEFAULT_DIR[key] ?? "desc");
