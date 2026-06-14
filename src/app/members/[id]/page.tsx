@@ -391,7 +391,7 @@ export default async function MemberDetailPage({
           />
         )}
 
-        {!isProfileSetup && isManager && !isSelf && (
+        {!isProfileSetup && canEditOthersStatus && !isSelf && (
           <DeleteMemberButton profileId={profile.id} name={profile.name} />
         )}
       </div>

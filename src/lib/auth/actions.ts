@@ -147,6 +147,8 @@ export async function signup(formData: FormData) {
 
   // 이메일 확인 OFF: 세션이 함께 와 즉시 로그인 상태 → 프로필을 곧바로 저장해 가입 확정.
   if (data.session && data.user) {
+    // 신규 가입자의 approved_at 는 컬럼 default(NULL)로 유지 → 회장 승인 전 차단.
+    // 명시적으로 null 을 setting 하지 않는다(컬럼 미적용 환경에서 schema cache 에러 회피).
     const { error: profileError } = await supabase
       .from("profiles")
       .update({
@@ -159,7 +161,6 @@ export async function signup(formData: FormData) {
         profile_completed: true,
       })
       .eq("id", data.user.id);
-    revalidatePath("/", "layout");
     if (profileError) {
       // 계정은 생성됐지만 프로필 저장만 실패 → 프로필 편집 페이지에서 마저 완성
       redirect(
@@ -168,8 +169,16 @@ export async function signup(formData: FormData) {
         )}`,
       );
     }
+
+    // 회장 전원에게 승인 대기 알림 발송 (RLS 우회 함수 호출)
+    await supabase.rpc("notify_signup_pending", {
+      p_new_user_id: data.user.id,
+      p_new_user_name: name,
+    });
+
+    revalidatePath("/", "layout");
     redirect(
-      `/?message=${encodeURIComponent("환영합니다! 가입이 완료되었습니다")}`,
+      `/pending-approval?message=${encodeURIComponent("가입 신청이 접수되었습니다. 회장 승인 후 이용 가능합니다.")}`,
     );
   }
 

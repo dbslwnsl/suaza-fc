@@ -27,6 +27,7 @@ const TYPE_BADGE: Record<string, { char: string; color: string }> = {
   match_result: { char: "결", color: "#1E293B" },
   new_member: { char: "멤", color: "#14B8A6" },
   points: { char: "포", color: "#F97316" },
+  signup_pending: { char: "승", color: "#EF3E3E" },
 };
 function badgeFor(type: string) {
   return TYPE_BADGE[type] ?? { char: "알", color: "#9CA3AF" };
@@ -43,6 +44,7 @@ const CATEGORY_OF: Record<string, Category> = {
   match_result: "match",
   new_member: "club",
   points: "club",
+  signup_pending: "club",
 };
 
 const FILTERS: { key: "all" | Category; label: string }[] = [

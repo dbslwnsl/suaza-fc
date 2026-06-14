@@ -36,16 +36,20 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // 삭제(탈퇴 처리)된 계정은 세션이 남아 있어도 차단 — 보호 경로에서 로그인으로 보낸다.
-  // (auth.users 는 남지만 profiles.deleted_at 으로 비활성 판정)
+  // 삭제(탈퇴 처리)된 계정은 세션이 남아 있어도 차단.
+  // 신규 가입자는 approved_at = null → 승인 대기 페이지로 격리.
   let isDeleted = false;
+  let isPending = false;
   if (user) {
     const { data: prof } = await supabase
       .from("profiles")
-      .select("deleted_at")
+      .select("deleted_at, approved_at")
       .eq("id", user.id)
       .maybeSingle();
     isDeleted = !!prof?.deleted_at;
+    // approved_at 컬럼이 없는 환경(마이그레이션 0044 미적용)에선 prof.approved_at === undefined.
+    // 이 경우 차단하지 않는다. 명시적으로 null 인 경우만 승인 대기로 본다.
+    isPending = prof != null && prof.approved_at === null;
   }
   const activeUser = user && !isDeleted ? user : null;
 
@@ -66,6 +70,20 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (activeUser && (pathname === "/login" || pathname === "/signup")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    return NextResponse.redirect(url);
+  }
+
+  // 승인 대기 상태: 본인 승인 페이지·로그아웃 외의 모든 경로 차단.
+  if (activeUser && isPending && !pathname.startsWith("/pending-approval")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/pending-approval";
+    return NextResponse.redirect(url);
+  }
+
+  // 승인 완료된 사용자가 pending 페이지에 접근하면 홈으로
+  if (activeUser && !isPending && pathname.startsWith("/pending-approval")) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

@@ -283,7 +283,7 @@ export async function uploadAvatar(profileId: string, formData: FormData) {
  * - profiles.deleted_at 세팅 → 목록에선 숨겨지지만 row 자체는 남아 경기 기록(FK) 보존
  * - auth.users 는 삭제하지 않고(기록 cascade 방지), 이메일만 텀스톤으로 변경해
  *   원래 이메일을 풀어준다 → 같은 이메일로 재가입 가능. (재가입은 새 계정/프로필)
- * - 매니저 권한자만 호출 가능, 본인 자신은 삭제 불가
+ * - 회장(title=president)·감독(title=head_coach)·매니저(role=manager) 호출 가능, 본인은 삭제 불가
  */
 export async function softDeleteMember(profileId: string) {
   const supabase = await createClient();
@@ -294,13 +294,17 @@ export async function softDeleteMember(profileId: string) {
 
   const { data: me } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, title")
     .eq("id", user.id)
     .single();
 
-  if (me?.role !== "manager") {
+  const canDelete =
+    me?.role === "manager" ||
+    me?.title === "president" ||
+    me?.title === "head_coach";
+  if (!canDelete) {
     redirect(
-      `/members/${profileId}?error=${encodeURIComponent("매니저만 회원을 삭제할 수 있습니다")}`,
+      `/members/${profileId}?error=${encodeURIComponent("회장/감독/매니저만 회원을 삭제할 수 있습니다")}`,
     );
   }
   if (user.id === profileId) {
