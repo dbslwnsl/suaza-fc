@@ -81,7 +81,7 @@ async function geocode(query: string): Promise<GeoMatch | null> {
       next: { revalidate: 86400 },
       headers: {
         // Nominatim 정책상 User-Agent 필수
-        "User-Agent": "SuazaFC/1.0 (https://suaza-fc.vercel.app)",
+        "User-Agent": "SuazaFC/1.0 (https://ourmatch.kr)",
       },
     });
     if (!res.ok) return null;
