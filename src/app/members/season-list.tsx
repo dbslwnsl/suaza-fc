@@ -81,15 +81,21 @@ export default function SeasonList({
   // 0 = 시즌 전체, 1~12 = 해당 월
   const [month, setMonth] = useState(0);
 
-  // 선택된 기간에 해당하는 match / participation 만 추림
+  // 선택된 기간에 해당하는 match / participation 만 추림.
+  // KST 자정 경계로 월을 판정해야 브라우저 TZ 와 무관하게 일관된다
+  // (브라우저가 KST 가 아닐 때 getMonth() 가 UTC 월을 반환해 어긋날 수 있다).
   const period = useMemo(() => {
     if (month < 1 || month > 12) {
       return { ms: matches, ps: parts };
     }
-    const ms = matches.filter((m) => {
-      const d = new Date(m.match_date);
-      return d.getMonth() + 1 === month;
-    });
+    const kstMonth = (iso: string): number => {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Seoul",
+        month: "numeric",
+      }).formatToParts(new Date(iso));
+      return Number(parts.find((p) => p.type === "month")?.value ?? "0");
+    };
+    const ms = matches.filter((m) => kstMonth(m.match_date) === month);
     const allowedIds = new Set(ms.map((m) => m.id));
     const ps = parts.filter((p) => allowedIds.has(p.match_id));
     return { ms, ps };

@@ -178,21 +178,30 @@ export function buildRichSeasonStats(
   });
 }
 
+// 경기/통계는 클럽 운영 기준 KST(서울) 자정 경계로 잘라야 한다.
+// 서버(Vercel) 가 UTC 라 new Date(year, 0, 1) 는 UTC 자정이 되어 KST 보다 9시간
+// 뒤로 밀린다 → 1/1 새벽 KST 경기가 연도/월 집계에서 누락. 명시적 +09:00
+// 으로 KST 경계의 ISO 를 만든다.
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
 export function yearRange(year: number) {
   return {
-    from: new Date(year, 0, 1).toISOString(),
-    to: new Date(year + 1, 0, 1).toISOString(),
+    from: `${year}-01-01T00:00:00+09:00`,
+    to: `${year + 1}-01-01T00:00:00+09:00`,
   };
 }
 
 /**
  * month: 1~12 면 해당 월, 그 외 값(0 / null)은 연도 전체.
+ * KST 기준 월 경계.
  */
 export function periodRange(year: number, month: number) {
   if (month < 1 || month > 12) return yearRange(year);
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
   return {
-    from: new Date(year, month - 1, 1).toISOString(),
-    to: new Date(year, month, 1).toISOString(),
+    from: `${year}-${pad2(month)}-01T00:00:00+09:00`,
+    to: `${nextYear}-${pad2(nextMonth)}-01T00:00:00+09:00`,
   };
 }
 
