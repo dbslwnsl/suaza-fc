@@ -17,8 +17,32 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  // 공유 미리보기(OG)·아이콘의 상대경로를 이 도메인 기준 절대주소로 변환.
+  metadataBase: new URL("https://ourmatch.kr"),
   title: "SUAZA FC",
   description: "SUAZA FC 축구 동호회 회원 전용 사이트",
+  openGraph: {
+    type: "website",
+    siteName: "SUAZA FC",
+    title: "SUAZA FC",
+    description: "SUAZA FC 축구 동호회 회원 전용 사이트",
+    url: "/",
+    locale: "ko_KR",
+    images: [
+      {
+        url: "/suaza-emblem-original.png",
+        width: 1024,
+        height: 1024,
+        alt: "SUAZA FC 엠블럼",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "SUAZA FC",
+    description: "SUAZA FC 축구 동호회 회원 전용 사이트",
+    images: ["/suaza-emblem-original.png"],
+  },
 };
 
 export default async function RootLayout({
