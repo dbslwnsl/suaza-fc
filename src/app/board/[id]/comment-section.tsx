@@ -256,18 +256,45 @@ function CommentItem({
             : "border-suaza-border"
         }`}
       >
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-xs text-suaza-ink-muted flex items-center gap-1.5 flex-wrap min-w-0">
-            <CommentAvatar
-              name={comment.author?.name ?? null}
-              src={comment.author?.avatar_url ?? null}
-            />
-            <span className="font-medium text-suaza-ink">
-              {comment.author?.name ?? "(알 수 없음)"}
-            </span>
-            <span>·</span>
-            <span>{formatPostDate(comment.created_at)}</span>
-            {edited && <span className="text-suaza-ink-faint">(수정됨)</span>}
+        <div className="text-xs text-suaza-ink-muted flex items-center gap-1.5 flex-wrap min-w-0">
+          <CommentAvatar
+            name={comment.author?.name ?? null}
+            src={comment.author?.avatar_url ?? null}
+          />
+          <span className="font-medium text-suaza-ink">
+            {comment.author?.name ?? "(알 수 없음)"}
+          </span>
+          <span>{formatPostDate(comment.created_at)}</span>
+          {edited && <span className="text-suaza-ink-faint">(수정됨)</span>}
+        </div>
+        <p className="text-sm text-suaza-ink whitespace-pre-wrap leading-relaxed">
+          {comment.content}
+        </p>
+        {/* 액션 — 좌측: 답글·삭제·수정 / 우측: 좋아요 (댓글 맨 아래 한 줄) */}
+        {/* -ml-2 로 첫 버튼(답글) 텍스트를 본문 좌측 끝과 정렬 (버튼 px-2 상쇄) */}
+        <div className="flex items-center gap-1 -ml-2">
+          {canReply && (
+            <button
+              type="button"
+              onClick={() => setReplying((v) => !v)}
+              className="h-6 inline-flex items-center text-[11px] px-2 rounded text-suaza-ink-muted hover:text-suaza-ink hover:bg-gray-100 transition"
+            >
+              {replying ? "답글 취소" : "답글"}
+            </button>
+          )}
+          {canDelete && (
+            <DeleteButton commentId={comment.id} postId={postId} />
+          )}
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="h-6 inline-flex items-center text-[11px] px-2 rounded text-suaza-ink-muted hover:text-suaza-ink hover:bg-gray-100 transition"
+            >
+              수정
+            </button>
+          )}
+          <div className="ml-auto">
             <CommentLike
               commentId={comment.id}
               postId={postId}
@@ -275,33 +302,7 @@ function CommentItem({
               initialLiked={comment.liked_by_me}
             />
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            {canReply && (
-              <button
-                type="button"
-                onClick={() => setReplying((v) => !v)}
-                className="h-6 inline-flex items-center text-[11px] px-2 rounded text-suaza-ink-muted hover:text-suaza-ink hover:bg-gray-100 transition"
-              >
-                {replying ? "답글 취소" : "답글"}
-              </button>
-            )}
-            {canEdit && (
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                className="h-6 inline-flex items-center text-[11px] px-2 rounded text-suaza-ink-muted hover:text-suaza-ink hover:bg-gray-100 transition"
-              >
-                수정
-              </button>
-            )}
-            {canDelete && (
-              <DeleteButton commentId={comment.id} postId={postId} />
-            )}
-          </div>
         </div>
-        <p className="text-sm text-suaza-ink whitespace-pre-wrap leading-relaxed">
-          {comment.content}
-        </p>
       </div>
 
       {replying && (
