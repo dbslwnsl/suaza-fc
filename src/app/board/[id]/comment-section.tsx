@@ -64,11 +64,7 @@ export default function CommentSection({
         <span className="text-xs text-suaza-ink-muted">{totalCount}</span>
       </div>
 
-      {tree.length === 0 ? (
-        <p className="text-sm text-suaza-ink-muted py-2 text-center">
-          첫 댓글을 남겨보세요
-        </p>
-      ) : (
+      {tree.length > 0 && (
         <ul className="flex flex-col gap-3">
           {tree.map((c) => (
             <li key={c.id}>
