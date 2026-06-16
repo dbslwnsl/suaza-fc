@@ -157,8 +157,8 @@ export default function RosterList({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 포지션 필터 칩 (한 줄) — 모바일은 가로 전체를 채우도록 균등 분배, 데스크탑은 좌측 정렬 */}
-      <div className="flex items-center justify-between desktop:justify-start gap-1.5 desktop:gap-2">
+      {/* 포지션 필터 칩 (한 줄) — 좌측 정렬 */}
+      <div className="flex items-center gap-1.5 desktop:gap-2">
         <FilterChip
           label="전체"
           count={members.length}

@@ -219,8 +219,8 @@ export default function SeasonList({
         <MonthDropdown month={month} onChange={setMonth} year={year} />
       </div>
 
-      {/* 포지션별 필터 — 모바일은 가로 전체를 채우도록 균등 분배, 데스크탑은 좌측 정렬 */}
-      <div className="flex items-center justify-between desktop:justify-start gap-1.5 overflow-x-auto -mx-1 px-1">
+      {/* 포지션별 필터 — 좌측 정렬 */}
+      <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1">
         <FilterChip
           label="전체"
           count={totalMembers}
