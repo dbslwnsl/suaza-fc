@@ -307,14 +307,6 @@ export default async function MatchDetailPage({
       <main className="flex-1 bg-white desktop:bg-suaza-bg px-6 desktop:px-8 py-8 desktop:py-12">
         <div className="max-w-[600px] mx-auto bg-white desktop:rounded-2xl desktop:p-12 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
           <header className="flex flex-col gap-2">
-            {m.status === "done" || m.status === "canceled" ? (
-              <Link
-                href={`/matches/${m.id}`}
-                className="inline-flex items-center gap-1 text-sm text-suaza-ink-muted hover:underline w-fit"
-              >
-                <span aria-hidden>←</span> 경기 상세
-              </Link>
-            ) : null}
             <div className="flex items-center gap-3">
               {m.status !== "done" && m.status !== "canceled" && (
                 <svg
@@ -339,11 +331,6 @@ export default async function MatchDetailPage({
                   : "경기 정보 수정"}
               </h1>
             </div>
-            {(m.status === "done" || m.status === "canceled") && (
-              <p className="text-sm text-suaza-ink-muted">
-                종료된 경기는 정보 조회만 가능합니다
-              </p>
-            )}
           </header>
 
           {error && (
