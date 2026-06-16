@@ -4,7 +4,6 @@ export const POST_CATEGORIES = [
   "free",
   "tactics",
   "qna",
-  "suggestion",
 ] as const;
 export type PostCategory = (typeof POST_CATEGORIES)[number];
 
@@ -15,7 +14,6 @@ export const CATEGORY_LABEL: Record<PostCategory, string> = {
   free: "자유",
   tactics: "훈련",
   qna: "질문",
-  suggestion: "건의",
 };
 
 // 직책자(일반회원이 아닌 사람)만 선택 가능한 카테고리
@@ -53,7 +51,6 @@ export const CATEGORY_BADGE: Record<PostCategory, string> = {
   free: "bg-gray-100 text-gray-700",
   tactics: "bg-blue-100 text-blue-700",
   qna: "bg-violet-100 text-violet-700",
-  suggestion: "bg-amber-100 text-amber-700",
 };
 
 export function isPostCategory(v: string): v is PostCategory {

@@ -61,6 +61,24 @@ export default async function BoardPage({
   const commentRows = (commentsRaw ?? []) as unknown as CommentRow[];
   const isManager = me?.role === "manager";
 
+  // 인라인 확장 시에도 좋아요가 보이도록 댓글 좋아요 수·본인 여부를 집계한다.
+  const commentIds = commentRows.map((c) => c.id);
+  const likeCountByComment = new Map<string, number>();
+  const likedCommentIds = new Set<string>();
+  if (commentIds.length > 0) {
+    const { data: commentLikeRows } = await supabase
+      .from("comment_likes")
+      .select("comment_id, user_id")
+      .in("comment_id", commentIds);
+    for (const r of commentLikeRows ?? []) {
+      likeCountByComment.set(
+        r.comment_id,
+        (likeCountByComment.get(r.comment_id) ?? 0) + 1,
+      );
+      if (r.user_id === user.id) likedCommentIds.add(r.comment_id);
+    }
+  }
+
   const commentsByPost = new Map<string, Comment[]>();
   for (const c of commentRows) {
     const list = commentsByPost.get(c.post_id) ?? [];
@@ -72,9 +90,8 @@ export default async function BoardPage({
       author_id: c.author_id,
       parent_id: c.parent_id,
       author: c.author,
-      // 목록 화면은 좋아요를 표시하지 않으므로 기본값 (상세 페이지에서만 실제 값 사용)
-      like_count: 0,
-      liked_by_me: false,
+      like_count: likeCountByComment.get(c.id) ?? 0,
+      liked_by_me: likedCommentIds.has(c.id),
     });
     commentsByPost.set(c.post_id, list);
   }

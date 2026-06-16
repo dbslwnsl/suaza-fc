@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CATEGORY_LABEL,
   POST_CATEGORIES,
@@ -38,13 +38,6 @@ export default function PostList({
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("ALL");
 
-  const counts = useMemo(() => {
-    const c = {} as Record<PostCategory, number>;
-    for (const cat of POST_CATEGORIES) c[cat] = 0;
-    for (const p of posts) c[p.category] = (c[p.category] ?? 0) + 1;
-    return c;
-  }, [posts]);
-
   const filtered = useMemo(
     () => (filter === "ALL" ? posts : posts.filter((p) => p.category === filter)),
     [posts, filter],
@@ -52,19 +45,10 @@ export default function PostList({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 카테고리 필터 — 모바일: 커스텀 드랍다운, 데스크탑: 칩 */}
-      <div className="sm:hidden self-start">
-        <CategoryDropdown
-          filter={filter}
-          totalCount={posts.length}
-          counts={counts}
-          onChange={setFilter}
-        />
-      </div>
-      <div className="hidden sm:flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
+      {/* 카테고리 필터 — 전 화면 버튼형 칩 (좁으면 가로 스크롤) */}
+      <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
         <CategoryChip
           label="전체"
-          count={posts.length}
           active={filter === "ALL"}
           onClick={() => setFilter("ALL")}
         />
@@ -72,7 +56,6 @@ export default function PostList({
           <CategoryChip
             key={c}
             label={CATEGORY_LABEL[c]}
-            count={counts[c]}
             active={filter === c}
             onClick={() => setFilter(c)}
           />
@@ -105,113 +88,12 @@ export default function PostList({
   );
 }
 
-function CategoryDropdown({
-  filter,
-  totalCount,
-  counts,
-  onChange,
-}: {
-  filter: Filter;
-  totalCount: number;
-  counts: Record<PostCategory, number>;
-  onChange: (f: Filter) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onMouseDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onMouseDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const currentLabel =
-    filter === "ALL" ? "전체" : CATEGORY_LABEL[filter];
-  const currentCount = filter === "ALL" ? totalCount : counts[filter];
-
-  const items: { key: Filter; label: string; count: number }[] = [
-    { key: "ALL", label: "전체", count: totalCount },
-    ...POST_CATEGORIES.map((c) => ({
-      key: c as Filter,
-      label: CATEGORY_LABEL[c],
-      count: counts[c],
-    })),
-  ];
-
-  return (
-    <div ref={ref} className="relative inline-flex items-center">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1 py-1 pr-0 text-sm font-medium text-suaza-ink hover:text-suaza-ink-muted transition"
-      >
-        <span>
-          {currentLabel} ({currentCount})
-        </span>
-        <span
-          aria-hidden
-          className={`text-[10px] text-suaza-ink-muted transition-transform ${
-            open ? "rotate-180" : ""
-          }`}
-        >
-          ▼
-        </span>
-      </button>
-      {open && (
-        <div className="absolute z-20 top-full left-0 mt-1 min-w-[140px] bg-white rounded-lg border border-suaza-border shadow-lg py-1">
-          {items.map((it) => {
-            const active = filter === it.key;
-            return (
-              <button
-                key={it.key}
-                type="button"
-                onClick={() => {
-                  onChange(it.key);
-                  setOpen(false);
-                }}
-                className={`flex items-center justify-between gap-3 w-full px-3 py-2 text-sm text-left transition ${
-                  active
-                    ? "bg-gray-100 font-bold text-suaza-ink"
-                    : "text-suaza-ink hover:bg-gray-50"
-                }`}
-              >
-                <span>{it.label}</span>
-                <span
-                  className={
-                    active ? "text-suaza-ink-muted" : "text-suaza-ink-faint"
-                  }
-                >
-                  {it.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function CategoryChip({
   label,
-  count,
   active,
   onClick,
 }: {
   label: string;
-  count: number;
   active: boolean;
   onClick: () => void;
 }) {
@@ -219,16 +101,13 @@ function CategoryChip({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition shrink-0 ${
+      className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition shrink-0 ${
         active
           ? "bg-suaza-ink text-white border border-suaza-ink"
           : "bg-white text-suaza-ink border border-suaza-border hover:bg-gray-100"
       }`}
     >
-      <span>{label}</span>
-      <span className={active ? "text-white/70" : "text-suaza-ink-muted"}>
-        {count}
-      </span>
+      {label}
     </button>
   );
 }
@@ -301,12 +180,20 @@ function PostCard({
               aria-label={open ? "글 접기" : "글 펼치기"}
               className="shrink-0 w-7 h-7 inline-flex items-center justify-center rounded-full text-suaza-ink-muted hover:text-suaza-ink hover:bg-gray-100 transition"
             >
-              <span
+              <svg
                 aria-hidden
-                className={`text-xs transition-transform ${open ? "rotate-180" : ""}`}
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={`transition-transform ${open ? "rotate-180" : ""}`}
               >
-                ▼
-              </span>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
             </button>
           </div>
           <div className="text-xs text-suaza-ink-muted">
