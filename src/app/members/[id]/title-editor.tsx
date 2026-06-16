@@ -71,11 +71,6 @@ export default function MemberTitleEditor({
           );
         })}
       </div>
-
-      <p className="text-[11px] leading-relaxed text-suaza-accent">
-        ⚠ <span className="font-medium">회장</span>을 부여하면 본인의 직책이
-        ‘회원’으로 변경되고 매니저 권한도 해제됩니다. (회장은 1명만 유지)
-      </p>
     </div>
   );
 }

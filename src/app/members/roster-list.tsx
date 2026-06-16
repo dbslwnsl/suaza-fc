@@ -106,8 +106,10 @@ export default function RosterList({
 
   const counts = useMemo(() => {
     const c: Record<Position, number> = { GK: 0, DF: 0, MF: 0, FW: 0 };
+    // 주포지션(positions[0]) 기준으로만 카운트한다.
     for (const m of members) {
-      for (const p of m.positions) c[p] += 1;
+      const primary = m.positions[0];
+      if (primary && primary in c) c[primary] += 1;
     }
     return c;
   }, [members]);
@@ -155,8 +157,8 @@ export default function RosterList({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 포지션 필터 칩 (한 줄) */}
-      <div className="flex items-center gap-1.5 desktop:gap-2">
+      {/* 포지션 필터 칩 (한 줄) — 모바일은 가로 전체를 채우도록 균등 분배, 데스크탑은 좌측 정렬 */}
+      <div className="flex items-center justify-between desktop:justify-start gap-1.5 desktop:gap-2">
         <FilterChip
           label="전체"
           count={members.length}
