@@ -13,11 +13,17 @@ import {
   type StatDef,
 } from "@/lib/stats/helpers";
 import { displayMemberName } from "@/lib/members/name";
+import {
+  POSITIONS,
+  POSITION_COLOR,
+  type Position,
+} from "@/lib/members/positions";
 
 export type RosterBase = {
   player_id: string;
   name: string;
   jersey_number: number | null;
+  positions: Position[];
 };
 
 type SortKey =
@@ -131,8 +137,6 @@ export default function SeasonList({
     return buildRichSeasonStats(base, period.ps, period.ms, defs);
   }, [period, roster, defs]);
 
-  const activeCount = stats.filter((s) => s.appearances > 0).length;
-
   const sortedAll = useMemo(() => {
     const sign = sortDir === "desc" ? 1 : -1;
     return [...stats].sort((a, b) => {
@@ -168,22 +172,72 @@ export default function SeasonList({
   }, [sortedAll, sortKey]);
   const rankedAll = ranked;
 
-  const filtered = ranked;
+  // 포지션 필터 (회원명단과 동일). 전체 = 필터 없음.
+  const [posFilter, setPosFilter] = useState<"ALL" | Position>("ALL");
+  // 주포지션(positions[0]) 기준으로만 카운트·필터한다.
+  const primaryById = useMemo(
+    () => new Map(roster.map((r) => [r.player_id, r.positions[0] ?? null])),
+    [roster],
+  );
+  const posCounts = useMemo(() => {
+    const c: Record<Position, number> = { GK: 0, DF: 0, MF: 0, FW: 0 };
+    for (const r of roster) {
+      const primary = r.positions[0];
+      if (primary && primary in c) c[primary]++;
+    }
+    return c;
+  }, [roster]);
+
+  const filtered = useMemo(() => {
+    if (posFilter === "ALL") return ranked;
+    // 포지션 필터 시: 필터된 선수들만 대상으로 순위를 다시 매김 (공동순위 유지)
+    const subset = ranked.filter(
+      (r) => primaryById.get(r.player_id) === posFilter,
+    );
+    const sameRank = (a: RichPlayerSeasonStat, b: RichPlayerSeasonStat) => {
+      const av = sortValue(a, sortKey);
+      const bv = sortValue(b, sortKey);
+      if (typeof av === "string" || typeof bv === "string") {
+        return String(av) === String(bv);
+      }
+      return av === bv;
+    };
+    return subset.reduce<RowWithRank[]>((acc, s, i) => {
+      const rank = i > 0 && sameRank(subset[i - 1], s) ? acc[i - 1].rank : i + 1;
+      acc.push({ ...s, rank });
+      return acc;
+    }, []);
+  }, [ranked, posFilter, primaryById, sortKey]);
 
   const me = myId ? rankedAll.find((s) => s.player_id === myId) ?? null : null;
 
   return (
     <section className="flex flex-col gap-5">
-      {/* 시즌 칩 + 인원 */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <SeasonSelector year={year} years={years} />
-          <MonthDropdown month={month} onChange={setMonth} year={year} />
-        </div>
-        <span className="shrink-0 text-xs text-suaza-ink-muted bg-gray-100 px-3 py-1 rounded-full">
-          총 {totalMembers}명
-          <span className="hidden desktop:inline"> · 활동 {activeCount}명</span>
-        </span>
+      {/* 시즌 칩 */}
+      <div className="flex items-center gap-2">
+        <SeasonSelector year={year} years={years} />
+        <MonthDropdown month={month} onChange={setMonth} year={year} />
+      </div>
+
+      {/* 포지션별 필터 — 모바일은 가로 전체를 채우도록 균등 분배, 데스크탑은 좌측 정렬 */}
+      <div className="flex items-center justify-between desktop:justify-start gap-1.5 overflow-x-auto -mx-1 px-1">
+        <FilterChip
+          label="전체"
+          count={totalMembers}
+          active={posFilter === "ALL"}
+          onClick={() => setPosFilter("ALL")}
+        />
+        {POSITIONS.map((p) => (
+          <FilterChip
+            key={p}
+            label={p}
+            count={posCounts[p]}
+            color={POSITION_COLOR[p]}
+            oneDigit={p === "GK"}
+            active={posFilter === p}
+            onClick={() => setPosFilter(p)}
+          />
+        ))}
       </div>
 
       {/* 나의 기록 카드 */}
@@ -191,7 +245,9 @@ export default function SeasonList({
 
       {filtered.length === 0 ? (
         <p className="text-center text-sm text-suaza-ink-muted py-10">
-          이번 시즌 출전 기록이 없습니다
+          {posFilter === "ALL"
+            ? "이번 시즌 출전 기록이 없습니다"
+            : "해당 포지션의 회원이 없습니다"}
         </p>
       ) : (
         <>
@@ -222,6 +278,50 @@ export default function SeasonList({
   );
 }
 
+// 포지션 필터 칩 (회원명단과 동일 스타일). 색 점은 모바일에서 숨김.
+function FilterChip({
+  label,
+  count,
+  color,
+  oneDigit = false,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  color?: string;
+  oneDigit?: boolean;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 desktop:gap-1.5 px-2 desktop:px-3 py-0.5 desktop:py-1 rounded-lg text-xs desktop:text-sm font-medium transition shrink-0 ${
+        active
+          ? "bg-suaza-ink text-white border border-suaza-ink"
+          : "bg-white text-suaza-ink border border-suaza-border hover:bg-gray-50"
+      }`}
+    >
+      {color && (
+        <span
+          className="hidden desktop:block w-1.5 h-1.5 rounded-full"
+          style={{ backgroundColor: color }}
+        />
+      )}
+      <span>{label}</span>
+      <span
+        className={`text-[10px] desktop:text-xs text-center tabular-nums ${
+          oneDigit ? "min-w-[1ch]" : "min-w-[2ch]"
+        } ${active ? "text-white/70" : "text-suaza-ink-muted"}`}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
 // ───────────────────────────────────────────────────────────
 // 시즌 선택 + 정렬 칩
 // ───────────────────────────────────────────────────────────
@@ -241,13 +341,13 @@ function SeasonSelector({ year, years }: { year: number; years: number[] }) {
           <Link
             key={y}
             href={href}
-            className={`shrink-0 inline-flex items-center px-2 desktop:px-3 py-0.5 desktop:py-1 rounded-lg text-xs desktop:text-sm font-bold transition ${
+            className={`shrink-0 inline-flex items-center px-2 desktop:px-3 py-0.5 desktop:py-1 rounded-lg text-xs desktop:text-sm font-medium transition ${
               active
                 ? "bg-suaza-ink text-white border border-suaza-ink"
                 : "bg-white text-suaza-ink border border-suaza-border hover:bg-gray-50"
             }`}
           >
-            {y} 시즌
+            {y}
           </Link>
         );
       })}

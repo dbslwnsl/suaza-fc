@@ -5,6 +5,7 @@ import {
   type ParticipationRow,
   type StatDef,
 } from "@/lib/stats/helpers";
+import { type Position } from "@/lib/members/positions";
 import SeasonList, { type RosterBase } from "./season-list";
 
 export default async function SeasonView({
@@ -62,7 +63,7 @@ export default async function SeasonView({
   // 모든 활성 회원 명단 (출전 없는 사람도 명단에 포함)
   const { data: allMembersRaw } = await supabase
     .from("profiles")
-    .select("id, name, jersey_number")
+    .select("id, name, jersey_number, positions")
     .is("deleted_at", null)
     .order("name", { ascending: true });
 
@@ -70,6 +71,9 @@ export default async function SeasonView({
     player_id: m.id,
     name: m.name,
     jersey_number: m.jersey_number,
+    positions: ((m.positions ?? []) as Position[]).filter((p) =>
+      ["GK", "DF", "MF", "FW"].includes(p),
+    ),
   }));
 
   return (
