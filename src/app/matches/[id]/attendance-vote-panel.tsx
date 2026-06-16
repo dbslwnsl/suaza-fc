@@ -787,6 +787,33 @@ function AttendingByQuarterSection({
     return { full, partial };
   }, [attending, totalQuarters]);
 
+  // 일부 참여 멤버를 "동일한 참여 쿼터"끼리 묶는다.
+  // 같은 쿼터 조합의 멤버들은 한 라인에 모아 표기하고, 쿼터는 한 번만 보여준다.
+  const partialGroups = useMemo(() => {
+    const map = new Map<
+      string,
+      { quarters: number[]; members: VotePlayer[] }
+    >();
+    for (const p of partial) {
+      const qs = [...(p.attending_quarters ?? [])].sort((a, b) => a - b);
+      const key = qs.join(",");
+      const g = map.get(key);
+      if (g) g.members.push(p);
+      else map.set(key, { quarters: qs, members: [p] });
+    }
+    const groups = [...map.values()];
+    for (const g of groups) {
+      g.members.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+    }
+    // 그룹 정렬: 참여 쿼터 많은 순 → 쿼터 조합 사전순
+    groups.sort(
+      (a, b) =>
+        b.quarters.length - a.quarters.length ||
+        a.quarters.join(",").localeCompare(b.quarters.join(",")),
+    );
+    return groups;
+  }, [partial]);
+
   return (
     <div className="bg-suaza-bg/30 rounded-xl p-3 desktop:p-4 flex flex-col gap-3">
       <h3 className="text-sm font-bold text-suaza-ink flex items-center gap-1.5">
@@ -847,20 +874,33 @@ function AttendingByQuarterSection({
                 </span>
               </div>
               <ul className="flex flex-col gap-1.5">
-                {partial.map((m) => (
+                {partialGroups.map((g) => (
                   <li
-                    key={m.id}
-                    className="flex items-center justify-between gap-3"
+                    key={g.quarters.join(",")}
+                    className="flex items-center justify-between gap-2"
                   >
-                    <span className="inline-flex items-center gap-0.5 text-xs font-medium text-suaza-ink min-w-0">
-                      {m.is_injured && <InjuryBadge />}
-                      {m.on_leave && <OnLeaveBadge />}
-                      <KingBadges p={m} />
-                      <span className="truncate">{m.name}</span>
-                    </span>
-                    <div className="shrink-0">
+                    {/* 같은 쿼터에 참여하는 멤버들을 한 라인에 모아 표기 */}
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 min-w-0">
+                      {g.members.map((m) => (
+                        <span
+                          key={m.id}
+                          className="inline-flex items-center gap-0.5 text-xs font-medium text-suaza-ink"
+                        >
+                          {m.is_injured && <InjuryBadge />}
+                          {m.on_leave && <OnLeaveBadge />}
+                          <KingBadges p={m} />
+                          {m.name}
+                        </span>
+                      ))}
+                    </div>
+                    {/* 이름 / 쿼터 경계 + 참여 쿼터 (그룹당 한 번) */}
+                    <div className="shrink-0 flex items-center gap-2">
+                      <span
+                        aria-hidden
+                        className="w-px h-4 bg-suaza-border"
+                      />
                       <QuarterDots
-                        quarters={m.attending_quarters ?? null}
+                        quarters={g.quarters}
                         quarterActions={quarterActions}
                       />
                     </div>

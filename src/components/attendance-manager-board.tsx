@@ -194,6 +194,25 @@ export default function AttendanceManagerBoard({
     m.attending_quarters == null || m.attending_quarters.length >= totalQuarters;
   const full = byStatus.attending.filter(isFull);
   const partial = byStatus.attending.filter((m) => !isFull(m));
+  // 일부 참여를 "동일한 참여 쿼터"끼리 묶는다 — 같은 쿼터 조합의 멤버는 한 라인에.
+  const partialGroups = (() => {
+    const map = new Map<string, { quarters: number[]; members: Member[] }>();
+    for (const m of partial) {
+      const qs = [...(m.attending_quarters ?? [])].sort((a, b) => a - b);
+      const key = qs.join(",");
+      const g = map.get(key);
+      if (g) g.members.push(m);
+      else map.set(key, { quarters: qs, members: [m] });
+    }
+    const groups = [...map.values()];
+    // 그룹 정렬: 참여 쿼터 많은 순 → 쿼터 조합 사전순
+    groups.sort(
+      (a, b) =>
+        b.quarters.length - a.quarters.length ||
+        a.quarters.join(",").localeCompare(b.quarters.join(",")),
+    );
+    return groups;
+  })();
 
   return (
     <div className="flex flex-col gap-3">
@@ -237,24 +256,33 @@ export default function AttendanceManagerBoard({
             />
             일부 참여 {partial.length}
           </span>
-          <ul className="flex flex-col gap-1">
-            {partial.map((m) => (
+          <ul className="flex flex-col gap-1.5">
+            {partialGroups.map((g) => (
               <li
-                key={m.id}
-                className="flex items-center justify-between gap-3"
+                key={g.quarters.join(",")}
+                className="flex items-start justify-between gap-2"
               >
-                <Chip
-                  member={m}
-                  chipClass="border-green-300 text-suaza-ink"
-                  onDragStateChange={setDragging}
-                  readonly={readonly}
-                  isTouch={isTouch}
-                  pointerDrag={pointerDrag}
-                />
-                <QuarterDots
-                  quarters={m.attending_quarters ?? null}
-                  quarterActions={quarterActions}
-                />
+                {/* 같은 쿼터에 참여하는 멤버들을 한 라인에 모아 표기 (많아지면 줄바꿈) */}
+                <div className="flex flex-wrap items-center gap-1 min-w-0">
+                  {g.members.map((m) => (
+                    <Chip
+                      key={m.id}
+                      member={m}
+                      chipClass="border-green-300 text-suaza-ink"
+                      onDragStateChange={setDragging}
+                      readonly={readonly}
+                      isTouch={isTouch}
+                      pointerDrag={pointerDrag}
+                    />
+                  ))}
+                </div>
+                {/* 참여 쿼터 — 여러 줄이어도 첫 줄 높이에 맞춰 상단 고정 */}
+                <div className="shrink-0 flex items-center h-6">
+                  <QuarterDots
+                    quarters={g.quarters}
+                    quarterActions={quarterActions}
+                  />
+                </div>
               </li>
             ))}
           </ul>
