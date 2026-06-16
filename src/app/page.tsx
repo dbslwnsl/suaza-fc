@@ -619,7 +619,7 @@ export default async function Home() {
                   href={`/members/${user!.id}`}
                   aria-label="프로필 수정"
                   title="프로필 수정"
-                  className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-md text-suaza-accent bg-red-50 hover:bg-red-100 transition"
+                  className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-md border border-red-200 text-suaza-accent bg-red-50 hover:bg-red-100 transition"
                 >
                   <svg
                     viewBox="0 0 24 24"
