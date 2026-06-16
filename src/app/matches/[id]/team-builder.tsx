@@ -353,7 +353,6 @@ export default function TeamBuilder({
       {/* A팀 */}
       <TeamGroup
         label={teamAName}
-        color="#EF3E3E"
         members={teamA}
         chipClass="bg-red-50 text-suaza-accent border-red-200"
         team="A"
@@ -371,7 +370,6 @@ export default function TeamBuilder({
       {/* B팀 */}
       <TeamGroup
         label={teamBName}
-        color="#3B82F6"
         members={teamB}
         chipClass="bg-blue-50 text-blue-600 border-blue-200"
         team="B"
@@ -450,9 +448,28 @@ export default function TeamBuilder({
         )}
       </DropZone>
 
-      <p className="text-xs text-suaza-ink-faint">
-        불참 {absentCount} · 미정 {undecidedCount} · 미투표 {nonVoterCount}{" "}
-        (편성 제외)
+      <p className="text-xs text-suaza-ink-faint flex items-center gap-x-3 gap-y-1 flex-wrap">
+        <span className="inline-flex items-center gap-1">
+          <span
+            className="w-1.5 h-1.5 rounded-full shrink-0"
+            style={{ backgroundColor: "#EF3E3E" }}
+          />
+          불참 {absentCount}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span
+            className="w-1.5 h-1.5 rounded-full shrink-0"
+            style={{ backgroundColor: "#9CA3AF" }}
+          />
+          미정 {undecidedCount}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span
+            className="w-1.5 h-1.5 rounded-full shrink-0"
+            style={{ backgroundColor: "#D1D5DB" }}
+          />
+          미투표 {nonVoterCount}
+        </span>
       </p>
 
       {/* 감독 전달사항 (경기 메모) — 내용이 없어도 항상 표시. 권한자는 인라인 수정 */}
@@ -682,7 +699,6 @@ function DropZone({
 
 function TeamGroup({
   label,
-  color,
   members,
   chipClass,
   team,
@@ -698,7 +714,6 @@ function TeamGroup({
   onRemove,
 }: {
   label: string;
-  color: string;
   members: TeamMember[];
   chipClass: string;
   team: "A" | "B";
@@ -718,10 +733,6 @@ function TeamGroup({
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1.5 font-bold text-suaza-ink min-w-0">
-          <span
-            className="w-2.5 h-2.5 rounded-full shrink-0"
-            style={{ backgroundColor: color }}
-          />
           <span className="truncate">{label}</span>
           <span className="font-normal text-sm text-suaza-ink-muted shrink-0">
             {members.length}명
