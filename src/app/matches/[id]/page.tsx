@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { computeSeasonKings } from "@/lib/stats/kings";
@@ -14,6 +14,8 @@ import {
   AttendanceCardVote,
   AttendanceCompactVote,
   AttendanceProvider,
+  InjuryBadge,
+  OnLeaveBadge,
 } from "./attendance-vote-panel";
 import NewMatchForm from "@/app/matches/new/new-match-form";
 import ScoreControl from "./score-control";
@@ -501,9 +503,27 @@ export default async function MatchDetailPage({
                     }
                     lockedMessage={
                       injuredLock
-                        ? "🚑 부상 상태로 자동 불참 처리되었습니다 (프로필에서 부상 해제 시 투표 가능)"
+                        ? (
+                          <>
+                            <span className="block">
+                              <InjuryBadge /> 부상 상태로 자동 불참 처리되었습니다
+                            </span>
+                            <span className="block">
+                              (프로필에서 부상 해제 시 투표 가능)
+                            </span>
+                          </>
+                        )
                         : onLeaveLock
-                          ? "📴 장기불참 상태로 자동 불참 처리되었습니다 (프로필에서 장기불참 해제 시 투표 가능)"
+                          ? (
+                            <>
+                              <span className="block">
+                                <OnLeaveBadge /> 장기불참 상태로 자동 불참 처리되었습니다
+                              </span>
+                              <span className="block">
+                                (프로필에서 장기불참 해제 시 투표 가능)
+                              </span>
+                            </>
+                          )
                           : isStarted
                           ? "🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다"
                           : voteClosed
@@ -990,7 +1010,7 @@ function AttendanceCard({
   deadlineStr: string;
   voteClosed?: boolean;
   locked?: boolean;
-  lockedMessage?: string;
+  lockedMessage?: ReactNode;
 }) {
   return (
     <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4 desktop:h-full">
@@ -1138,7 +1158,7 @@ export function AttendanceVote({
   totalQuarters?: number;
   quarterActions?: (string | null)[] | null;
   locked?: boolean;
-  lockedMessage?: string;
+  lockedMessage?: ReactNode;
 }) {
   return (
     <section className="flex flex-col gap-3 p-4 border border-suaza-border rounded-lg">

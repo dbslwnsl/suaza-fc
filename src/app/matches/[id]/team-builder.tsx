@@ -389,7 +389,7 @@ export default function TeamBuilder({
             <button
               type="button"
               onClick={onAddMercenary}
-              className="shrink-0 inline-flex items-center gap-0.5 h-8 px-3 rounded-lg border border-suaza-border text-xs font-bold text-suaza-ink transition hover:bg-gray-50"
+              className="shrink-0 inline-flex items-center gap-0.5 px-3 py-1 rounded-lg border border-suaza-border text-xs font-bold text-suaza-ink transition hover:bg-gray-50"
             >
               + 용병
             </button>

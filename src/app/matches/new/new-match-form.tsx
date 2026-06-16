@@ -726,8 +726,8 @@ export default function NewMatchForm({
         </div>
       )}
 
-      {/* 메모 */}
-      <Field label="메모" tag="선택">
+      {/* 감독 전달사항 */}
+      <Field label="감독 전달사항" tag="선택">
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}

@@ -573,7 +573,7 @@ export function AttendanceCardVote({
   totalQuarters: number;
   quarterActions?: (string | null)[] | null;
   locked: boolean;
-  lockedMessage?: string;
+  lockedMessage?: ReactNode;
 }) {
   // 출석 낙관 상태는 AttendanceProvider 가 소유 — TeamBuilder 와 같은 소스를 공유한다.
   const {
@@ -691,7 +691,7 @@ export function AttendanceCompactVote({
   totalQuarters?: number;
   quarterActions?: (string | null)[] | null;
   locked?: boolean;
-  lockedMessage?: string;
+  lockedMessage?: ReactNode;
 }) {
   const {
     optimisticStatus,
