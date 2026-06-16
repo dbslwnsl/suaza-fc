@@ -8,12 +8,21 @@ export default function TimePicker({
   options,
   required,
   placeholder = "시간 선택",
+  rounded = "rounded-lg",
+  textSize = "text-base",
+  padding = "px-4 py-3",
 }: {
   value: string;
   onChange: (v: string) => void;
   options: string[];
   required?: boolean;
   placeholder?: string;
+  /** 입력창 모서리 둥글기 클래스 (기본 rounded-lg) */
+  rounded?: string;
+  /** 입력창 글씨 크기 클래스 (기본 text-base) */
+  textSize?: string;
+  /** 입력창 패딩 클래스 (기본 px-4 py-3) */
+  padding?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -69,7 +78,7 @@ export default function TimePicker({
             setOpen((o) => !o);
           }
         }}
-        className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink bg-white placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button cursor-pointer"
+        className={`w-full ${padding} ${rounded} border border-suaza-border ${textSize} text-suaza-ink bg-white placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button cursor-pointer`}
       />
       {open && (
         <div className="absolute z-30 top-full left-0 mt-2 w-full min-w-[140px] bg-white rounded-xl border border-suaza-border shadow-lg p-2">

@@ -247,7 +247,7 @@ export default function NewMatchForm({
       const ai = quarterActions[i];
       if (ai === "warmup" || ai === "training") nonGameBefore += 1;
     }
-    return `Q${idx + 1 - nonGameBefore}`;
+    return `${idx + 1 - nonGameBefore}쿼터`;
   };
   // 투표 마감 모드 + 직접설정 값
   // 신규 등록 기본값: 직접 설정(경기일 2일 전 12:00)
@@ -422,7 +422,7 @@ export default function NewMatchForm({
               onChange={(e) => setTeamAName(e.target.value)}
               placeholder="예: 감독"
               maxLength={7}
-              className={inputCls}
+              className={compactInputCls}
             />
           </Field>
           <Field label="B팀 이름">
@@ -432,7 +432,7 @@ export default function NewMatchForm({
               onChange={(e) => setTeamBName(e.target.value)}
               placeholder="예: 회장"
               maxLength={7}
-              className={inputCls}
+              className={compactInputCls}
             />
           </Field>
         </div>
@@ -464,7 +464,13 @@ export default function NewMatchForm({
       {/* 날짜 + 킥오프 */}
       <div className="grid grid-cols-2 gap-3">
         <Field label="경기 날짜" hint="YYYY-MM-DD" required>
-          <DatePicker value={date} onChange={setDate} required />
+          <DatePicker
+            value={date}
+            onChange={setDate}
+            required
+            textSize="text-sm"
+            padding="px-3 py-1.5"
+          />
         </Field>
         <Field label="시작 시간" hint="30분 단위" required>
           <TimePicker
@@ -472,9 +478,31 @@ export default function NewMatchForm({
             onChange={setTime}
             options={TIME_OPTIONS}
             required
+            textSize="text-sm"
+            padding="px-3 py-1.5"
           />
         </Field>
       </div>
+
+      {/* 장소 */}
+      <Field label="장소" required>
+        <input
+          type="text"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          placeholder="예: 수원공고"
+          required
+          className={compactInputCls}
+        />
+        {recentLocations.length > 0 && (
+          <Suggestions
+            label="최근 장소"
+            options={recentLocations}
+            onSelect={setLocation}
+            mobileLimit={2}
+          />
+        )}
+      </Field>
 
       {/* 경기 시간 */}
       <div className="flex flex-col gap-1.5">
@@ -498,34 +526,39 @@ export default function NewMatchForm({
           채 시작 시간과 경기 시간이 자동으로 맞춰집니다.
         </p>
 
-        {/* 진행 쿼터 수 stepper */}
-        <div className="flex items-center justify-between gap-2 rounded-lg bg-suaza-bg/60 px-3 py-2">
-          <span className="text-sm text-suaza-ink">진행 쿼터 수</span>
-          <div className="flex items-center gap-3">
+        {/* 진행 쿼터 수 stepper — 라벨·시간은 왼쪽, −/+ 스테퍼는 오른쪽 끝에 고정.
+            왼쪽 패딩 없이 위 제목과 동일한 라인에 맞춤 (배경/오른쪽 패딩만 유지). */}
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-suaza-bg/60 pl-0 pr-3 py-2">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <span className="text-sm text-suaza-ink whitespace-nowrap">
+              진행 쿼터 수
+            </span>
+            <span className="text-xs text-suaza-ink-muted whitespace-nowrap">
+              {formatDurationLabel(totalQuarters * 0.5)}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
             <button
               type="button"
               onClick={() => changeTotalQuarters(totalQuarters - 1)}
               disabled={totalQuarters <= MATCH_DURATION_MIN * 2}
-              className="w-8 h-8 rounded-md border border-suaza-border text-suaza-ink hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed font-bold"
+              className="w-8 h-8 rounded-md border border-suaza-border text-suaza-ink text-sm hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed font-bold"
               aria-label="쿼터 수 감소"
             >
               −
             </button>
-            <span className="w-6 text-center text-lg font-bold text-suaza-ink tabular-nums">
+            <span className="w-6 text-center text-sm font-bold text-suaza-ink tabular-nums">
               {totalQuarters}
             </span>
             <button
               type="button"
               onClick={() => changeTotalQuarters(totalQuarters + 1)}
               disabled={totalQuarters >= MATCH_DURATION_MAX * 2}
-              className="w-8 h-8 rounded-md border border-suaza-border text-suaza-ink hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed font-bold"
+              className="w-8 h-8 rounded-md border border-suaza-border text-suaza-ink text-sm hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed font-bold"
               aria-label="쿼터 수 증가"
             >
               +
             </button>
-            <span className="w-20 text-right text-xs text-suaza-ink-muted">
-              {formatDurationLabel(totalQuarters * 0.5)}
-            </span>
           </div>
         </div>
 
@@ -541,13 +574,13 @@ export default function NewMatchForm({
                 className="flex items-center gap-2 py-1"
               >
                 <span
-                  className={`shrink-0 inline-flex items-center justify-center w-12 py-2 rounded-lg text-xs font-bold ${
+                  className={`shrink-0 inline-flex items-center justify-center w-14 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${
                     enabled
                       ? "bg-suaza-button text-white"
                       : "bg-gray-200 text-suaza-ink-faint"
                   }`}
                 >
-                  {enabled ? computeQuarterLabel(i) : `Q${i + 1}`}
+                  {enabled ? computeQuarterLabel(i) : `${i + 1}쿼터`}
                 </span>
                 {enabled ? (
                   <div className="flex-1 grid grid-cols-3 gap-1.5">
@@ -560,7 +593,7 @@ export default function NewMatchForm({
                           type="button"
                           onClick={() => setQuarterAction(i, a)}
                           aria-pressed={active}
-                          className="w-full text-xs font-medium py-2 rounded-lg border transition"
+                          className="w-full text-xs font-medium py-1.5 rounded-lg border transition"
                           style={
                             active
                               ? {
@@ -590,26 +623,6 @@ export default function NewMatchForm({
           })}
         </div>
       </div>
-
-      {/* 장소 */}
-      <Field label="장소" required>
-        <input
-          type="text"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-          placeholder="예: 수원공고"
-          required
-          className={inputCls}
-        />
-        {recentLocations.length > 0 && (
-          <Suggestions
-            label="최근 장소"
-            options={recentLocations}
-            onSelect={setLocation}
-            mobileLimit={2}
-          />
-        )}
-      </Field>
 
       {/* 투표 마감 */}
       <div className="flex flex-col gap-2.5">
@@ -657,6 +670,8 @@ export default function NewMatchForm({
                 value={dlDate || ""}
                 onChange={setDlDate}
                 placeholder="마감 날짜"
+                textSize="text-sm"
+                padding="px-3 py-1.5"
               />
               {/* 마감 시간 */}
               <TimePicker
@@ -664,6 +679,8 @@ export default function NewMatchForm({
                 onChange={setDlTime}
                 options={TIME_OPTIONS}
                 placeholder="마감 시간"
+                textSize="text-sm"
+                padding="px-3 py-1.5"
               />
             </div>
           );
@@ -689,56 +706,54 @@ export default function NewMatchForm({
         )}
       </div>
 
-      {/* 경기 상태 — 새 경기 등록이므로 예정만 가능 */}
-      <div className="flex flex-col gap-2">
-        <span className="text-suaza-ink text-base font-medium">경기 상태</span>
-        <div className="grid grid-cols-2 desktop:grid-cols-4 gap-2">
-          {STATUS_OPTS.map((opt) => {
-            const on = status === opt.value;
-            const disabled = !isEdit && opt.value !== "scheduled";
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                disabled={disabled}
-                onClick={() => !disabled && setStatus(opt.value)}
-                style={
-                  on
-                    ? {
-                        borderColor: opt.color,
-                        backgroundColor: `${opt.color}14`,
-                      }
-                    : undefined
-                }
-                className={`flex flex-col items-center justify-center gap-1 py-3 rounded-lg border-2 transition ${
-                  on
-                    ? ""
-                    : disabled
-                      ? "border-suaza-border bg-gray-50 opacity-50 cursor-not-allowed"
+      {/* 경기 상태 — 편집 모드에서만 노출. 신규 등록은 항상 "예정"으로 생성된다. */}
+      {isEdit && (
+        <div className="flex flex-col gap-2">
+          <span className="text-suaza-ink text-base font-medium">경기 상태</span>
+          <div className="grid grid-cols-2 desktop:grid-cols-4 gap-2">
+            {STATUS_OPTS.map((opt) => {
+              const on = status === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setStatus(opt.value)}
+                  style={
+                    on
+                      ? {
+                          borderColor: opt.color,
+                          backgroundColor: `${opt.color}14`,
+                        }
+                      : undefined
+                  }
+                  className={`flex flex-col items-center justify-center gap-1 py-3 rounded-lg border-2 transition ${
+                    on
+                      ? ""
                       : "border-suaza-border bg-white hover:bg-gray-50"
-                }`}
-              >
-                <span className="flex items-center gap-1.5">
-                  <span
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: opt.color }}
-                  />
-                  <span
-                    className={`font-bold ${
-                      on ? "text-suaza-ink" : "text-suaza-ink-muted"
-                    }`}
-                  >
-                    {opt.label}
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ backgroundColor: opt.color }}
+                    />
+                    <span
+                      className={`font-bold ${
+                        on ? "text-suaza-ink" : "text-suaza-ink-muted"
+                      }`}
+                    >
+                      {opt.label}
+                    </span>
                   </span>
-                </span>
-                <span className="hidden pointer-fine:block text-[11px] text-suaza-ink-faint">
-                  {opt.desc}
-                </span>
-              </button>
-            );
-          })}
+                  <span className="hidden pointer-fine:block text-[11px] text-suaza-ink-faint">
+                    {opt.desc}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 메모 */}
       <Field label="메모" tag="선택">
@@ -747,7 +762,7 @@ export default function NewMatchForm({
           onChange={(e) => setNotes(e.target.value)}
           rows={4}
           placeholder="유니폼 컬러, 사전 미팅, 회비 정산 등"
-          className={`${inputCls} resize-none`}
+          className={`${compactInputCls} resize-none`}
         />
       </Field>
 
@@ -772,6 +787,10 @@ export default function NewMatchForm({
 
 const inputCls =
   "w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button";
+
+// A/B팀 이름 등 짧은 입력 — 힌트(작은) 글씨에 맞춰 낮은 높이.
+const compactInputCls =
+  "w-full px-3 py-1.5 rounded-lg border border-suaza-border text-sm text-suaza-ink placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button";
 
 // 상의 유니폼 SVG (단색)
 function Jersey({ color }: { color: string }) {
@@ -1071,11 +1090,11 @@ function DurationStepper({
           onClick={dec}
           disabled={value <= MATCH_DURATION_MIN}
           aria-label="30분 감소"
-          className="w-14 h-14 rounded-xl border border-suaza-border text-suaza-ink text-2xl font-bold flex items-center justify-center hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+          className="w-10 h-10 rounded-xl border border-suaza-border text-suaza-ink text-lg font-bold flex items-center justify-center hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
         >
           −
         </button>
-        <div className="flex-1 h-14 rounded-xl border border-suaza-border flex items-center justify-center text-xl font-bold text-suaza-ink">
+        <div className="flex-1 h-10 rounded-xl border border-suaza-border flex items-center justify-center text-sm font-bold text-suaza-ink">
           {formatDurationLabel(value)}
         </div>
         <button
@@ -1083,14 +1102,14 @@ function DurationStepper({
           onClick={inc}
           disabled={value >= MATCH_DURATION_MAX}
           aria-label="30분 증가"
-          className="w-14 h-14 rounded-xl bg-suaza-accent text-white text-2xl font-bold flex items-center justify-center hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+          className="w-10 h-10 rounded-xl bg-suaza-accent text-white text-lg font-bold flex items-center justify-center hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
         >
           +
         </button>
       </div>
       {/* 빠른 선택 칩 — 모바일: 패딩 없이 가운데 정렬.
-          데스크탑: 가운데 시간 표시 bar 와 좌우 끝을 맞춤 (−/+ 버튼 w-14 + gap-2 = 4rem). */}
-      <div className="flex items-center justify-center desktop:justify-start gap-1.5 flex-wrap desktop:px-16">
+          데스크탑: 가운데 시간 표시 bar 와 좌우 끝을 맞춤 (−/+ 버튼 w-10 + gap-2 = 3rem). */}
+      <div className="flex items-center justify-center desktop:justify-start gap-1.5 flex-wrap desktop:px-12">
         {MATCH_DURATION_OPTIONS.map((opt) => {
           const on = opt === value;
           return (
@@ -1164,16 +1183,16 @@ function MatchTypeCard({
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-col items-center justify-center gap-1.5 py-5 rounded-xl border-2 transition ${
+      className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl border-2 transition ${
         selected
           ? "border-suaza-accent bg-red-50 text-suaza-accent"
           : "border-suaza-border bg-white text-suaza-ink hover:bg-gray-50"
       }`}
     >
-      <span className="text-2xl">{icon}</span>
-      <span className="font-bold text-base">{label}</span>
+      <span className="text-xl">{icon}</span>
+      <span className="font-bold text-sm">{label}</span>
       <span
-        className={`text-xs ${
+        className={`text-[11px] ${
           selected ? "text-suaza-accent" : "text-suaza-ink-faint"
         }`}
       >

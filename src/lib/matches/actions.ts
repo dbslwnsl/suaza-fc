@@ -171,9 +171,10 @@ export async function createMatch(formData: FormData) {
     redirect(`/matches/new?error=${encodeURIComponent("경기 날짜를 선택해 주세요")}`);
   }
 
+  // 새 경기는 항상 "예정" 상태로 생성한다 (등록 폼에 상태 선택 없음).
   const { data, error } = await supabase
     .from("matches")
-    .insert({ ...input, created_by: userId })
+    .insert({ ...input, status: "scheduled", created_by: userId })
     .select("id")
     .single();
 
