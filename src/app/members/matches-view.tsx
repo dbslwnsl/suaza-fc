@@ -136,16 +136,40 @@ export default async function MatchesView({
     return m.intra_winner === myTeam ? "W" : "L";
   }
 
-  const matchEntries: MatchListEntry[] = matches.map((m) => ({
-    id: m.id,
-    matchDate: m.match_date,
-    opponent: m.opponent,
-    ourScore: m.our_score,
-    opponentScore: m.opponent_score,
-    result: resultOf(m),
-    myResult: myResultOf(m),
-    attendingCount: countByMatch.get(m.id) ?? 0,
-  }));
+  const matchEntries: MatchListEntry[] = matches.map((m) => {
+    const isIntra = m.opponent === "자체전";
+    const myTeam = isIntra ? myTeamByMatch.get(m.id) ?? null : null;
+    // 자체전인데 A/B 어느 팀에도 배정되지 않음 → "미참여"
+    const intraNotJoined = isIntra && myTeam !== "A" && myTeam !== "B";
+    // 모바일 카드 배지에 쓸 "내 팀 기준" 점수.
+    //  - 상대전: 우리(=A 자리) / 상대(=B 자리)
+    //  - 자체전 배정됨: 내 팀 점수가 앞, 상대 팀이 뒤 (our=A, opponent=B)
+    let myMine: number | null = null;
+    let myTheirs: number | null = null;
+    if (!isIntra) {
+      myMine = m.our_score;
+      myTheirs = m.opponent_score;
+    } else if (myTeam === "A") {
+      myMine = m.our_score;
+      myTheirs = m.opponent_score;
+    } else if (myTeam === "B") {
+      myMine = m.opponent_score;
+      myTheirs = m.our_score;
+    }
+    return {
+      id: m.id,
+      matchDate: m.match_date,
+      opponent: m.opponent,
+      ourScore: m.our_score,
+      opponentScore: m.opponent_score,
+      result: resultOf(m),
+      myResult: myResultOf(m),
+      myMine,
+      myTheirs,
+      intraNotJoined,
+      attendingCount: countByMatch.get(m.id) ?? 0,
+    };
+  });
 
   // 매치 x 플레이어 셀 데이터 (직렬화 가능한 평면 구조)
   const cells = parts.map((p) => ({

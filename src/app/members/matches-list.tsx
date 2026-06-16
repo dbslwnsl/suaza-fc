@@ -14,6 +14,11 @@ export type MatchListEntry = {
   result: "W" | "D" | "L" | null;
   /** "내가 속한 팀" 기준 결과 — 자체전이면 intra_winner vs 내 팀, 상대전은 result 와 동일. 모바일 카드에서 사용. */
   myResult: "W" | "D" | "L" | null;
+  /** 모바일 카드 배지용 "내 팀 기준" 점수 (앞=내 팀/우리, 뒤=상대). 미입력이면 null. */
+  myMine: number | null;
+  myTheirs: number | null;
+  /** 자체전인데 A/B 어느 팀에도 배정되지 않음 → 카드에 "미참여" 표기 */
+  intraNotJoined: boolean;
   attendingCount: number;
 };
 
@@ -462,6 +467,16 @@ function MobileMatchCard({
         : match.myResult === "L"
           ? "#EF4444"
           : "#9CA3AF";
+  // 둘째 줄: 본인 기록 칩이 하나라도 있으면 칩, 없으면 미출전.
+  // 단, 자체전 '미참여'는 위 배지로 이미 표기했으므로 둘째 줄을 비운다.
+  const hasChips =
+    !!myCell &&
+    (myCell.goals > 0 ||
+      myCell.assists > 0 ||
+      myCell.cleanSheets > 0 ||
+      myCell.refereeCount > 0 ||
+      myCell.mom > 0);
+  const showAbsent = !myCell && !match.intraNotJoined;
   return (
     <Link
       href={`/matches/${match.id}`}
@@ -481,14 +496,23 @@ function MobileMatchCard({
             <span className="text-sm text-suaza-ink-muted truncate">
               vs {match.opponent}
             </span>
+            {/* 경기타입(상대) 오른편에 결과 배지 — 자체전 미배정은 '미참여' */}
+            {match.intraNotJoined ? (
+              <span className="inline-flex items-center text-[11px] text-suaza-ink-muted bg-gray-100 px-2 py-0.5 rounded-full font-medium">
+                미참여
+              </span>
+            ) : (
+              <ResultBadge
+                result={match.myResult}
+                ourScore={match.myMine}
+                opponentScore={match.myTheirs}
+              />
+            )}
           </div>
-          {/* 두번째 라인: 승무패(내 팀 기준) → 본인 기록 칩(있는 것만) → 미출전이면 미출전 */}
+          {/* 두번째 라인: 본인 기록 칩(있는 것만) → 미출전이면 미출전.
+              자체전 미배정('미참여')일 땐 중복 표기하지 않는다. */}
+          {(hasChips || showAbsent) && (
           <div className="flex items-center gap-1 flex-wrap">
-            <ResultBadge
-              result={match.myResult}
-              ourScore={match.ourScore}
-              opponentScore={match.opponentScore}
-            />
             {myCell ? (
               <>
                 {myCell.goals > 0 && (
@@ -537,6 +561,7 @@ function MobileMatchCard({
               </span>
             )}
           </div>
+          )}
         </div>
         <div className="shrink-0 flex items-center gap-1.5 text-suaza-ink-muted text-sm">
           <span className="font-medium text-suaza-ink">
