@@ -62,23 +62,31 @@ export default async function NewPostPage({
           />
 
           <label className="flex flex-col gap-2">
-            <span className="text-suaza-ink text-base">제목</span>
+            <span className="flex items-baseline gap-2">
+              <span className="text-suaza-ink text-base">제목</span>
+              <span className="text-xs text-suaza-accent font-medium">필수</span>
+            </span>
             <input
               type="text"
               name="title"
               required
               maxLength={120}
-              className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button"
+              placeholder="제목을 넣어주세요"
+              className="w-full px-3 py-1.5 rounded-lg border border-suaza-border text-sm text-suaza-ink placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button"
             />
           </label>
 
           <label className="flex flex-col gap-2">
-            <span className="text-suaza-ink text-base">내용</span>
+            <span className="flex items-baseline gap-2">
+              <span className="text-suaza-ink text-base">내용</span>
+              <span className="text-xs text-suaza-accent font-medium">필수</span>
+            </span>
             <textarea
               name="content"
               required
               rows={10}
-              className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink focus:outline-none focus:border-suaza-button resize-none"
+              placeholder="내용을 넣어주세요"
+              className="w-full px-3 py-1.5 rounded-lg border border-suaza-border text-sm text-suaza-ink placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button resize-none"
             />
           </label>
 

@@ -29,21 +29,31 @@ export default function PostFields({
 
   return (
     <>
-      <label className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2">
         <span className="text-suaza-ink text-base">카테고리</span>
-        <select
-          name="category"
-          value={category}
-          onChange={(e) => setCategory(e.target.value as PostCategory)}
-          className="w-full px-4 py-3 rounded-lg border border-suaza-border text-base text-suaza-ink bg-white focus:outline-none focus:border-suaza-button"
-        >
-          {POST_CATEGORIES.filter((c) => canUseCategory(c, title)).map((c) => (
-            <option key={c} value={c}>
-              {CATEGORY_LABEL[c]}
-            </option>
-          ))}
-        </select>
-      </label>
+        {/* 폼 제출용 — 선택한 카테고리 값 */}
+        <input type="hidden" name="category" value={category} />
+        <div className="flex items-center flex-wrap gap-1.5">
+          {POST_CATEGORIES.filter((c) => canUseCategory(c, title)).map((c) => {
+            const active = category === c;
+            return (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCategory(c)}
+                aria-pressed={active}
+                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition shrink-0 ${
+                  active
+                    ? "bg-suaza-ink text-white border border-suaza-ink"
+                    : "bg-white text-suaza-ink border border-suaza-border hover:bg-gray-100"
+                }`}
+              >
+                {CATEGORY_LABEL[c]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {showExpose && (
         <label className="flex items-center gap-2 cursor-pointer">
