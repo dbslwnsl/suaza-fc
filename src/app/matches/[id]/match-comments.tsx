@@ -1,10 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   createMatchComment,
   deleteMatchComment,
+  toggleMatchCommentLike,
   updateMatchComment,
 } from "@/lib/matches/actions";
 import { formatPostDate } from "@/lib/board/helpers";
@@ -17,6 +18,8 @@ export type MatchComment = {
   author_id: string;
   parent_id: string | null;
   author: { name: string; avatar_url: string | null } | null;
+  like_count: number;
+  liked_by_me: boolean;
 };
 
 type CommentWithReplies = MatchComment & { replies: MatchComment[] };
@@ -85,6 +88,8 @@ export default function MatchCommentSection({
         author_id: myUserId,
         parent_id: effectiveParent,
         author: { name: myName ?? "", avatar_url: myAvatarUrl },
+        like_count: 0,
+        liked_by_me: false,
       },
     ]);
     // 2) 저장 후 실제 행(id·시각)으로 교체. 실패하면 임시 항목 제거(롤백).
@@ -357,23 +362,26 @@ function CommentItem({
             : "border-suaza-border"
         }`}
       >
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-xs text-suaza-ink-muted flex items-center gap-1.5 flex-wrap min-w-0">
-            <CommentAvatar
-              name={comment.author?.name ?? null}
-              src={comment.author?.avatar_url ?? null}
-            />
-            <span className="font-medium text-suaza-ink">
-              {comment.author?.name ?? "(알 수 없음)"}
-            </span>
-            <span>·</span>
-            <span>{formatPostDate(comment.created_at)}</span>
-            {edited && !isTemp && (
-              <span className="text-suaza-ink-faint">(수정됨)</span>
-            )}
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            {canReply && !isTemp && (
+        <div className="text-xs text-suaza-ink-muted flex items-center gap-1.5 flex-wrap min-w-0">
+          <CommentAvatar
+            name={comment.author?.name ?? null}
+            src={comment.author?.avatar_url ?? null}
+          />
+          <span className="font-medium text-suaza-ink">
+            {comment.author?.name ?? "(알 수 없음)"}
+          </span>
+          <span>{formatPostDate(comment.created_at)}</span>
+          {edited && !isTemp && (
+            <span className="text-suaza-ink-faint">(수정됨)</span>
+          )}
+        </div>
+        <p className="text-sm text-suaza-ink whitespace-pre-wrap leading-relaxed">
+          {comment.content}
+        </p>
+        {/* 액션 — 좌측: 답글·수정·삭제 / 우측: 좋아요 (댓글 내용 아래 한 줄) */}
+        {!isTemp && (
+          <div className="flex items-center gap-1 -ml-2">
+            {canReply && (
               <button
                 type="button"
                 onClick={() => setReplying((v) => !v)}
@@ -382,7 +390,7 @@ function CommentItem({
                 {replying ? "답글 취소" : "답글"}
               </button>
             )}
-            {canEdit && !isTemp && (
+            {canEdit && (
               <button
                 type="button"
                 onClick={() => setEditing(true)}
@@ -391,17 +399,18 @@ function CommentItem({
                 수정
               </button>
             )}
-            {canDelete && !isTemp && (
-              <DeleteButton
-                commentId={comment.id}
-                onDelete={onDelete}
-              />
+            {canDelete && (
+              <DeleteButton commentId={comment.id} onDelete={onDelete} />
             )}
+            <div className="ml-auto">
+              <CommentLike
+                commentId={comment.id}
+                initialCount={comment.like_count}
+                initialLiked={comment.liked_by_me}
+              />
+            </div>
           </div>
-        </div>
-        <p className="text-sm text-suaza-ink whitespace-pre-wrap leading-relaxed">
-          {comment.content}
-        </p>
+        )}
       </div>
 
       {replying && (
@@ -417,6 +426,57 @@ function CommentItem({
         </div>
       )}
     </div>
+  );
+}
+
+// 댓글용 작은 좋아요 — 하트 + 카운트. 낙관적 토글.
+function CommentLike({
+  commentId,
+  initialCount,
+  initialLiked,
+}: {
+  commentId: string;
+  initialCount: number;
+  initialLiked: boolean;
+}) {
+  const [liked, setLiked] = useState(initialLiked);
+  const [count, setCount] = useState(initialCount);
+  const [, startTransition] = useTransition();
+
+  const toggle = () => {
+    const next = !liked;
+    setLiked(next);
+    setCount((c) => Math.max(0, c + (next ? 1 : -1)));
+    startTransition(() => toggleMatchCommentLike(commentId));
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-pressed={liked}
+      aria-label="좋아요"
+      className={`inline-flex items-center gap-1 h-6 px-2 rounded-full text-[11px] font-medium transition ${
+        liked
+          ? "text-red-600 bg-red-50"
+          : "text-suaza-ink-muted hover:bg-gray-100"
+      }`}
+    >
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill={liked ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+      </svg>
+      <span className="tabular-nums">{count}</span>
+    </button>
   );
 }
 

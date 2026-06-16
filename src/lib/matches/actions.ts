@@ -1708,6 +1708,32 @@ export async function deleteMatchComment(commentId: string) {
   await supabase.from("match_comments").delete().eq("id", commentId);
 }
 
+/**
+ * 경기 댓글 좋아요 토글 — 본인 행 1개(있으면 삭제, 없으면 추가).
+ * 클라이언트가 낙관적으로 즉시 반영하므로 revalidate 하지 않는다.
+ */
+export async function toggleMatchCommentLike(commentId: string) {
+  const { supabase, userId } = await requireUser();
+  const { data: existing } = await supabase
+    .from("match_comment_likes")
+    .select("comment_id")
+    .eq("comment_id", commentId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase
+      .from("match_comment_likes")
+      .delete()
+      .eq("comment_id", commentId)
+      .eq("user_id", userId);
+  } else {
+    await supabase
+      .from("match_comment_likes")
+      .insert({ comment_id: commentId, user_id: userId });
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // 용병 (match_mercenaries) — 자체전에서 임시로 추가되는 1회성 멤버
 // ─────────────────────────────────────────────────────────────

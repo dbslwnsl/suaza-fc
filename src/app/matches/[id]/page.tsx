@@ -112,7 +112,34 @@ export default async function MatchDetailPage({
     computeSeasonKings(supabase, matchYear),
   ]);
 
-  const comments = (commentsRaw ?? []) as unknown as MatchComment[];
+  // 댓글 좋아요 수·본인 좋아요 여부 집계 (게시판 댓글과 동일 패턴)
+  const commentIds = (commentsRaw ?? []).map((c) => c.id as string);
+  const likeCountByComment = new Map<string, number>();
+  const likedCommentIds = new Set<string>();
+  if (commentIds.length > 0) {
+    const { data: commentLikeRows } = await supabase
+      .from("match_comment_likes")
+      .select("comment_id, user_id")
+      .in("comment_id", commentIds);
+    for (const r of commentLikeRows ?? []) {
+      likeCountByComment.set(
+        r.comment_id,
+        (likeCountByComment.get(r.comment_id) ?? 0) + 1,
+      );
+      if (r.user_id === user.id) likedCommentIds.add(r.comment_id);
+    }
+  }
+
+  const comments = (
+    (commentsRaw ?? []) as unknown as Omit<
+      MatchComment,
+      "like_count" | "liked_by_me"
+    >[]
+  ).map((c) => ({
+    ...c,
+    like_count: likeCountByComment.get(c.id) ?? 0,
+    liked_by_me: likedCommentIds.has(c.id),
+  })) as MatchComment[];
 
   type VotePlayer = {
     id: string;
