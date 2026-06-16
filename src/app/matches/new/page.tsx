@@ -70,9 +70,6 @@ export default async function NewMatchPage({
               경기 등록
             </h1>
           </div>
-          <p className="hidden pointer-fine:block text-sm text-suaza-ink-muted">
-            경기 정보를 입력하면 일정 캘린더와 출석 투표가 자동 생성됩니다
-          </p>
         </header>
 
         {error && (

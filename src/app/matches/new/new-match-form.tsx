@@ -109,16 +109,6 @@ function defaultCustomDeadline(dateStr: string): string {
   return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T12:00`;
 }
 
-const DOW = ["일", "월", "화", "수", "목", "금", "토"];
-function formatDeadlineLabel(local: string): string {
-  if (!local) return "";
-  const [datePart, timePart] = local.split("T");
-  const [y, mo, d] = datePart.split("-").map(Number);
-  if ([y, mo, d].some((n) => Number.isNaN(n))) return "";
-  const dow = DOW[new Date(y, mo - 1, d).getDay()];
-  return `${mo}월 ${d}일 (${dow}) ${timePart}`;
-}
-
 export default function NewMatchForm({
   mode = "create",
   matchId,
@@ -685,25 +675,6 @@ export default function NewMatchForm({
             </div>
           );
         })()}
-        {voteDeadline ? (
-          <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-blue-50 text-sm flex-wrap">
-            <span aria-hidden>🔔</span>
-            <span className="font-bold text-blue-600">
-              {formatDeadlineLabel(voteDeadline)} 마감
-            </span>
-            {time && (
-              <span className="text-suaza-ink-muted">
-                · 경기 {time} 시작 기준
-              </span>
-            )}
-          </div>
-        ) : (
-          <div className="px-3 py-2.5 rounded-lg bg-gray-50 text-sm text-suaza-ink-faint">
-            {voteMode === "custom"
-              ? "마감 일시를 직접 선택해 주세요"
-              : "경기 날짜·시간을 먼저 입력하면 마감 시각이 표시됩니다"}
-          </div>
-        )}
       </div>
 
       {/* 경기 상태 — 편집 모드에서만 노출. 신규 등록은 항상 "예정"으로 생성된다. */}
@@ -761,7 +732,7 @@ export default function NewMatchForm({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={4}
-          placeholder="유니폼 컬러, 사전 미팅, 회비 정산 등"
+          placeholder="훈련내용, 팀공지 등"
           className={`${compactInputCls} resize-none`}
         />
       </Field>
