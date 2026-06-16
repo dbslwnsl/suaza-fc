@@ -13,7 +13,7 @@ const NotificationSettings = dynamic(() => import("./notification-settings"), {
 // 로딩 중 레이아웃 흔들림 방지용 자리표시(토글 위치는 비워둠 — 잘못된 ON/OFF 를 보이지 않게).
 function SettingsSkeleton() {
   return (
-    <div className="mt-3 mx-4 h-[71px] rounded-2xl border border-suaza-border/60 bg-white animate-pulse" />
+    <div className="h-[71px] rounded-2xl border border-suaza-border/60 bg-white animate-pulse" />
   );
 }
 
