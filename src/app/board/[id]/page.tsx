@@ -197,7 +197,6 @@ export default async function PostDetailPage({
                   <span className="truncate">
                     {p.author?.name ?? "(알 수 없음)"}
                   </span>
-                  <span>·</span>
                   <span className="shrink-0">{formatPostDate(p.created_at)}</span>
                 </div>
                 {canEdit && (
