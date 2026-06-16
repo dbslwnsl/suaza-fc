@@ -173,6 +173,61 @@ export async function deletePost(postId: string) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// 게시글 좋아요 (토글)
+// ─────────────────────────────────────────────────────────────
+
+export async function togglePostLike(postId: string) {
+  const { supabase, userId } = await getUserAndRole();
+
+  const { data: existing } = await supabase
+    .from("post_likes")
+    .select("post_id")
+    .eq("post_id", postId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase
+      .from("post_likes")
+      .delete()
+      .eq("post_id", postId)
+      .eq("user_id", userId);
+  } else {
+    await supabase
+      .from("post_likes")
+      .insert({ post_id: postId, user_id: userId });
+  }
+
+  revalidatePath(`/board/${postId}`);
+}
+
+// 댓글 좋아요 (토글)
+export async function toggleCommentLike(commentId: string, postId: string) {
+  const { supabase, userId } = await getUserAndRole();
+
+  const { data: existing } = await supabase
+    .from("comment_likes")
+    .select("comment_id")
+    .eq("comment_id", commentId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase
+      .from("comment_likes")
+      .delete()
+      .eq("comment_id", commentId)
+      .eq("user_id", userId);
+  } else {
+    await supabase
+      .from("comment_likes")
+      .insert({ comment_id: commentId, user_id: userId });
+  }
+
+  revalidatePath(`/board/${postId}`);
+}
+
+// ─────────────────────────────────────────────────────────────
 // 게시글 댓글
 // ─────────────────────────────────────────────────────────────
 

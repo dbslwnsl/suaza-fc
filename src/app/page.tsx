@@ -205,7 +205,7 @@ export default async function Home() {
     supabase
       .from("posts")
       .select(
-        "id, title, content, category, created_at, author:profiles(name, avatar_url)",
+        "id, title, content, category, created_at, author:profiles!posts_author_id_fkey(name, avatar_url)",
       )
       .eq("is_notice", true)
       .order("created_at", { ascending: false })

@@ -1,10 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   createComment,
   deleteComment,
+  toggleCommentLike,
   updateComment,
 } from "@/lib/board/actions";
 import { formatPostDate } from "@/lib/board/helpers";
@@ -17,6 +18,8 @@ export type Comment = {
   author_id: string;
   parent_id: string | null;
   author: { name: string; avatar_url: string | null } | null;
+  like_count: number;
+  liked_by_me: boolean;
 };
 
 type CommentWithReplies = Comment & { replies: Comment[] };
@@ -265,6 +268,12 @@ function CommentItem({
             <span>·</span>
             <span>{formatPostDate(comment.created_at)}</span>
             {edited && <span className="text-suaza-ink-faint">(수정됨)</span>}
+            <CommentLike
+              commentId={comment.id}
+              postId={postId}
+              initialCount={comment.like_count}
+              initialLiked={comment.liked_by_me}
+            />
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {canReply && (
@@ -309,6 +318,59 @@ function CommentItem({
         </div>
       )}
     </div>
+  );
+}
+
+// 댓글용 작은 좋아요 — 하트 + 카운트. 낙관적 토글.
+function CommentLike({
+  commentId,
+  postId,
+  initialCount,
+  initialLiked,
+}: {
+  commentId: string;
+  postId: string;
+  initialCount: number;
+  initialLiked: boolean;
+}) {
+  const [liked, setLiked] = useState(initialLiked);
+  const [count, setCount] = useState(initialCount);
+  const [, startTransition] = useTransition();
+
+  const toggle = () => {
+    const next = !liked;
+    setLiked(next);
+    setCount((c) => Math.max(0, c + (next ? 1 : -1)));
+    startTransition(() => toggleCommentLike(commentId, postId));
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-pressed={liked}
+      aria-label="좋아요"
+      className={`inline-flex items-center gap-1 h-6 px-2 rounded-full text-[11px] font-medium transition ${
+        liked
+          ? "text-red-600 bg-red-50"
+          : "text-suaza-ink-muted hover:bg-gray-100"
+      }`}
+    >
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill={liked ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+      </svg>
+      <span className="tabular-nums">{count}</span>
+    </button>
   );
 }
 

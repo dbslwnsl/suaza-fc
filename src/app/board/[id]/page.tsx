@@ -10,6 +10,7 @@ import {
   type PostCategory,
 } from "@/lib/board/helpers";
 import CommentSection, { type Comment } from "./comment-section";
+import PostActions from "./post-actions";
 import PostFields from "../post-fields";
 
 type Post = {
@@ -45,7 +46,7 @@ export default async function PostDetailPage({
       supabase
         .from("posts")
         .select(
-          "id, title, content, is_notice, category, author_id, created_at, updated_at, author:profiles(name)",
+          "id, title, content, is_notice, category, author_id, created_at, updated_at, author:profiles!posts_author_id_fkey(name)",
         )
         .eq("id", id)
         .single(),
@@ -57,11 +58,39 @@ export default async function PostDetailPage({
       supabase
         .from("post_comments")
         .select(
-          "id, content, created_at, updated_at, author_id, parent_id, author:profiles(name, avatar_url)",
+          "id, content, created_at, updated_at, author_id, parent_id, author:profiles!post_comments_author_id_fkey(name, avatar_url)",
         )
         .eq("post_id", id)
         .order("created_at", { ascending: true }),
     ]);
+
+  // 좋아요 — 행 개수 = 좋아요 수, 본인 행 존재 = 내가 누름.
+  // (마이그레이션 0044 미적용 등으로 테이블이 없으면 error 만 받고 0/false 로 처리)
+  const { data: likeRows } = await supabase
+    .from("post_likes")
+    .select("user_id")
+    .eq("post_id", id);
+  const likeCount = likeRows?.length ?? 0;
+  const likedByMe = (likeRows ?? []).some((r) => r.user_id === user.id);
+
+  // 댓글 좋아요 — 이 글의 댓글들에 대한 좋아요 행을 모아 댓글별 수/본인여부 계산.
+  // (마이그레이션 0045 미적용 시 테이블이 없으면 빈 값으로 처리)
+  const commentIds = (commentsRaw ?? []).map((c) => c.id as string);
+  const likeCountByComment = new Map<string, number>();
+  const likedCommentIds = new Set<string>();
+  if (commentIds.length > 0) {
+    const { data: commentLikeRows } = await supabase
+      .from("comment_likes")
+      .select("comment_id, user_id")
+      .in("comment_id", commentIds);
+    for (const r of commentLikeRows ?? []) {
+      likeCountByComment.set(
+        r.comment_id,
+        (likeCountByComment.get(r.comment_id) ?? 0) + 1,
+      );
+      if (r.user_id === user.id) likedCommentIds.add(r.comment_id);
+    }
+  }
 
   if (!post) notFound();
   const p = post as unknown as Post;
@@ -73,7 +102,13 @@ export default async function PostDetailPage({
   const isPresident = myTitle === "president";
   const canEdit = isAuthor || isPresident;
   const editing = edit === "1" && canEdit;
-  const comments = (commentsRaw ?? []) as unknown as Comment[];
+  const comments: Comment[] = (
+    (commentsRaw ?? []) as unknown as Omit<Comment, "like_count" | "liked_by_me">[]
+  ).map((c) => ({
+    ...c,
+    like_count: likeCountByComment.get(c.id) ?? 0,
+    liked_by_me: likedCommentIds.has(c.id),
+  }));
 
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
@@ -189,6 +224,12 @@ export default async function PostDetailPage({
             <div className="text-suaza-ink whitespace-pre-wrap leading-relaxed">
               {p.content}
             </div>
+
+            <PostActions
+              postId={p.id}
+              initialLikes={likeCount}
+              initialLiked={likedByMe}
+            />
 
             <CommentSection
               postId={p.id}

@@ -44,14 +44,14 @@ export default async function BoardPage({
       supabase
         .from("posts")
         .select(
-          "id, title, content, is_notice, category, created_at, author_id, author:profiles(name, avatar_url)",
+          "id, title, content, is_notice, category, created_at, author_id, author:profiles!posts_author_id_fkey(name, avatar_url)",
         )
         .order("is_notice", { ascending: false })
         .order("created_at", { ascending: false }),
       supabase
         .from("post_comments")
         .select(
-          "id, post_id, content, created_at, updated_at, author_id, parent_id, author:profiles(name, avatar_url)",
+          "id, post_id, content, created_at, updated_at, author_id, parent_id, author:profiles!post_comments_author_id_fkey(name, avatar_url)",
         )
         .order("created_at", { ascending: true }),
       supabase.from("profiles").select("role").eq("id", user.id).single(),
@@ -72,6 +72,9 @@ export default async function BoardPage({
       author_id: c.author_id,
       parent_id: c.parent_id,
       author: c.author,
+      // 목록 화면은 좋아요를 표시하지 않으므로 기본값 (상세 페이지에서만 실제 값 사용)
+      like_count: 0,
+      liked_by_me: false,
     });
     commentsByPost.set(c.post_id, list);
   }
