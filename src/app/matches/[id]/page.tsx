@@ -554,6 +554,7 @@ export default async function MatchDetailPage({
                       user.id === m.team_a_captain ||
                       user.id === m.team_b_captain
                     }
+                    notes={m.notes}
                   />
                 </div>
               )}

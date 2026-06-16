@@ -1,6 +1,12 @@
 "use client";
 
-import { useMemo, useOptimistic, useState, useTransition } from "react";
+import {
+  useEffect,
+  useMemo,
+  useOptimistic,
+  useState,
+  useTransition,
+} from "react";
 import {
   addMercenary,
   autoBalanceTeams,
@@ -12,6 +18,7 @@ import {
   setMatchTeam,
   setMercenaryTeam,
   setTeamColor,
+  updateMatchNotes,
 } from "@/lib/matches/actions";
 import {
   DEFAULT_TEAM_COLOR,
@@ -121,6 +128,7 @@ export default function TeamBuilder({
   teamBCaptain = null,
   readonly,
   canAddMercenary = false,
+  notes = null,
 }: {
   matchId: string;
   absentCount: number;
@@ -135,6 +143,8 @@ export default function TeamBuilder({
   readonly: boolean;
   /** 용병 추가 버튼 노출 권한 — 회장·감독·주장 */
   canAddMercenary?: boolean;
+  /** 감독 전달사항 (경기 메모) — 있으면 참석 영역 아래에 표시 */
+  notes?: string | null;
 }) {
   // 출석 낙관과 같은 소스 — 투표/드래그 시 참석 리스트가 즉시 갱신된다.
   const { attendingMembers: attendees } = useAttendanceCtx();
@@ -445,6 +455,24 @@ export default function TeamBuilder({
         (편성 제외)
       </p>
 
+      {/* 감독 전달사항 (경기 메모) — 내용이 없어도 항상 표시. 권한자는 인라인 수정 */}
+      <div className="h-px bg-suaza-border" />
+      <div className="flex flex-col gap-2">
+        <h2 className="font-bold text-suaza-ink text-lg">감독 전달사항</h2>
+        {readonly ? (
+          notes ? (
+            <p className="text-sm text-suaza-ink whitespace-pre-wrap leading-relaxed">
+              {notes}
+            </p>
+          ) : (
+            <p className="text-sm text-suaza-ink-faint">
+              등록된 전달사항이 없습니다
+            </p>
+          )
+        ) : (
+          <NotesEditor matchId={matchId} notes={notes ?? null} />
+        )}
+      </div>
     </section>
   );
 }
@@ -467,6 +495,91 @@ function JerseyIcon({ color }: { color: string }) {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+// 감독 전달사항 인라인 편집 (권한자 전용) — "수정/추가" → 텍스트박스 + 저장/취소. 낙관적 반영.
+function NotesEditor({
+  matchId,
+  notes,
+}: {
+  matchId: string;
+  notes: string | null;
+}) {
+  const [value, setValue] = useState(notes ?? "");
+  const [draft, setDraft] = useState(notes ?? "");
+  const [editing, setEditing] = useState(false);
+  const [, startTransition] = useTransition();
+
+  // 서버값(revalidate)이 바뀌면 동기화
+  useEffect(() => {
+    setValue(notes ?? "");
+    setDraft(notes ?? "");
+  }, [notes]);
+
+  const save = () => {
+    const next = draft.trim();
+    setValue(next);
+    setEditing(false);
+    startTransition(() => updateMatchNotes(matchId, next));
+  };
+
+  if (editing) {
+    return (
+      <div className="flex flex-col gap-2">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={4}
+          autoFocus
+          placeholder="훈련내용, 팀공지 등"
+          className="w-full px-3 py-2 rounded-lg border border-suaza-border text-sm text-suaza-ink placeholder:text-suaza-placeholder focus:outline-none focus:border-suaza-button resize-none"
+        />
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(value);
+              setEditing(false);
+            }}
+            className="px-3 py-1.5 rounded-lg border border-suaza-border text-suaza-ink text-xs font-medium hover:bg-gray-50"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            className="px-3 py-1.5 rounded-lg bg-suaza-button text-white text-xs font-medium hover:opacity-90"
+          >
+            저장
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-2">
+      {value ? (
+        <p className="text-sm text-suaza-ink whitespace-pre-wrap leading-relaxed">
+          {value}
+        </p>
+      ) : (
+        <p className="text-sm text-suaza-ink-faint">
+          등록된 전달사항이 없습니다
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(value);
+          setEditing(true);
+        }}
+        className="text-xs font-medium px-2.5 py-1 rounded-md border border-suaza-border text-suaza-ink hover:bg-gray-50 transition"
+      >
+        {value ? "수정" : "추가"}
+      </button>
+    </div>
   );
 }
 

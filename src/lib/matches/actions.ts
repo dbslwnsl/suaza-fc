@@ -353,6 +353,25 @@ async function migrateQuartersAfterEdit(
     .eq("match_id", matchId);
 }
 
+/**
+ * 감독 전달사항(메모) 인라인 수정 — 경기 상세 팀 편성 카드에서 바로 저장.
+ * 권한: requireStaff (회장·감독·매니저). 종료/취소 경기는 수정 불가.
+ */
+export async function updateMatchNotes(matchId: string, notes: string) {
+  const { supabase } = await requireStaff();
+  const trimmed = notes.trim() || null;
+
+  const { data: existing } = await supabase
+    .from("matches")
+    .select("status")
+    .eq("id", matchId)
+    .single();
+  if (existing?.status === "done" || existing?.status === "canceled") return;
+
+  await supabase.from("matches").update({ notes: trimmed }).eq("id", matchId);
+  revalidatePath(`/matches/${matchId}`);
+}
+
 export async function updateMatch(matchId: string, formData: FormData) {
   const { supabase } = await requireStaff();
   const input = parseForm(formData);
