@@ -19,6 +19,7 @@ import {
 import ProfileEditForm from "./profile-edit-form";
 import AvatarUpload from "./avatar-upload";
 import DeleteMemberButton from "./delete-member-button";
+import MemberTitleEditor from "./title-editor";
 import CoachCommentSection, { type CoachComment } from "./coach-comments";
 
 type StatDef = {
@@ -175,6 +176,10 @@ export default async function MemberDetailPage({
 
   // 감독&코치 코멘트: 작성은 감독/코치(title)만, 조회는 본인 또는 감독/코치만(RLS 강제)
   const myTitle = (me?.title ?? "player") as MemberTitle;
+  // 회원 삭제 권한 — 매니저(회장 포함)만. 감독(head_coach)은 매니저 권한이 있어도 삭제는 제외.
+  const canDeleteMembers = isManager && myTitle !== "head_coach";
+  // 직책 부여 권한 — 회장(president)만.
+  const canAssignTitles = myTitle === "president";
   const isCoachingStaff = myTitle === "head_coach" || myTitle === "coach";
   const coachComments = (coachCommentsRaw ?? []) as unknown as CoachComment[];
   const showCoachComments = isCoachingStaff || isSelf;
@@ -391,7 +396,15 @@ export default async function MemberDetailPage({
           />
         )}
 
-        {!isProfileSetup && canEditOthersStatus && !isSelf && (
+        {!isProfileSetup && canAssignTitles && !isSelf && (
+          <MemberTitleEditor
+            profileId={profile.id}
+            currentTitle={title}
+            name={profile.name}
+          />
+        )}
+
+        {!isProfileSetup && canDeleteMembers && !isSelf && (
           <DeleteMemberButton profileId={profile.id} name={profile.name} />
         )}
       </div>

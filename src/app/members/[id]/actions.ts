@@ -298,13 +298,11 @@ export async function softDeleteMember(profileId: string) {
     .eq("id", user.id)
     .single();
 
-  const canDelete =
-    me?.role === "manager" ||
-    me?.title === "president" ||
-    me?.title === "head_coach";
+  // 매니저(회장 포함)만 삭제 가능. 감독(head_coach)은 매니저 권한이 있어도 삭제는 제외.
+  const canDelete = me?.role === "manager" && me?.title !== "head_coach";
   if (!canDelete) {
     redirect(
-      `/members/${profileId}?error=${encodeURIComponent("회장/감독/매니저만 회원을 삭제할 수 있습니다")}`,
+      `/members/${profileId}?error=${encodeURIComponent("회장/매니저만 회원을 삭제할 수 있습니다")}`,
     );
   }
   if (user.id === profileId) {
@@ -350,6 +348,84 @@ export async function softDeleteMember(profileId: string) {
   revalidatePath("/members");
   revalidatePath("/");
   redirect(`/members?message=${encodeURIComponent("회원이 삭제되었습니다")}`);
+}
+
+/**
+ * 직책(title) 부여 — 회장(president)만 가능.
+ * - 직책에 맞춰 시스템 권한(role)도 함께 정리: 회장/감독 → manager, 그 외 → player.
+ *   (회장/감독은 BEFORE 트리거가 manager 로 자동 승격하므로 안전하게 일치한다.)
+ * - "회장" 부여는 1인 체제 유지를 위해 본인(기존 회장)을 회원(player)으로 강등한다.
+ */
+export async function setMemberTitle(profileId: string, title: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!(MEMBER_TITLES as readonly string[]).includes(title)) {
+    redirect(
+      `/members/${profileId}?error=${encodeURIComponent("잘못된 직책입니다")}`,
+    );
+  }
+  const newTitle = title as MemberTitle;
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("title")
+    .eq("id", user.id)
+    .single();
+
+  // 회장만 직책 부여 가능
+  if (me?.title !== "president") {
+    redirect(
+      `/members/${profileId}?error=${encodeURIComponent("회장만 직책을 부여할 수 있습니다")}`,
+    );
+  }
+  // 본인 직책은 이 화면에서 변경하지 않는다 (회장 이양 시 자동 강등으로만 처리)
+  if (profileId === user.id) {
+    redirect(
+      `/members/${profileId}?error=${encodeURIComponent("본인 직책은 변경할 수 없습니다")}`,
+    );
+  }
+
+  // 직책 → 권한 매핑: 회장/감독만 매니저
+  const nextRole =
+    newTitle === "president" || newTitle === "head_coach"
+      ? "manager"
+      : "player";
+
+  // 1) 대상 회원에게 새 직책/권한 부여
+  const { error: targetError } = await supabase
+    .from("profiles")
+    .update({ title: newTitle, role: nextRole })
+    .eq("id", profileId);
+  if (targetError) {
+    redirect(
+      `/members/${profileId}?error=${encodeURIComponent(targetError.message)}`,
+    );
+  }
+
+  // 2) 회장 이양인 경우 — 본인(기존 회장)을 회원으로 강등 (직책·권한 모두)
+  //    대상 업데이트를 먼저 끝낸 뒤 강등해야, 강등 후 권한 부족으로 막히지 않는다.
+  if (newTitle === "president") {
+    const { error: selfError } = await supabase
+      .from("profiles")
+      .update({ title: "player", role: "player" })
+      .eq("id", user.id);
+    if (selfError) {
+      redirect(
+        `/members/${profileId}?error=${encodeURIComponent(selfError.message)}`,
+      );
+    }
+  }
+
+  revalidatePath(`/members/${profileId}`);
+  revalidatePath("/members");
+  revalidatePath("/");
+  redirect(
+    `/members/${profileId}?message=${encodeURIComponent("직책이 변경되었습니다")}`,
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
