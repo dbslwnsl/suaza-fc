@@ -59,7 +59,7 @@ export async function updateProfile(profileId: string, formData: FormData) {
 
   const jerseyRaw = String(formData.get("jersey_number") ?? "").trim();
   const birthRaw = String(formData.get("birth_date") ?? "").trim();
-  const nickname = String(formData.get("nickname") ?? "").trim().slice(0, 6);
+  const nickname = String(formData.get("nickname") ?? "").trim().slice(0, 10);
   const footRaw = String(formData.get("preferred_foot") ?? "");
   const preferred_foot = (PREFERRED_FEET as readonly string[]).includes(footRaw)
     ? (footRaw as PreferredFoot)
@@ -146,6 +146,67 @@ export async function updateProfile(profileId: string, formData: FormData) {
   redirect(
     `/members/${profileId}?message=${encodeURIComponent("저장되었습니다")}`,
   );
+}
+
+/**
+ * 본인 프로필의 자동 저장용 — 별명/포지션/주발만 부분 갱신.
+ * 리다이렉트 없이 {ok} 를 반환해 인라인 즉시 저장에 사용한다.
+ * 등번호·생년월일·이름·직책은 건드리지 않는다(편집 화면에서 읽기전용).
+ */
+export async function updateProfileFields(
+  profileId: string,
+  fields: {
+    nickname: string | null;
+    positions: Position[];
+    preferred_foot: PreferredFoot | null;
+  },
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "로그인이 필요합니다" };
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  const isSelf = user.id === profileId;
+  const isManager = me?.role === "manager";
+  if (!isSelf && !isManager) return { ok: false, error: "수정 권한이 없습니다" };
+
+  // 주포지션, 부포지션 순서 보존 + 중복 제거 + 최대 2개.
+  const valid = new Set<string>(POSITIONS);
+  const positions = (fields.positions ?? [])
+    .map(String)
+    .filter((p) => valid.has(p))
+    .filter((p, i, arr) => arr.indexOf(p) === i)
+    .slice(0, 2) as Position[];
+
+  const nickname = (fields.nickname ?? "").trim().slice(0, 10) || null;
+  const foot = fields.preferred_foot;
+  const preferred_foot = (PREFERRED_FEET as readonly string[]).includes(
+    foot ?? "",
+  )
+    ? (foot as PreferredFoot)
+    : null;
+
+  // 필수값(주포지션·주발)은 비어있을 때 덮어쓰지 않는다.
+  const update: Record<string, unknown> = { nickname };
+  if (positions.length > 0) update.positions = positions;
+  if (preferred_foot) update.preferred_foot = preferred_foot;
+
+  const { error } = await supabase
+    .from("profiles")
+    .update(update)
+    .eq("id", profileId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/members/${profileId}`);
+  revalidatePath("/members");
+  revalidatePath("/");
+  return { ok: true };
 }
 
 /**

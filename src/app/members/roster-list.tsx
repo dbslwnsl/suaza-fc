@@ -358,12 +358,12 @@ function MemberCard({
         <div className="flex-1 min-w-0 flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <div className="flex items-baseline gap-1.5 min-w-0">
-              <span className="font-bold text-suaza-ink truncate">
+              <span className="font-bold text-suaza-ink shrink-0 whitespace-nowrap">
                 {m.displayName}
               </span>
               {m.nickname && (
                 <span
-                  className="text-sm font-medium truncate"
+                  className="text-sm font-medium truncate min-w-0"
                   style={{ color: "#338CF2" }}
                 >
                   @{m.nickname}

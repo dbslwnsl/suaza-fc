@@ -301,7 +301,6 @@ function CommentItem({
           >
             {TITLE_LABEL[authorTitle] ?? "회원"}
           </span>
-          <span>·</span>
           <span className="shrink-0">{formatDate(comment.created_at)}</span>
           {edited && !isTemp && (
             <span className="text-suaza-ink-faint shrink-0">(수정됨)</span>

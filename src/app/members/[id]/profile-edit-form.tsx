@@ -14,7 +14,7 @@ import {
   type PreferredFoot,
 } from "@/lib/members/positions";
 import DatePicker from "../../matches/new/date-picker";
-import { setMemberStatus, updateProfile } from "./actions";
+import { setMemberStatus, updateProfile, updateProfileFields } from "./actions";
 
 // 등번호 드롭다운 옵션 (0~99)
 const JERSEY_OPTIONS = Array.from({ length: 100 }, (_, i) => ({
@@ -91,6 +91,27 @@ export default function ProfileEditForm({
 
   const title = initial.title;
 
+  // 본인 편집(가입 단계·타인 조회 제외)에서는 변경 즉시 자동 저장한다.
+  const autoSave = !setupMode && !readonly;
+  const [isSaving, startSaveTransition] = useTransition();
+  // 별명/포지션/주발 자동 저장 — 변경된 값만 override 로 받아 현재 상태와 합쳐 전송.
+  const persistFields = (next: {
+    nickname?: string | null;
+    positions?: Position[];
+    preferred_foot?: PreferredFoot | null;
+  }) => {
+    if (!autoSave) return;
+    startSaveTransition(async () => {
+      await updateProfileFields(profileId, {
+        nickname:
+          next.nickname !== undefined ? next.nickname : nickname.trim() || null,
+        positions: next.positions ?? positions,
+        preferred_foot:
+          next.preferred_foot !== undefined ? next.preferred_foot : foot,
+      });
+    });
+  };
+
   const isDirty = useMemo(() => {
     if (nickname.trim() !== (initial.nickname ?? "")) return true;
     if (jersey.trim() !== String(initial.jersey_number ?? "")) return true;
@@ -113,32 +134,30 @@ export default function ProfileEditForm({
   // 가입 입력 단계에선 사진(아바타) 등록까지 완료해야 저장(회원가입) 가능
   const canSave = isDirty && requiredValid && (!setupMode || hasAvatar);
 
-  // 부상/장기불참 토글. 본인/편집 모드에선 폼 저장으로 반영되고,
-  // 타인 조회(readonly)인데 회장/매니저(canEditStatus)면 즉시 서버에 반영한다.
-  const [, startStatusTransition] = useTransition();
+  // 부상/장기불참 토글 — 본인 편집 또는 회장/매니저(타인 조회)면 즉시 서버에 반영한다.
+  const [statusPending, startStatusTransition] = useTransition();
   const statusEditable = !readonly || canEditStatus;
   const toggleInjured = () => {
+    if (!statusEditable) return;
     const prev = injured;
     const next = !prev;
     setInjured(next);
-    if (readonly && canEditStatus) {
-      startStatusTransition(async () => {
-        const r = await setMemberStatus(profileId, next, onLeave);
-        if (!r?.ok) setInjured(prev); // 권한/저장 실패 시 원상복구
-      });
-    }
+    startStatusTransition(async () => {
+      const r = await setMemberStatus(profileId, next, onLeave);
+      if (!r?.ok) setInjured(prev); // 권한/저장 실패 시 원상복구
+    });
   };
   const toggleOnLeave = () => {
+    if (!statusEditable) return;
     const prev = onLeave;
     const next = !prev;
     setOnLeave(next);
-    if (readonly && canEditStatus) {
-      startStatusTransition(async () => {
-        const r = await setMemberStatus(profileId, injured, next);
-        if (!r?.ok) setOnLeave(prev); // 권한/저장 실패 시 원상복구
-      });
-    }
+    startStatusTransition(async () => {
+      const r = await setMemberStatus(profileId, injured, next);
+      if (!r?.ok) setOnLeave(prev); // 권한/저장 실패 시 원상복구
+    });
   };
+  const busy = isSaving || statusPending;
 
   // 카드 + 포지션 + 주발 (편집/읽기 공통 레이아웃)
   const sections = (
@@ -212,22 +231,29 @@ export default function ProfileEditForm({
               <InlineEditable
                 type="text"
                 value={nickname}
-                onCommit={(v) => setNickname(v.slice(0, 6))}
+                onCommit={(v) => {
+                  const nv = v.slice(0, 10);
+                  setNickname(nv);
+                  persistFields({ nickname: nv.trim() || null });
+                }}
                 readonly={readonly}
-                maxLength={6}
+                maxLength={10}
                 placeholder="별명"
                 ariaLabel="별명 수정"
                 renderDisplay={(v) => (
-                  <span className="inline-flex items-center gap-1 font-medium text-suaza-ink">
-                    {v || (readonly ? "—" : "별명입력")}
+                  <span
+                    className="inline-flex items-center gap-1 font-medium"
+                    style={{ color: "#338CF2" }}
+                  >
+                    {v ? `@${v}` : readonly ? "—" : "별명입력"}
                     {!readonly && <span aria-hidden>✏️</span>}
                   </span>
                 )}
-                displayClassName="px-2.5 py-1 rounded-full border border-suaza-border text-xs hover:bg-gray-50 transition"
-                inputClassName={`${inlineInputCls} w-[120px]`}
+                displayClassName="rounded-full text-xs hover:bg-gray-50 transition"
+                inputClassName={`${inlineInputCls} w-[160px]`}
               />
               {!hideStatus && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 mt-2">
                   <StatusPill
                     label="부상"
                     active={injured}
@@ -308,8 +334,14 @@ export default function ProfileEditForm({
             }))}
             onChange={(v) => {
               const next = v as Position | null;
+              const ns = next && secondary === next ? null : secondary;
               setPrimary(next);
               if (next && secondary === next) setSecondary(null);
+              persistFields({
+                positions: [next, ns].filter(
+                  (p): p is Position => p != null,
+                ),
+              });
             }}
           />
         </div>
@@ -330,7 +362,15 @@ export default function ProfileEditForm({
               label: p,
               color: POSITION_COLOR[p],
             }))}
-            onChange={(v) => setSecondary(v as Position | null)}
+            onChange={(v) => {
+              const next = v as Position | null;
+              setSecondary(next);
+              persistFields({
+                positions: [primary, next].filter(
+                  (p): p is Position => p != null,
+                ),
+              });
+            }}
           />
         </div>
 
@@ -347,7 +387,11 @@ export default function ProfileEditForm({
               value: f,
               label: FOOT_LABEL[f],
             }))}
-            onChange={(v) => setFoot(v as PreferredFoot | null)}
+            onChange={(v) => {
+              const next = v as PreferredFoot | null;
+              setFoot(next);
+              persistFields({ preferred_foot: next });
+            }}
           />
         </div>
       </div>
@@ -369,52 +413,40 @@ export default function ProfileEditForm({
     );
   }
 
-  return (
-    <form
-      action={updateProfile.bind(null, profileId)}
-      className="flex flex-col gap-6"
-    >
-      <input type="hidden" name="name" value={initial.name} />
-      <input type="hidden" name="nickname" value={nickname} />
-      <input type="hidden" name="jersey_number" value={jersey} />
-      <input type="hidden" name="birth_date" value={birth} />
-      {positions.map((p) => (
-        <input key={p} type="hidden" name="positions" value={p} />
-      ))}
-      {foot && <input type="hidden" name="preferred_foot" value={foot} />}
-      <input type="hidden" name="is_injured" value={injured ? "1" : "0"} />
-      <input type="hidden" name="on_leave" value={onLeave ? "1" : "0"} />
+  // 가입 첫 입력 단계 — 계정이 아직 없으므로 폼 제출(updateProfile)로 저장/가입한다.
+  if (setupMode) {
+    return (
+      <form
+        action={updateProfile.bind(null, profileId)}
+        className="flex flex-col gap-6"
+      >
+        <input type="hidden" name="name" value={initial.name} />
+        <input type="hidden" name="nickname" value={nickname} />
+        <input type="hidden" name="jersey_number" value={jersey} />
+        <input type="hidden" name="birth_date" value={birth} />
+        {positions.map((p) => (
+          <input key={p} type="hidden" name="positions" value={p} />
+        ))}
+        {foot && <input type="hidden" name="preferred_foot" value={foot} />}
+        <input type="hidden" name="is_injured" value={injured ? "1" : "0"} />
+        <input type="hidden" name="on_leave" value={onLeave ? "1" : "0"} />
 
-      {/* 제목 + 저장 — 같은 라인 (카드 밖 상단) */}
-      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <UsersIcon className="w-9 h-9 text-suaza-ink shrink-0" />
           <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
-            {setupMode ? "프로필입력" : "프로필"}
+            프로필입력
           </h1>
         </div>
-        {!setupMode && (
-          <button
-            type="submit"
-            disabled={!canSave}
-            className="text-xs font-medium px-3 py-1.5 rounded-md bg-suaza-ink text-white hover:opacity-90 transition shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            저장
-          </button>
+
+        {sections}
+
+        {/* 필수 누락 안내 */}
+        {isDirty && !requiredValid && (
+          <p className="text-xs text-suaza-accent">
+            * 등번호, 생년월일, 주포지션, 주발은 필수 항목입니다
+          </p>
         )}
-      </div>
 
-      {sections}
-
-      {/* 필수 누락 안내 */}
-      {isDirty && !requiredValid && (
-        <p className="text-xs text-suaza-accent">
-          * 등번호, 생년월일, 주포지션, 주발은 필수 항목입니다
-        </p>
-      )}
-
-      {/* 가입 첫 입력 단계 — 하단 회원가입 버튼 (이전 "다음" 버튼과 동일 스타일) */}
-      {setupMode && (
         <button
           type="submit"
           disabled={!canSave}
@@ -422,9 +454,33 @@ export default function ProfileEditForm({
         >
           회원가입
         </button>
-      )}
+      </form>
+    );
+  }
 
-    </form>
+  // 본인 편집 — 저장 버튼 없이 변경 즉시 자동 저장
+  return (
+    <div className="flex flex-col gap-6">
+      {/* 제목 + 자동 저장 표시 (카드 밖 상단) */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <UsersIcon className="w-9 h-9 text-suaza-ink shrink-0" />
+          <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
+            프로필
+          </h1>
+        </div>
+        <span
+          className={`text-xs shrink-0 transition-opacity ${
+            busy ? "opacity-100 text-suaza-ink-muted" : "opacity-0"
+          }`}
+          aria-live="polite"
+        >
+          저장 중…
+        </span>
+      </div>
+
+      {sections}
+    </div>
   );
 }
 
@@ -534,7 +590,7 @@ function StatusPill({
   onClick: () => void;
   readonly?: boolean;
 }) {
-  const cls = `inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition ${
+  const cls = `inline-flex items-center px-2.5 py-1 rounded-full text-[11px] leading-none font-medium transition ${
     active ? "" : `bg-gray-100 text-suaza-ink-muted${readonly ? "" : " hover:bg-gray-200"}`
   }`;
   const style = active ? { backgroundColor: onBg, color: onColor } : undefined;
