@@ -205,7 +205,7 @@ const OPTS: {
     value: "attending",
     label: "참석",
     icon: "✓",
-    activeClass: "bg-green-600 text-white border-green-600",
+    activeClass: "bg-green-500 text-white border-green-500",
   },
   {
     value: "absent",
