@@ -40,6 +40,8 @@ export type RosterMember = {
   isAssistKing?: boolean;
   isCleanSheetKing?: boolean;
   isRefereeKing?: boolean;
+  /** 이 회원이 MVP인 월 목록 (예: [3, 5]). 오름차순. */
+  mvpMonths?: number[];
 };
 
 type Filter = "ALL" | Position;
@@ -347,6 +349,12 @@ function MemberCard({
               size="xs"
               titlePlacement="bottom-center"
             />
+            {/* 월별 MVP — 아바타 우상단엔 가장 최근 달 메달만. 이전 달은 이름줄 나이 옆으로. */}
+            {m.mvpMonths && m.mvpMonths.length > 0 && (
+              <span className="absolute -top-2.5 -right-1 z-20">
+                <MvpMedal month={Math.max(...m.mvpMonths)} />
+              </span>
+            )}
           </div>
           {m.jerseyNumber != null && (
             <span className="mt-1 text-suaza-accent font-bold text-sm leading-none">
@@ -402,6 +410,17 @@ function MemberCard({
                 </span>
               )}
             </div>
+            {/* MVP 2개 이상: 최근 달은 아바타에, 이전 달들은 이름줄 맨 오른쪽에 */}
+            {m.mvpMonths && m.mvpMonths.length >= 2 && (
+              <span className="inline-flex items-center gap-0.5 shrink-0 ml-auto -mt-2">
+                {[...m.mvpMonths]
+                  .sort((a, b) => a - b)
+                  .slice(0, -1)
+                  .map((mo) => (
+                    <MvpMedal key={mo} month={mo} />
+                  ))}
+              </span>
+            )}
           </div>
 
           {m.positions.length > 0 && (
@@ -450,6 +469,44 @@ function MemberCard({
   );
 }
 
+
+// 월별 MVP 금메달 — 선버스트 메달 안에 월(예: "5월") 표기, 상단에 별.
+function MvpMedal({ month, size = "md" }: { month: number; size?: "md" | "sm" }) {
+  const label = `${month}월 MVP`;
+  const sizeCls =
+    size === "sm" ? "w-5 h-5" : "w-7 h-7 desktop:w-8 desktop:h-8";
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      className={`inline-block ${sizeCls} drop-shadow-sm`}
+    >
+      <svg viewBox="0 0 32 32" className="w-full h-full" aria-hidden>
+        {/* 햇살(선버스트) 메달 외곽 */}
+        <polygon
+          points="16,0.5 18.72,5.86 23.75,2.58 23.42,8.58 29.42,8.25 26.14,13.28 31.5,16 26.14,18.72 29.42,23.75 23.42,23.42 23.75,29.42 18.72,26.14 16,31.5 13.28,26.14 8.25,29.42 8.58,23.42 2.58,23.75 5.86,18.72 0.5,16 5.86,13.28 2.58,8.25 8.58,8.58 8.25,2.58 13.28,5.86"
+          fill="#F59E0B"
+          stroke="#FFFFFF"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+        {/* 안쪽 원판 */}
+        <circle cx="16" cy="16" r="9.5" fill="#FBBF24" stroke="#FFFFFF" strokeWidth="1" />
+        {/* 월 표기 (예: 5월) */}
+        <text
+          x="16"
+          y="20"
+          textAnchor="middle"
+          fontSize={month >= 10 ? 7 : 8.5}
+          fontWeight="800"
+          fill="#7C2D12"
+        >
+          {month}월
+        </text>
+      </svg>
+    </span>
+  );
+}
 
 function PositionChip({ position }: { position: Position }) {
   const color = POSITION_COLOR[position];

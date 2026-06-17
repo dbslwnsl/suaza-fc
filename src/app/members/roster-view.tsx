@@ -97,6 +97,46 @@ export default async function RosterView({ year }: { year: number }) {
     pointsByPlayer.set(p.player_id, (pointsByPlayer.get(p.player_id) ?? 0) + pts);
   }
 
+  // ── 월별 MVP — 각 월(KST) 경기 포인트 합이 가장 높은 회원(공동 1위 포함) ──
+  const kstMonth = (iso: string): number => {
+    const p = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Seoul",
+      month: "numeric",
+    }).formatToParts(new Date(iso));
+    return Number(p.find((x) => x.type === "month")?.value ?? "0");
+  };
+  const matchMonthById = new Map<string, number>();
+  for (const m of (matchesRaw ?? []) as { id: string; match_date: string }[]) {
+    matchMonthById.set(m.id, kstMonth(m.match_date));
+  }
+  // month -> (playerId -> points)
+  const monthPlayerPoints = new Map<number, Map<string, number>>();
+  for (const p of parts) {
+    const mo = matchMonthById.get(p.match_id);
+    if (!mo) continue;
+    const pts = pointsForParticipation(p, matchDateById.get(p.match_id), pvMap);
+    let mp = monthPlayerPoints.get(mo);
+    if (!mp) {
+      mp = new Map();
+      monthPlayerPoints.set(mo, mp);
+    }
+    mp.set(p.player_id, (mp.get(p.player_id) ?? 0) + pts);
+  }
+  // playerId -> 그 회원이 MVP인 월 목록
+  const mvpMonthsByPlayer = new Map<string, number[]>();
+  for (const [mo, mp] of monthPlayerPoints) {
+    let max = 0;
+    for (const v of mp.values()) if (v > max) max = v;
+    if (max <= 0) continue;
+    for (const [pid, v] of mp) {
+      if (v === max) {
+        const arr = mvpMonthsByPlayer.get(pid) ?? [];
+        arr.push(mo);
+        mvpMonthsByPlayer.set(pid, arr);
+      }
+    }
+  }
+
   const raw = (members ?? []) as MemberRow[];
   const sorted = myId
     ? [
@@ -156,6 +196,7 @@ export default async function RosterView({ year }: { year: number }) {
       isAssistKing: assistKings.has(m.id),
       isCleanSheetKing: cleanSheetKings.has(m.id),
       isRefereeKing: refereeKings.has(m.id),
+      mvpMonths: (mvpMonthsByPlayer.get(m.id) ?? []).sort((a, b) => a - b),
     };
   });
 
