@@ -448,11 +448,11 @@ export default async function Home() {
                   </span>
                 )}
               </div>
-              {profile && (
+              {profile && profile.title && profile.title !== "player" && (
                 <span
-                  className={`absolute left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 z-10 whitespace-nowrap text-[11px] leading-none px-2 py-1 rounded-full ring-2 ring-white shadow-sm ${TITLE_BADGE[(profile.title as MemberTitle) ?? "player"]}`}
+                  className={`absolute left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 z-10 whitespace-nowrap text-[11px] leading-none px-2 py-1 rounded-full ring-2 ring-white shadow-sm ${TITLE_BADGE[profile.title as MemberTitle]}`}
                 >
-                  {TITLE_LABEL[(profile.title as MemberTitle) ?? "player"]}
+                  {TITLE_LABEL[profile.title as MemberTitle]}
                 </span>
               )}
             </div>
