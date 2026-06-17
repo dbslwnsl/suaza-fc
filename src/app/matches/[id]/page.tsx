@@ -1134,6 +1134,7 @@ export function AttendanceVote({
   matchId,
   meId,
   myName,
+  myPositions = null,
   myStatus,
   myAttendingQuarters = null,
   byStatus,
@@ -1147,6 +1148,7 @@ export function AttendanceVote({
   matchId: string;
   meId: string;
   myName: string | null;
+  myPositions?: string[] | null;
   myStatus: string | null;
   myAttendingQuarters?: number[] | null;
   byStatus: {
@@ -1167,7 +1169,7 @@ export function AttendanceVote({
 
       <AttendanceCompactVote
         matchId={matchId}
-        me={{ id: meId, name: myName ?? "" }}
+        me={{ id: meId, name: myName ?? "", positions: myPositions }}
         myStatus={myStatus}
         myAttendingQuarters={myAttendingQuarters}
         byStatus={byStatus}

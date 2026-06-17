@@ -16,6 +16,7 @@ import {
   voteAttendance,
 } from "@/lib/matches/actions";
 import { quarterShortLabel } from "@/lib/matches/helpers";
+import { POSITION_COLOR, type Position } from "@/lib/members/positions";
 import AttendanceManagerBoard from "@/components/attendance-manager-board";
 
 // 컨디션 1~5단계. 1=최상(빨강·12시) → 5=최하(파랑·6시).
@@ -431,9 +432,12 @@ export function useAttendanceCtx(): AttendanceCtxValue {
 function VoteButtons({
   status,
   onVote,
+  tall = false,
 }: {
   status: string | null;
   onVote: (value: Status) => void;
+  /** true 면 막대(세그먼트)와 동일하게 항상 h-9 (홈 화면용) */
+  tall?: boolean;
 }) {
   return (
     <div className="grid grid-cols-3 gap-2">
@@ -444,7 +448,7 @@ function VoteButtons({
             key={o.value}
             type="button"
             onClick={() => onVote(o.value)}
-            className={`h-7 desktop:h-9 w-full rounded-lg border text-xs desktop:text-sm font-medium transition flex items-center justify-center gap-1 ${
+            className={`${tall ? "h-9" : "h-7 desktop:h-9"} w-full rounded-lg border text-xs desktop:text-sm font-medium transition flex items-center justify-center gap-1 ${
               active
                 ? o.activeClass
                 : "bg-white border-suaza-border text-suaza-ink hover:bg-gray-100"
@@ -468,11 +472,14 @@ function QuarterPicker({
   selected, // null = 전체, 또는 참여 쿼터 번호 배열
   quarterActions,
   onChange,
+  bare = false,
 }: {
   totalQuarters: number;
   selected: number[] | null;
   quarterActions?: (string | null)[] | null;
   onChange: (quarters: number[] | null) => void;
+  /** true 면 카드(테두리·배경·패딩) 없이 내용만 렌더 */
+  bare?: boolean;
 }) {
   // null = 전체 참여. 특정 쿼터를 누르면 그 쿼터만 토글(비활성화).
   const isAttending = (q: number) => selected === null || selected.includes(q);
@@ -500,6 +507,39 @@ function QuarterPicker({
       : [...cur, q].sort((a, b) => a - b);
     onChange(next.length === totalQuarters ? null : next);
   };
+
+  // 홈(bare): 카드 없이 "참석한 구간을 선택하세요" 라벨 + 이어진 막대(세그먼트) 형태
+  if (bare) {
+    return (
+      <div className="flex flex-col gap-2">
+        <span className="text-xs text-suaza-ink-muted">
+          참석할 구간을 선택하세요
+        </span>
+        <div className="flex rounded-lg overflow-hidden border border-suaza-border">
+          {Array.from({ length: totalQuarters }, (_, i) => {
+            const q = i + 1;
+            const active = isAttending(q);
+            return (
+              <button
+                key={q}
+                type="button"
+                onClick={() => toggle(q)}
+                className={`flex-1 h-9 flex items-center justify-center text-xs font-bold transition ${
+                  i > 0 ? "border-l border-suaza-border" : ""
+                } ${
+                  active
+                    ? "bg-green-500 text-white"
+                    : "bg-gray-50 text-suaza-ink-muted hover:bg-gray-100"
+                }`}
+              >
+                {label(q)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-lg border border-suaza-border p-3 flex flex-col gap-2">
@@ -629,9 +669,10 @@ export function AttendanceCardVote({
               <ConditionChip level={condition} onCycle={cycleCondition} />
             </div>
           </div>
-          <VoteButtons status={optimisticStatus} onVote={vote} />
+          <VoteButtons status={optimisticStatus} onVote={vote} tall />
           {optimisticStatus === "attending" && (
             <QuarterPicker
+              bare
               totalQuarters={totalQuarters}
               selected={optimisticQuarters}
               quarterActions={quarterActions}
@@ -698,9 +739,7 @@ export function AttendanceCompactVote({
     optimisticQuarters,
     vote,
     setAttendingQuarters,
-    drag,
     groups,
-    nonVoters: nv,
     counts,
   } = useOptimisticVote(
     matchId,
@@ -719,9 +758,10 @@ export function AttendanceCompactVote({
         </div>
       ) : (
         <>
-          <VoteButtons status={optimisticStatus} onVote={vote} />
+          <VoteButtons status={optimisticStatus} onVote={vote} tall />
           {optimisticStatus === "attending" && (
             <QuarterPicker
+              bare
               totalQuarters={totalQuarters}
               selected={optimisticQuarters}
               quarterActions={quarterActions}
@@ -739,18 +779,73 @@ export function AttendanceCompactVote({
         <StatCount label="미투표" value={counts.nonVoters} color="#D1D5DB" />
       </div>
 
-      {/* 경기 상세와 동일하게 모든 회원이 같은 보드 뷰를 본다.
-          매니저·감독만 드래그앤드롭 변경 가능, 일반 회원은 보기 전용(readonly).
-          드롭은 부모의 통합 낙관(drag)에 위임 → 칩·상단 통계가 한 번에 갱신. */}
-      <AttendanceManagerBoard
-        byStatus={groups}
-        nonVoters={nv}
-        totalQuarters={totalQuarters}
-        quarterActions={quarterActions}
-        readonly={!isManager}
-        onDrop={isManager ? drag : undefined}
-      />
+      {/* 참석자 — 주 포지션(FW/MF/DF/GK)별 그룹 (팀 편성 카드와 동일 방식) */}
+      <div className="h-px bg-suaza-border" />
+      <AttendingByPosition attending={groups.attending} />
     </>
+  );
+}
+
+// 참석자를 주 포지션(positions[0]) 기준 FW→MF→DF→GK 로 묶어 칩으로 표기. 미지정은 "기타".
+const ATTEND_POSITION_ORDER: Position[] = ["FW", "MF", "DF", "GK"];
+function AttendingByPosition({ attending }: { attending: VotePlayer[] }) {
+  const positionGroups = useMemo(() => {
+    const buckets = new Map<string, VotePlayer[]>();
+    for (const p of attending) {
+      const primary = p.positions?.[0];
+      const key =
+        primary && (ATTEND_POSITION_ORDER as string[]).includes(primary)
+          ? primary
+          : "기타";
+      const arr = buckets.get(key);
+      if (arr) arr.push(p);
+      else buckets.set(key, [p]);
+    }
+    const byName = (a: VotePlayer, b: VotePlayer) =>
+      a.name.localeCompare(b.name, "ko");
+    const result: { pos: string; members: VotePlayer[] }[] = [];
+    for (const pos of ATTEND_POSITION_ORDER) {
+      const arr = buckets.get(pos);
+      if (arr?.length) result.push({ pos, members: arr.sort(byName) });
+    }
+    const etc = buckets.get("기타");
+    if (etc?.length) result.push({ pos: "기타", members: etc.sort(byName) });
+    return result;
+  }, [attending]);
+
+  if (attending.length === 0) {
+    return (
+      <p className="text-xs text-suaza-ink-faint py-1">
+        아직 참석한 멤버가 없어요
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {positionGroups.map((g) => (
+        <div key={g.pos} className="flex items-start gap-2">
+          <span
+            className="shrink-0 w-7 text-[11px] font-bold leading-6"
+            style={{
+              color: g.pos === "기타" ? "#9CA3AF" : POSITION_COLOR[g.pos as Position],
+            }}
+          >
+            {g.pos}
+          </span>
+          <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
+            {g.members.map((m) => (
+              <span
+                key={m.id}
+                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs border border-green-300 bg-white text-suaza-ink"
+              >
+                {m.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

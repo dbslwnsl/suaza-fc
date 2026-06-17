@@ -1,8 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { WeatherCardClient } from "@/components/weather-client";
 import { logout } from "@/lib/auth/actions";
 import {
   FOOT_LABEL,
@@ -38,11 +36,6 @@ import {
 } from "@/lib/stats/helpers";
 import { AttendanceVote } from "./matches/[id]/page";
 import { computeSeasonKings } from "@/lib/stats/kings";
-import {
-  fetchWeatherDebug,
-  failureMessage,
-  type WeatherInfo,
-} from "@/lib/weather";
 
 type NoticeRow = {
   id: string;
@@ -79,78 +72,6 @@ function NoticeAvatar({
       )}
     </div>
   );
-}
-
-async function UpcomingWeather({
-  location,
-  matchDate,
-}: {
-  location: string | null;
-  matchDate: string;
-}) {
-  const weatherResult = await fetchWeatherDebug(location, matchDate);
-  if (weatherResult.ok) {
-    return <WeatherStrip weather={weatherResult.data} matchDate={matchDate} />;
-  }
-  return (
-    <div className="flex items-center gap-2 bg-gray-50 border border-suaza-border rounded-lg px-3 py-2 text-xs text-suaza-ink-muted">
-      <span>🌤️</span>
-      <span>날씨 정보 없음</span>
-      <span className="text-suaza-ink-faint truncate">
-        · {failureMessage(weatherResult.failure)}
-      </span>
-    </div>
-  );
-}
-
-function WeatherStrip({
-  weather,
-  matchDate,
-}: {
-  weather: WeatherInfo;
-  matchDate: string;
-}) {
-  return (
-    <div className="flex flex-col gap-1 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2">
-      <div className="flex items-center justify-between gap-2 text-[11px] text-sky-700 font-medium">
-        <span>{forecastLabel(matchDate)}</span>
-        <span className="text-suaza-ink-faint font-normal truncate max-w-[60%]">
-          {weather.matchedLocation}
-        </span>
-      </div>
-      <div className="flex items-baseline gap-2 flex-wrap">
-        <span className="text-xl">{weather.emoji}</span>
-        <span className="text-sm font-bold text-suaza-ink">{weather.label}</span>
-        <span className="text-xs text-suaza-ink-muted tabular-nums">
-          {weather.tempMin}° / {weather.tempMax}°
-        </span>
-        {weather.precipitationProbability > 0 && (
-          <span className="text-xs text-sky-700 tabular-nums">
-            💧 {weather.precipitationProbability}%
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function forecastLabel(matchDateIso: string): string {
-  const matchDate = new Date(matchDateIso);
-  if (Number.isNaN(matchDate.getTime())) return "경기일 예보";
-  // KST 기준 자정 비교 (Vercel UTC 서버에서도 동일 동작)
-  const fmt = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const today = new Date(fmt.format(new Date()) + "T00:00:00+09:00");
-  const target = new Date(fmt.format(matchDate) + "T00:00:00+09:00");
-  const diff = Math.round((target.getTime() - today.getTime()) / 86400000);
-  if (diff === 0) return "오늘 예보";
-  if (diff === 1) return "내일 예보";
-  if (diff > 1) return `D-${diff} 예보`;
-  return "경기일 예보";
 }
 
 function PositionBadge({ position }: { position: Position }) {
@@ -251,6 +172,7 @@ export default async function Home() {
     id: string;
     name: string;
     jersey_number: number | null;
+    positions?: string[] | null;
     attending_quarters?: number[] | null;
     voted_at?: string | null;
     is_injured?: boolean | null;
@@ -275,7 +197,7 @@ export default async function Home() {
         supabase
           .from("match_attendances")
           .select(
-            "status, attending_quarters, updated_at, player:profiles(id, name, jersey_number, deleted_at, is_injured, on_leave)",
+            "status, attending_quarters, updated_at, player:profiles(id, name, jersey_number, positions, deleted_at, is_injured, on_leave)",
           )
           .eq("match_id", upcoming.id),
         supabase
@@ -286,7 +208,7 @@ export default async function Home() {
           .maybeSingle(),
         supabase
           .from("profiles")
-          .select("id, name, jersey_number, is_injured, on_leave")
+          .select("id, name, jersey_number, positions, is_injured, on_leave")
           .is("deleted_at", null)
           .order("name", { ascending: true }),
       ]);
@@ -707,30 +629,35 @@ export default async function Home() {
         {notice ? (
           <Link
             href={`/board/${notice.id}`}
-            className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border hover:bg-gray-50 transition flex items-start gap-3"
+            className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border hover:bg-gray-50 transition flex flex-col gap-2"
           >
-            <NoticeAvatar
-              name={notice.author?.name ?? null}
-              src={notice.author?.avatar_url ?? null}
-            />
-            <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium shrink-0">
-                  {notice.category && notice.category !== "notice"
-                    ? CATEGORY_LABEL[notice.category]
-                    : "공지"}
+            <div className="flex items-center gap-3">
+              <NoticeAvatar
+                name={notice.author?.name ?? null}
+                src={notice.author?.avatar_url ?? null}
+              />
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="font-bold text-suaza-ink truncate">
+                  {notice.author?.name ?? ""}
                 </span>
-                <span className="text-xs text-suaza-ink-muted truncate">
-                  {notice.author?.name ?? ""} · {formatPostDate(notice.created_at)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-suaza-ink-muted">
+                    {formatPostDate(notice.created_at)}
+                  </span>
+                  <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium shrink-0">
+                    {notice.category && notice.category !== "notice"
+                      ? CATEGORY_LABEL[notice.category]
+                      : "공지"}
+                  </span>
+                </div>
               </div>
-              <span className="font-bold text-suaza-ink truncate">
-                {notice.title}
-              </span>
-              <p className="text-sm text-suaza-ink-muted whitespace-pre-wrap line-clamp-3">
-                {notice.content}
-              </p>
             </div>
+            <span className="font-bold text-suaza-ink truncate">
+              {notice.title}
+            </span>
+            <p className="text-sm text-suaza-ink-muted whitespace-pre-wrap line-clamp-3">
+              {notice.content}
+            </p>
           </Link>
         ) : (
           <div className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border flex items-center gap-2">
@@ -746,39 +673,30 @@ export default async function Home() {
         {/* Upcoming Match + Attendance */}
         {upcoming && (
           <section className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-xs text-suaza-ink-muted font-medium">
-                다가오는 경기
-              </h2>
-              <span
-                className={`text-xs px-2 py-0.5 rounded ${MATCH_STATUS_BADGE[upcoming.status]}`}
-              >
-                {MATCH_STATUS_LABEL[upcoming.status]}
-              </span>
-            </div>
             <Link
               href={`/matches/${upcoming.id}`}
               className="flex flex-col gap-1 hover:opacity-80"
             >
-              <span className="font-bold text-suaza-ink text-lg">
-                vs {upcoming.opponent}
+              <span className="flex items-center justify-between gap-2">
+                <span className="font-bold text-suaza-ink text-lg">
+                  vs {upcoming.opponent}
+                </span>
+                <span
+                  className={`shrink-0 text-xs px-2 py-0.5 rounded ${MATCH_STATUS_BADGE[upcoming.status]}`}
+                >
+                  {MATCH_STATUS_LABEL[upcoming.status]}
+                </span>
               </span>
               <span className="text-sm text-suaza-ink-muted">
                 {formatMatchDate(upcoming.match_date)}
                 {upcoming.location && ` · ${upcoming.location}`}
               </span>
             </Link>
-            {/* 날씨는 Suspense streaming — 외부 API 응답이 페이지 첫 paint 를 차단하지 않는다 */}
-            <Suspense fallback={null}>
-              <UpcomingWeather
-                location={upcoming.location}
-                matchDate={upcoming.match_date}
-              />
-            </Suspense>
             <AttendanceVote
               matchId={upcoming.id}
               meId={user!.id}
               myName={profile?.name ?? null}
+              myPositions={profile?.positions ?? null}
               myStatus={myStatus}
               myAttendingQuarters={myAttendingQuarters}
               byStatus={byStatus}
