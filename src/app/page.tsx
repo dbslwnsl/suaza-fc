@@ -678,18 +678,34 @@ export default async function Home() {
               className="flex flex-col gap-1 hover:opacity-80"
             >
               <span className="flex items-center justify-between gap-2">
-                <span className="font-bold text-suaza-ink text-lg">
-                  vs {upcoming.opponent}
+                <span className="flex items-baseline gap-2 min-w-0">
+                  <span className="font-bold text-suaza-ink text-lg shrink-0">
+                    vs {upcoming.opponent}
+                  </span>
+                  <span className="text-sm text-suaza-ink-muted truncate">
+                    {formatMatchDate(upcoming.match_date)}
+                  </span>
                 </span>
-                <span
-                  className={`shrink-0 text-xs px-2 py-0.5 rounded ${MATCH_STATUS_BADGE[upcoming.status]}`}
-                >
-                  {MATCH_STATUS_LABEL[upcoming.status]}
+                <span className="shrink-0 flex items-center gap-1.5">
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded ${MATCH_STATUS_BADGE[upcoming.status]}`}
+                  >
+                    {MATCH_STATUS_LABEL[upcoming.status]}
+                  </span>
+                  {/* 카드 진입(상세 보기) 힌트 — 탭 가능 표시 */}
+                  <svg
+                    className="w-4 h-4 text-suaza-ink-faint"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
                 </span>
-              </span>
-              <span className="text-sm text-suaza-ink-muted">
-                {formatMatchDate(upcoming.match_date)}
-                {upcoming.location && ` · ${upcoming.location}`}
               </span>
             </Link>
             <AttendanceVote

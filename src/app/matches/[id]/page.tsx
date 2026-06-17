@@ -1164,9 +1164,7 @@ export function AttendanceVote({
   lockedMessage?: ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-3 p-4 border border-suaza-border rounded-lg">
-      <h2 className="font-bold text-suaza-ink">출석</h2>
-
+    <section className="flex flex-col gap-3">
       <AttendanceCompactVote
         matchId={matchId}
         me={{ id: meId, name: myName ?? "", positions: myPositions }}
