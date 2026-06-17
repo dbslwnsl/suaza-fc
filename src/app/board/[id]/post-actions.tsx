@@ -2,6 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { togglePostLike } from "@/lib/board/actions";
+import { displayMemberName } from "@/lib/members/name";
+
+export type Liker = { id: string; name: string };
 
 /**
  * 게시글 본문 아래(댓글 가로선 위) 좋아요 + 공유 버튼 행.
@@ -12,15 +15,19 @@ export default function PostActions({
   postId,
   initialLikes,
   initialLiked,
+  likers = [],
 }: {
   postId: string;
   initialLikes: number;
   initialLiked: boolean;
+  /** 좋아요를 누른 회원 목록 (서버값). 누가 눌렀는지 표시용. */
+  likers?: Liker[];
 }) {
   const [liked, setLiked] = useState(initialLiked);
   const [count, setCount] = useState(initialLikes);
   const [, startTransition] = useTransition();
   const [copied, setCopied] = useState(false);
+  const [showLikers, setShowLikers] = useState(false);
 
   const toggleLike = () => {
     const next = !liked;
@@ -54,7 +61,8 @@ export default function PostActions({
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
       <button
         type="button"
         onClick={toggleLike}
@@ -108,6 +116,53 @@ export default function PostActions({
         </svg>
         {copied ? "복사됨" : "공유"}
       </button>
+      </div>
+
+      {/* 누가 좋아요를 눌렀는지 — 클릭하면 이름 목록 펼침 */}
+      {likers.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <button
+            type="button"
+            onClick={() => setShowLikers((v) => !v)}
+            aria-expanded={showLikers}
+            className="self-start inline-flex items-center gap-1 text-xs text-suaza-ink-muted hover:text-suaza-ink transition"
+          >
+            <span className="text-red-500" aria-hidden>
+              ♥
+            </span>
+            <span>
+              {displayMemberName(likers[0].name)}
+              {likers.length > 1 ? ` 외 ${likers.length - 1}명` : ""}님이 좋아합니다
+            </span>
+            <svg
+              aria-hidden
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`transition-transform ${showLikers ? "rotate-180" : ""}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {showLikers && (
+            <div className="flex flex-wrap gap-1">
+              {likers.map((l) => (
+                <span
+                  key={l.id}
+                  className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-suaza-ink"
+                >
+                  {displayMemberName(l.name)}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

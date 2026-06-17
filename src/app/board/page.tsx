@@ -65,17 +65,48 @@ export default async function BoardPage({
   const commentIds = commentRows.map((c) => c.id);
   const likeCountByComment = new Map<string, number>();
   const likedCommentIds = new Set<string>();
+  const commentLikersById = new Map<string, { id: string; name: string }[]>();
   if (commentIds.length > 0) {
     const { data: commentLikeRows } = await supabase
       .from("comment_likes")
-      .select("comment_id, user_id")
+      .select("comment_id, user_id, user:profiles(name)")
       .in("comment_id", commentIds);
-    for (const r of commentLikeRows ?? []) {
+    for (const r of (commentLikeRows ?? []) as unknown as {
+      comment_id: string;
+      user_id: string;
+      user: { name: string } | null;
+    }[]) {
       likeCountByComment.set(
         r.comment_id,
         (likeCountByComment.get(r.comment_id) ?? 0) + 1,
       );
       if (r.user_id === user.id) likedCommentIds.add(r.comment_id);
+      const arr = commentLikersById.get(r.comment_id) ?? [];
+      arr.push({ id: r.user_id, name: r.user?.name ?? "(알 수 없음)" });
+      commentLikersById.set(r.comment_id, arr);
+    }
+  }
+
+  // 게시글 좋아요 — 인라인 확장에서도 하트 수·본인 여부·누른 사람을 표시.
+  const postIds = postRows.map((p) => p.id);
+  const likeCountByPost = new Map<string, number>();
+  const likedByMePosts = new Set<string>();
+  const likersByPost = new Map<string, { id: string; name: string }[]>();
+  if (postIds.length > 0) {
+    const { data: postLikeRows } = await supabase
+      .from("post_likes")
+      .select("post_id, user_id, user:profiles(name)")
+      .in("post_id", postIds);
+    for (const r of (postLikeRows ?? []) as unknown as {
+      post_id: string;
+      user_id: string;
+      user: { name: string } | null;
+    }[]) {
+      likeCountByPost.set(r.post_id, (likeCountByPost.get(r.post_id) ?? 0) + 1);
+      if (r.user_id === user.id) likedByMePosts.add(r.post_id);
+      const arr = likersByPost.get(r.post_id) ?? [];
+      arr.push({ id: r.user_id, name: r.user?.name ?? "(알 수 없음)" });
+      likersByPost.set(r.post_id, arr);
     }
   }
 
@@ -92,6 +123,7 @@ export default async function BoardPage({
       author: c.author,
       like_count: likeCountByComment.get(c.id) ?? 0,
       liked_by_me: likedCommentIds.has(c.id),
+      likers: commentLikersById.get(c.id) ?? [],
     });
     commentsByPost.set(c.post_id, list);
   }
@@ -106,6 +138,9 @@ export default async function BoardPage({
     author_id: p.author_id,
     author: p.author,
     comments: commentsByPost.get(p.id) ?? [],
+    likeCount: likeCountByPost.get(p.id) ?? 0,
+    likedByMe: likedByMePosts.has(p.id),
+    likers: likersByPost.get(p.id) ?? [],
   }));
 
   return (

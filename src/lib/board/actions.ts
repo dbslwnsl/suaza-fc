@@ -199,6 +199,7 @@ export async function togglePostLike(postId: string) {
   }
 
   revalidatePath(`/board/${postId}`);
+  revalidatePath("/board");
 }
 
 // 댓글 좋아요 (토글)
@@ -225,6 +226,7 @@ export async function toggleCommentLike(commentId: string, postId: string) {
   }
 
   revalidatePath(`/board/${postId}`);
+  revalidatePath("/board");
 }
 
 // ─────────────────────────────────────────────────────────────

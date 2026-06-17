@@ -68,27 +68,43 @@ export default async function PostDetailPage({
   // (마이그레이션 0044 미적용 등으로 테이블이 없으면 error 만 받고 0/false 로 처리)
   const { data: likeRows } = await supabase
     .from("post_likes")
-    .select("user_id")
+    .select("user_id, user:profiles(name)")
     .eq("post_id", id);
-  const likeCount = likeRows?.length ?? 0;
-  const likedByMe = (likeRows ?? []).some((r) => r.user_id === user.id);
+  const likeRowsT = (likeRows ?? []) as unknown as {
+    user_id: string;
+    user: { name: string } | null;
+  }[];
+  const likeCount = likeRowsT.length;
+  const likedByMe = likeRowsT.some((r) => r.user_id === user.id);
+  const likers = likeRowsT.map((r) => ({
+    id: r.user_id,
+    name: r.user?.name ?? "(알 수 없음)",
+  }));
 
   // 댓글 좋아요 — 이 글의 댓글들에 대한 좋아요 행을 모아 댓글별 수/본인여부 계산.
   // (마이그레이션 0045 미적용 시 테이블이 없으면 빈 값으로 처리)
   const commentIds = (commentsRaw ?? []).map((c) => c.id as string);
   const likeCountByComment = new Map<string, number>();
   const likedCommentIds = new Set<string>();
+  const likersByComment = new Map<string, { id: string; name: string }[]>();
   if (commentIds.length > 0) {
     const { data: commentLikeRows } = await supabase
       .from("comment_likes")
-      .select("comment_id, user_id")
+      .select("comment_id, user_id, user:profiles(name)")
       .in("comment_id", commentIds);
-    for (const r of commentLikeRows ?? []) {
+    for (const r of (commentLikeRows ?? []) as unknown as {
+      comment_id: string;
+      user_id: string;
+      user: { name: string } | null;
+    }[]) {
       likeCountByComment.set(
         r.comment_id,
         (likeCountByComment.get(r.comment_id) ?? 0) + 1,
       );
       if (r.user_id === user.id) likedCommentIds.add(r.comment_id);
+      const arr = likersByComment.get(r.comment_id) ?? [];
+      arr.push({ id: r.user_id, name: r.user?.name ?? "(알 수 없음)" });
+      likersByComment.set(r.comment_id, arr);
     }
   }
 
@@ -103,11 +119,15 @@ export default async function PostDetailPage({
   const canEdit = isAuthor || isPresident;
   const editing = edit === "1" && canEdit;
   const comments: Comment[] = (
-    (commentsRaw ?? []) as unknown as Omit<Comment, "like_count" | "liked_by_me">[]
+    (commentsRaw ?? []) as unknown as Omit<
+      Comment,
+      "like_count" | "liked_by_me" | "likers"
+    >[]
   ).map((c) => ({
     ...c,
     like_count: likeCountByComment.get(c.id) ?? 0,
     liked_by_me: likedCommentIds.has(c.id),
+    likers: likersByComment.get(c.id) ?? [],
   }));
 
   return (
@@ -228,6 +248,7 @@ export default async function PostDetailPage({
               postId={p.id}
               initialLikes={likeCount}
               initialLiked={likedByMe}
+              likers={likers}
             />
 
             <CommentSection

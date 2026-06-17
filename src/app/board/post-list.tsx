@@ -11,6 +11,7 @@ import {
   type PostCategory,
 } from "@/lib/board/helpers";
 import CommentSection, { type Comment } from "./[id]/comment-section";
+import PostActions, { type Liker } from "./[id]/post-actions";
 
 export type ListPost = {
   id: string;
@@ -22,6 +23,9 @@ export type ListPost = {
   author_id: string;
   author: { name: string; avatar_url: string | null } | null;
   comments: Comment[];
+  likeCount: number;
+  likedByMe: boolean;
+  likers: Liker[];
 };
 
 type Filter = "ALL" | PostCategory;
@@ -207,6 +211,13 @@ function PostCard({
           <p className="text-suaza-ink whitespace-pre-wrap leading-relaxed text-sm">
             {post.content}
           </p>
+          {/* 좋아요(하트)·공유 + 누가 눌렀는지 — 상세 페이지와 동일 */}
+          <PostActions
+            postId={post.id}
+            initialLikes={post.likeCount}
+            initialLiked={post.likedByMe}
+            likers={post.likers}
+          />
           <div className="flex justify-end">
             <Link
               href={`/board/${post.id}`}
