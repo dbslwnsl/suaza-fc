@@ -141,27 +141,8 @@ function PostCard({
             src={post.author?.avatar_url ?? null}
           />
         </Link>
-        {/* 우측: 1줄(이름·날짜·게시글 타입) / 2줄(제목 + 💬 + 펼치기) */}
+        {/* 우측: 1줄(제목 + 💬 + 펼치기) / 2줄(이름·날짜·게시글 타입) */}
         <div className="flex-1 min-w-0 flex flex-col gap-1">
-          <div className="flex items-center gap-2 flex-wrap text-xs">
-            <span className="font-medium text-suaza-ink">
-              {post.author?.name ?? "(알 수 없음)"}
-            </span>
-            <span className="text-suaza-ink-muted">
-              {formatPostDate(post.created_at)}
-            </span>
-            {/* 공지 카테고리는 카테고리 뱃지가 "공지"를 표시하므로 중복 방지 */}
-            {post.is_notice && post.category !== "notice" && (
-              <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium">
-                공지
-              </span>
-            )}
-            <span
-              className={`text-[11px] px-2 py-0.5 rounded font-medium ${categoryBadgeClass(post.category, post.is_notice)}`}
-            >
-              {CATEGORY_LABEL[post.category]}
-            </span>
-          </div>
           <div className="flex items-center gap-2">
             <Link href={`/board/${post.id}`} className="group flex-1 min-w-0">
               <h3 className="font-bold text-suaza-ink truncate group-hover:underline">
@@ -196,6 +177,25 @@ function PostCard({
                 <polyline points="6 9 12 15 18 9" />
               </svg>
             </button>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap text-xs">
+            <span className="font-medium text-suaza-ink">
+              {post.author?.name ?? "(알 수 없음)"}
+            </span>
+            <span className="text-suaza-ink-muted">
+              {formatPostDate(post.created_at)}
+            </span>
+            {/* 공지 카테고리는 카테고리 뱃지가 "공지"를 표시하므로 중복 방지 */}
+            {post.is_notice && post.category !== "notice" && (
+              <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium">
+                공지
+              </span>
+            )}
+            <span
+              className={`text-[11px] px-2 py-0.5 rounded font-medium ${categoryBadgeClass(post.category, post.is_notice)}`}
+            >
+              {CATEGORY_LABEL[post.category]}
+            </span>
           </div>
         </div>
       </div>
