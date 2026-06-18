@@ -679,13 +679,8 @@ export default async function Home() {
               className="flex flex-col gap-1 hover:opacity-80"
             >
               <span className="flex items-center justify-between gap-2">
-                <span className="flex items-baseline gap-2 min-w-0">
-                  <span className="font-bold text-suaza-ink text-lg shrink-0">
-                    vs {upcoming.opponent}
-                  </span>
-                  <span className="text-sm text-suaza-ink-muted truncate">
-                    {formatMatchDate(upcoming.match_date)}
-                  </span>
+                <span className="font-bold text-suaza-ink text-lg min-w-0 truncate">
+                  vs {upcoming.opponent}
                 </span>
                 <span className="shrink-0 flex items-center gap-1.5">
                   <span
@@ -707,6 +702,9 @@ export default async function Home() {
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                 </span>
+              </span>
+              <span className="text-sm text-suaza-ink-muted truncate">
+                {formatMatchDate(upcoming.match_date)}
               </span>
             </Link>
             <AttendanceVote
