@@ -1,10 +1,13 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { togglePostLike } from "@/lib/board/actions";
 import { displayMemberName } from "@/lib/members/name";
 
-export type Liker = { id: string; name: string };
+export type Liker = { id: string; name: string; avatar_url?: string | null };
 
 /**
  * 게시글 본문 아래(댓글 가로선 위) 좋아요 + 공유 버튼 행.
@@ -27,7 +30,6 @@ export default function PostActions({
   const [count, setCount] = useState(initialLikes);
   const [, startTransition] = useTransition();
   const [copied, setCopied] = useState(false);
-  const [showLikers, setShowLikers] = useState(false);
 
   const toggleLike = () => {
     const next = !liked;
@@ -68,15 +70,15 @@ export default function PostActions({
         onClick={toggleLike}
         aria-pressed={liked}
         aria-label="좋아요"
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition ${
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border transition ${
           liked
             ? "border-red-200 bg-red-50 text-red-600"
             : "border-suaza-border text-suaza-ink-muted hover:bg-gray-50"
         }`}
       >
         <svg
-          width="16"
-          height="16"
+          width="15"
+          height="15"
           viewBox="0 0 24 24"
           fill={liked ? "currentColor" : "none"}
           stroke="currentColor"
@@ -95,11 +97,11 @@ export default function PostActions({
         onClick={share}
         aria-label="게시글 링크 공유"
         title="게시글 링크 공유"
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border border-suaza-border text-suaza-ink-muted hover:bg-gray-50 transition"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border border-suaza-border text-suaza-ink-muted hover:bg-gray-50 transition"
       >
         <svg
-          width="16"
-          height="16"
+          width="15"
+          height="15"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -118,51 +120,139 @@ export default function PostActions({
       </button>
       </div>
 
-      {/* 누가 좋아요를 눌렀는지 — 클릭하면 이름 목록 펼침 */}
-      {likers.length > 0 && (
-        <div className="flex flex-col gap-1">
+      {/* 누가 좋아요를 눌렀는지 — 표시 + 바텀시트 (게시글·댓글 공용) */}
+      <LikersLine likers={likers} />
+    </div>
+  );
+}
+
+// 좋아요 표시줄 — "xxx님이 좋아합니다" / "xxx 외 N명님이 좋아합니다".
+// 이름/외N명을 누르면 좋아요한 사람 목록 바텀시트가 뜬다. 게시글·댓글 공용.
+export function LikersLine({
+  likers,
+  small = false,
+}: {
+  likers: Liker[];
+  /** true 면 한 단계 작은 글자(text-[11px]) — 댓글용 */
+  small?: boolean;
+}) {
+  const [showLikers, setShowLikers] = useState(false);
+  if (likers.length === 0) return null;
+  return (
+    <>
+      <p
+        className={`inline-flex items-center gap-1 text-suaza-ink-muted ${
+          small ? "text-[10px]" : "text-xs"
+        }`}
+      >
+        <span>
+          {likers.length === 1 ? (
+            // 1명: 이름을 누르면 목록 팝업 (클릭 가능 표시로 밑줄)
+            <button
+              type="button"
+              onClick={() => setShowLikers(true)}
+              className="font-medium text-suaza-ink underline underline-offset-2"
+            >
+              {displayMemberName(likers[0].name)}
+            </button>
+          ) : (
+            // 2명 이상: 첫 이름은 일반 텍스트, "외 N명"만 팝업 트리거
+            <>
+              <span className="font-medium text-suaza-ink">
+                {displayMemberName(likers[0].name)}
+              </span>
+              {" 외 "}
+              <button
+                type="button"
+                onClick={() => setShowLikers(true)}
+                className="font-medium text-suaza-ink underline underline-offset-2"
+              >
+                {likers.length - 1}명
+              </button>
+            </>
+          )}
+          님이 좋아합니다
+        </span>
+      </p>
+
+      {showLikers && (
+        <LikersModal likers={likers} onClose={() => setShowLikers(false)} />
+      )}
+    </>
+  );
+}
+
+// 좋아요한 사람 목록 팝업 (인스타 좋아요 리스트 참고) — 프로필 카드(아바타+이름) 리스트.
+function LikersModal({
+  likers,
+  onClose,
+}: {
+  likers: Liker[];
+  onClose: () => void;
+}) {
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label="좋아요한 사람"
+    >
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      {/* 하단에서 올라오는 바텀시트 — 화면을 다 가리지 않도록 높이 제한 */}
+      <div className="relative w-full max-w-[600px] max-h-[70vh] bg-white rounded-t-2xl shadow-xl flex flex-col overflow-hidden">
+        <div className="pt-2 flex justify-center shrink-0">
+          <span className="w-9 h-1 rounded-full bg-gray-300" aria-hidden />
+        </div>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-suaza-border shrink-0">
+          <h3 className="font-bold text-suaza-ink text-sm">
+            좋아요 {likers.length}
+          </h3>
           <button
             type="button"
-            onClick={() => setShowLikers((v) => !v)}
-            aria-expanded={showLikers}
-            className="self-start inline-flex items-center gap-1 text-xs text-suaza-ink-muted hover:text-suaza-ink transition"
+            onClick={onClose}
+            aria-label="닫기"
+            className="w-7 h-7 inline-flex items-center justify-center rounded-full text-suaza-ink-muted hover:text-suaza-ink hover:bg-gray-100 transition"
           >
-            <span className="text-red-500" aria-hidden>
-              ♥
-            </span>
-            <span>
-              {displayMemberName(likers[0].name)}
-              {likers.length > 1 ? ` 외 ${likers.length - 1}명` : ""}님이 좋아합니다
-            </span>
-            <svg
-              aria-hidden
-              width="11"
-              height="11"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={`transition-transform ${showLikers ? "rotate-180" : ""}`}
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
+            ✕
           </button>
-          {showLikers && (
-            <div className="flex flex-wrap gap-1">
-              {likers.map((l) => (
-                <span
-                  key={l.id}
-                  className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-suaza-ink"
-                >
+        </div>
+        {/* 최대 4명 정도만 보이고, 그 이상은 스크롤 (한 줄 ≈ 3.5rem) */}
+        <ul className="overflow-y-auto p-2 flex flex-col max-h-[14rem]">
+          {likers.map((l) => (
+            <li key={l.id}>
+              <Link
+                href={`/members/${l.id}`}
+                className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 transition"
+              >
+                <LikerAvatar name={l.name} src={l.avatar_url ?? null} />
+                <span className="font-medium text-suaza-ink text-sm truncate">
                   {displayMemberName(l.name)}
                 </span>
-              ))}
-            </div>
-          )}
-        </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function LikerAvatar({ name, src }: { name: string; src: string | null }) {
+  const initial = name?.charAt(0) || "?";
+  return (
+    <span className="relative shrink-0 w-9 h-9 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
+      {src ? (
+        <Image
+          src={src}
+          alt={name}
+          fill
+          sizes="36px"
+          className="object-cover"
+        />
+      ) : (
+        <span className="text-sm font-bold text-suaza-ink">{initial}</span>
       )}
-    </div>
+    </span>
   );
 }

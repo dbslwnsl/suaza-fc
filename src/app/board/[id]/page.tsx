@@ -68,17 +68,18 @@ export default async function PostDetailPage({
   // (마이그레이션 0044 미적용 등으로 테이블이 없으면 error 만 받고 0/false 로 처리)
   const { data: likeRows } = await supabase
     .from("post_likes")
-    .select("user_id, user:profiles(name)")
+    .select("user_id, user:profiles(name, avatar_url)")
     .eq("post_id", id);
   const likeRowsT = (likeRows ?? []) as unknown as {
     user_id: string;
-    user: { name: string } | null;
+    user: { name: string; avatar_url: string | null } | null;
   }[];
   const likeCount = likeRowsT.length;
   const likedByMe = likeRowsT.some((r) => r.user_id === user.id);
   const likers = likeRowsT.map((r) => ({
     id: r.user_id,
     name: r.user?.name ?? "(알 수 없음)",
+    avatar_url: r.user?.avatar_url ?? null,
   }));
 
   // 댓글 좋아요 — 이 글의 댓글들에 대한 좋아요 행을 모아 댓글별 수/본인여부 계산.
@@ -86,16 +87,19 @@ export default async function PostDetailPage({
   const commentIds = (commentsRaw ?? []).map((c) => c.id as string);
   const likeCountByComment = new Map<string, number>();
   const likedCommentIds = new Set<string>();
-  const likersByComment = new Map<string, { id: string; name: string }[]>();
+  const likersByComment = new Map<
+    string,
+    { id: string; name: string; avatar_url: string | null }[]
+  >();
   if (commentIds.length > 0) {
     const { data: commentLikeRows } = await supabase
       .from("comment_likes")
-      .select("comment_id, user_id, user:profiles(name)")
+      .select("comment_id, user_id, user:profiles(name, avatar_url)")
       .in("comment_id", commentIds);
     for (const r of (commentLikeRows ?? []) as unknown as {
       comment_id: string;
       user_id: string;
-      user: { name: string } | null;
+      user: { name: string; avatar_url: string | null } | null;
     }[]) {
       likeCountByComment.set(
         r.comment_id,
@@ -103,7 +107,11 @@ export default async function PostDetailPage({
       );
       if (r.user_id === user.id) likedCommentIds.add(r.comment_id);
       const arr = likersByComment.get(r.comment_id) ?? [];
-      arr.push({ id: r.user_id, name: r.user?.name ?? "(알 수 없음)" });
+      arr.push({
+        id: r.user_id,
+        name: r.user?.name ?? "(알 수 없음)",
+        avatar_url: r.user?.avatar_url ?? null,
+      });
       likersByComment.set(r.comment_id, arr);
     }
   }
@@ -220,17 +228,17 @@ export default async function PostDetailPage({
                   <span className="shrink-0">{formatPostDate(p.created_at)}</span>
                 </div>
                 {canEdit && (
-                  <div className="flex gap-1.5 shrink-0">
+                  <div className="flex items-center gap-3 shrink-0">
                     <Link
                       href={`/board/${p.id}?edit=1`}
-                      className="inline-flex items-center text-xs px-2.5 py-1 rounded-md border border-suaza-border text-suaza-ink hover:bg-gray-50 transition"
+                      className="text-xs font-medium text-blue-600 hover:underline"
                     >
                       수정
                     </Link>
                     <form action={deletePost.bind(null, p.id)}>
                       <button
                         type="submit"
-                        className="inline-flex items-center text-xs px-2.5 py-1 rounded-md border border-red-300 text-red-600 hover:bg-red-50 transition"
+                        className="text-xs font-medium text-red-600 hover:underline"
                       >
                         삭제
                       </button>

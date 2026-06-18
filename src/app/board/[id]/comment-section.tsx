@@ -9,8 +9,7 @@ import {
   updateComment,
 } from "@/lib/board/actions";
 import { formatPostDate } from "@/lib/board/helpers";
-import { displayMemberName } from "@/lib/members/name";
-import { type Liker } from "./post-actions";
+import { LikersLine, type Liker } from "./post-actions";
 
 export type Comment = {
   id: string;
@@ -302,7 +301,7 @@ function CommentItem({
             />
           </div>
         </div>
-        {comment.likers.length > 0 && <CommentLikers likers={comment.likers} />}
+        <LikersLine likers={comment.likers} small />
       </div>
 
       {replying && (
@@ -372,55 +371,6 @@ function CommentLike({
       </svg>
       <span className="tabular-nums">{count}</span>
     </button>
-  );
-}
-
-// 댓글 좋아요를 누른 사람 — 클릭하면 이름 목록 펼침.
-function CommentLikers({ likers }: { likers: Liker[] }) {
-  const [show, setShow] = useState(false);
-  return (
-    <div className="flex flex-col gap-1">
-      <button
-        type="button"
-        onClick={() => setShow((v) => !v)}
-        aria-expanded={show}
-        className="self-start inline-flex items-center gap-1 text-[11px] text-suaza-ink-muted hover:text-suaza-ink transition"
-      >
-        <span className="text-red-500" aria-hidden>
-          ♥
-        </span>
-        <span>
-          {displayMemberName(likers[0].name)}
-          {likers.length > 1 ? ` 외 ${likers.length - 1}명` : ""}
-        </span>
-        <svg
-          aria-hidden
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={`transition-transform ${show ? "rotate-180" : ""}`}
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
-      {show && (
-        <div className="flex flex-wrap gap-1">
-          {likers.map((l) => (
-            <span
-              key={l.id}
-              className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-suaza-ink"
-            >
-              {displayMemberName(l.name)}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 

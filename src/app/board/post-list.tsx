@@ -133,24 +133,24 @@ function PostCard({
 
   return (
     <div className="border border-suaza-border rounded-lg overflow-hidden">
-      <div className="flex gap-3 p-4">
-        {/* 좌측: 아바타(상단) + 이름(하단, 날짜 라인과 정렬) */}
-        <Link
-          href={`/board/${post.id}`}
-          className="flex flex-col items-center justify-between gap-1 shrink-0 w-12 group"
-        >
+      <div className="flex items-center gap-3 p-4">
+        {/* 좌측: 아바타 — 이름/제목 2줄에 걸쳐 세로 중앙 */}
+        <Link href={`/board/${post.id}`} className="shrink-0">
           <AuthorAvatar
             name={post.author?.name ?? null}
             src={post.author?.avatar_url ?? null}
           />
-          <span className="text-[11px] text-suaza-ink-muted truncate w-full text-center group-hover:text-suaza-ink">
-            {post.author?.name ?? "(알 수 없음)"}
-          </span>
         </Link>
-        {/* 우측: 태그 → 제목+💬+▼ → 날짜 */}
+        {/* 우측: 1줄(이름·날짜·게시글 타입) / 2줄(제목 + 💬 + 펼치기) */}
         <div className="flex-1 min-w-0 flex flex-col gap-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* 공지 카테고리는 아래 카테고리 뱃지가 "공지"를 표시하므로 중복 방지 */}
+          <div className="flex items-center gap-2 flex-wrap text-xs">
+            <span className="font-medium text-suaza-ink">
+              {post.author?.name ?? "(알 수 없음)"}
+            </span>
+            <span className="text-suaza-ink-muted">
+              {formatPostDate(post.created_at)}
+            </span>
+            {/* 공지 카테고리는 카테고리 뱃지가 "공지"를 표시하므로 중복 방지 */}
             {post.is_notice && post.category !== "notice" && (
               <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium">
                 공지
@@ -163,10 +163,7 @@ function PostCard({
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <Link
-              href={`/board/${post.id}`}
-              className="group flex-1 min-w-0"
-            >
+            <Link href={`/board/${post.id}`} className="group flex-1 min-w-0">
               <h3 className="font-bold text-suaza-ink truncate group-hover:underline">
                 {post.title}
               </h3>
@@ -199,9 +196,6 @@ function PostCard({
                 <polyline points="6 9 12 15 18 9" />
               </svg>
             </button>
-          </div>
-          <div className="text-xs text-suaza-ink-muted">
-            {formatPostDate(post.created_at)}
           </div>
         </div>
       </div>
