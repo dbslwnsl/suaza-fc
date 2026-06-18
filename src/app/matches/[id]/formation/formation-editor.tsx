@@ -1659,7 +1659,11 @@ function Pitch({
               }`}
               style={{
                 left: `${s.x * 100}%`,
-                top: `${s.y * 100}%`,
+                // 단일 팀(상대전·자체전 단독) 표기 시 GK 이름이 하단 라인과 겹치고
+                // 상단 여백이 남아, 11명 전체를 10px 위로 올린다. 두 팀 동시 표기엔 영향 없음.
+                top: isIntra
+                  ? `${s.y * 100}%`
+                  : `calc(${s.y * 100}% - 10px)`,
                 WebkitTouchCallout: "none",
                 // 드래그 가능한(선수 배치된) 슬롯은 처음부터 touch-action:none 으로 둔다.
                 // touchstart 시점의 값으로 스크롤 여부가 결정되므로, 드래그 시작 후
