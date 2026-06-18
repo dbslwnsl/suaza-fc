@@ -1266,6 +1266,66 @@ export async function setMyAttendingQuarters(
   revalidatePath("/");
 }
 
+/**
+ * 매니저(회장·감독)가 특정 참석 회원의 참여 쿼터를 직접 설정.
+ * 마감/종료 후에도 사용 가능(권한자 전용). 참석 상태인 회원만 대상.
+ */
+export async function setAttendingQuartersFor(
+  matchId: string,
+  playerId: string,
+  quarters: number[] | null,
+) {
+  const { supabase } = await requireStaff();
+
+  const { data: existing } = await supabase
+    .from("match_attendances")
+    .select("status, match:matches(total_quarters)")
+    .eq("match_id", matchId)
+    .eq("player_id", playerId)
+    .maybeSingle();
+
+  // 참석 상태가 아니면 무시 (쿼터는 참석자에게만 의미)
+  if (existing?.status !== "attending") return;
+
+  const total =
+    (existing as { match?: { total_quarters?: number } | null } | null)?.match
+      ?.total_quarters ?? 4;
+
+  // 정규화: 1..total 범위 + 중복 제거 + 정렬. 전체면 NULL(전체 참여).
+  let normalized: number[] | null = null;
+  if (Array.isArray(quarters)) {
+    const set = new Set(
+      quarters.filter((q) => Number.isInteger(q) && q >= 1 && q <= total),
+    );
+    // 매니저 수정에서 전부 해제하면 '불참'으로 이동 (출석 취소가 아닌 명시적 불참)
+    if (set.size === 0) {
+      await supabase
+        .from("match_attendances")
+        .update({ status: "absent", attending_quarters: null })
+        .eq("match_id", matchId)
+        .eq("player_id", playerId);
+      revalidatePath(`/matches/${matchId}`);
+      revalidatePath("/");
+      return;
+    }
+    if (set.size < total) {
+      normalized = Array.from(set).sort((a, b) => a - b);
+    }
+  }
+
+  await supabase
+    .from("match_attendances")
+    .update({
+      attending_quarters: normalized,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("match_id", matchId)
+    .eq("player_id", playerId);
+
+  revalidatePath(`/matches/${matchId}`);
+  revalidatePath("/");
+}
+
 // ─────────────────────────────────────────────────────────────
 // 자체전 A/B 팀 편성 (match_attendances.team)
 // ─────────────────────────────────────────────────────────────

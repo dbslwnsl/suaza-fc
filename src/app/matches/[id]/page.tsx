@@ -512,6 +512,7 @@ export default async function MatchDetailPage({
                     quarterActions={m.quarter_actions ?? null}
                     deadlineStr={deadlineStr}
                     voteClosed={voteClosed}
+                    deadlinePassed={deadlinePassed}
                     locked={
                       forcedAbsent ||
                       isStarted ||
@@ -1013,6 +1014,7 @@ function AttendanceCard({
   quarterActions,
   deadlineStr,
   voteClosed,
+  deadlinePassed,
   locked,
   lockedMessage,
 }: {
@@ -1026,6 +1028,8 @@ function AttendanceCard({
   quarterActions?: (string | null)[] | null;
   deadlineStr: string;
   voteClosed?: boolean;
+  /** 마감 시각 경과 여부 (수동 종료가 아니어도 자동 마감) */
+  deadlinePassed?: boolean;
   locked?: boolean;
   lockedMessage?: ReactNode;
 }) {
@@ -1040,9 +1044,9 @@ function AttendanceCard({
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {voteClosed ? (
+          {voteClosed || deadlinePassed ? (
             <span className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600 font-medium">
-              종료됨
+              {voteClosed ? "종료됨" : "마감됨"}
             </span>
           ) : (
             <span className="text-xs text-suaza-ink-muted">
@@ -1053,7 +1057,7 @@ function AttendanceCard({
             <form action={closeAttendanceVote.bind(null, matchId)}>
               <button
                 type="submit"
-                disabled={voteClosed}
+                disabled={voteClosed || deadlinePassed}
                 className="text-xs font-medium px-2.5 py-1 rounded-md border border-red-300 text-red-600 hover:bg-red-50 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
               >
                 투표 종료

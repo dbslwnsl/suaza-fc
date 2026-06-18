@@ -46,6 +46,7 @@ export default function AttendanceManagerBoard({
   quarterActions,
   readonly = false,
   onDrop,
+  onMemberClick,
 }: {
   byStatus: ByStatus;
   nonVoters: Member[];
@@ -56,8 +57,21 @@ export default function AttendanceManagerBoard({
   /** 드롭 시 부모의 통합 낙관 상태에 위임 — 칩·상단 통계가 한 번의 렌더로 함께 갱신된다.
    *  byStatus/nonVoters 는 이미 부모에서 낙관 반영된 값이므로 보드는 순수 표시만 한다. */
   onDrop?: (playerId: string, status: Status) => void;
+  /** 참석(전체/일부) 멤버 클릭 시 호출 — 매니저가 쿼터를 수정하는 용도. (드래그와 충돌하지 않게 처리) */
+  onMemberClick?: (m: Member) => void;
 }) {
   const [dragging, setDragging] = useState(false);
+  // 드래그 직후 발생하는 click 을 무시하기 위한 플래그 (터치 롱프레스 드래그용)
+  const suppressClickRef = useRef(false);
+
+  const handleMemberClick = (m: Member) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    if (readonly) return;
+    onMemberClick?.(m);
+  };
 
   // 터치 기기 여부 — 터치에서는 네이티브 HTML5 드래그가 동작하지 않으므로
   // 포인터 기반 롱프레스 드래그를 사용한다. (마우스는 기존 네이티브 DnD 유지)
@@ -118,6 +132,7 @@ export default function AttendanceManagerBoard({
 
   function startPointerDrag(member: Member, e: React.PointerEvent) {
     if (readonly) return;
+    suppressClickRef.current = false;
     lpStart.current = { x: e.clientX, y: e.clientY };
     modeRef.current = "pending";
     const target = e.currentTarget as HTMLElement;
@@ -129,6 +144,8 @@ export default function AttendanceManagerBoard({
       if (modeRef.current !== "pending") return; // 그 사이 스크롤로 전환됐으면 취소
       modeRef.current = "drag";
       dragMember.current = member;
+      // 드래그가 확정됐으니 직후의 click(쿼터 편집 열기)은 무시한다.
+      suppressClickRef.current = true;
       // 드래그 확정 시점에만 포인터 캡처 — 그 전엔 네이티브 스크롤(pan-y)을 방해하지 않는다.
       try {
         target.setPointerCapture(ptrId);
@@ -219,6 +236,7 @@ export default function AttendanceManagerBoard({
               readonly={readonly}
               isTouch={isTouch}
               pointerDrag={pointerDrag}
+              onClick={onMemberClick ? () => handleMemberClick(m) : undefined}
             />
           ))
         )}
@@ -247,6 +265,7 @@ export default function AttendanceManagerBoard({
                   readonly={readonly}
                   isTouch={isTouch}
                   pointerDrag={pointerDrag}
+                  onClick={onMemberClick ? () => handleMemberClick(m) : undefined}
                   compact
                 />
                 <QuarterSegments
@@ -473,6 +492,7 @@ function Chip({
   isTouch,
   pointerDrag,
   compact = false,
+  onClick,
 }: {
   member: Member;
   chipClass?: string;
@@ -484,6 +504,8 @@ function Chip({
   pointerDrag?: PointerDrag;
   /** true 면 좌우 패딩을 줄여 이름에 딱 맞는 좁은 칩 */
   compact?: boolean;
+  /** 칩 클릭 (드래그가 아닌 탭) — 매니저 쿼터 편집 등. 드래그와 충돌하지 않게 호출부에서 처리. */
+  onClick?: () => void;
 }) {
   const usePointer = !!isTouch && !readonly && !!pointerDrag;
   // 마우스(비터치)에서만 네이티브 HTML5 드래그 사용
@@ -507,12 +529,17 @@ function Chip({
       onPointerMove={usePointer ? pointerDrag!.onMove : undefined}
       onPointerUp={usePointer ? pointerDrag!.onEnd : undefined}
       onPointerCancel={usePointer ? pointerDrag!.onEnd : undefined}
+      onClick={onClick}
       // touch-action: pan-y — 세로 스크롤은 네이티브(관성 포함)에 맡긴다.
       // 스크롤이 시작되면 브라우저가 pointercancel 을 보내 롱프레스가 취소되고,
       // 롱프레스가 확정된(드래그) 동안에만 touchmove 를 preventDefault 해 스크롤을 막는다.
       style={usePointer ? { touchAction: "pan-y" } : undefined}
       className={`select-none ${
-        readonly ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+        readonly
+          ? "cursor-default"
+          : onClick
+            ? "cursor-pointer active:cursor-grabbing"
+            : "cursor-grab active:cursor-grabbing"
       } inline-flex items-center ${
         compact ? "gap-0.5 px-1" : "gap-1 px-2.5"
       } py-0.5 rounded-full text-xs border bg-white ${

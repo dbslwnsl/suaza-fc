@@ -9,15 +9,19 @@ import {
   useTransition,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   setAttendanceFor,
+  setAttendingQuartersFor,
   setMyAttendingQuarters,
   setMyCondition,
   voteAttendance,
 } from "@/lib/matches/actions";
 import { quarterShortLabel } from "@/lib/matches/helpers";
 import { POSITION_COLOR, type Position } from "@/lib/members/positions";
-import AttendanceManagerBoard from "@/components/attendance-manager-board";
+import AttendanceManagerBoard, {
+  type Member,
+} from "@/components/attendance-manager-board";
 
 // 컨디션 1~5단계. 1=최상(빨강·12시) → 5=최하(파랑·6시).
 const CONDITION_COLOR = [
@@ -633,6 +637,8 @@ export function AttendanceCardVote({
     myCondition ?? null,
   );
   const [, startConditionTransition] = useTransition();
+  // 매니저가 클릭한 참석 멤버 — 쿼터 편집 모달 대상
+  const [editing, setEditing] = useState<Member | null>(null);
   const cycleCondition = () => {
     const cur = condition ?? 3;
     const next: number = cur >= 5 ? 1 : cur + 1;
@@ -700,8 +706,85 @@ export function AttendanceCardVote({
         quarterActions={quarterActions}
         readonly={!isManager}
         onDrop={isManager ? drag : undefined}
+        onMemberClick={isManager ? setEditing : undefined}
       />
+
+      {editing && (
+        <QuarterEditModal
+          matchId={matchId}
+          member={editing}
+          totalQuarters={totalQuarters}
+          quarterActions={quarterActions}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </>
+  );
+}
+
+// 매니저가 참석 멤버를 클릭했을 때 — 참여 쿼터를 세그먼트 바로 수정하는 바텀시트.
+// 마감/종료 후에도 권한자가 쿼터를 조정할 수 있다.
+function QuarterEditModal({
+  matchId,
+  member,
+  totalQuarters,
+  quarterActions,
+  onClose,
+}: {
+  matchId: string;
+  member: Member;
+  totalQuarters: number;
+  quarterActions?: (string | null)[] | null;
+  onClose: () => void;
+}) {
+  const [quarters, setQuarters] = useState<number[] | null>(
+    member.attending_quarters ?? null,
+  );
+  const [, startTransition] = useTransition();
+
+  const apply = (q: number[] | null) => {
+    setQuarters(q);
+    startTransition(() => setAttendingQuartersFor(matchId, member.id, q));
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${member.name} 참여 쿼터 수정`}
+    >
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-[600px] bg-white rounded-t-2xl shadow-xl flex flex-col gap-3 p-4">
+        <div className="pt-1 flex justify-center">
+          <span className="w-9 h-1 rounded-full bg-gray-300" aria-hidden />
+        </div>
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-suaza-ink text-sm">
+            {member.name} · 참여 쿼터
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="w-7 h-7 inline-flex items-center justify-center rounded-full text-suaza-ink-muted hover:text-suaza-ink hover:bg-gray-100 transition"
+          >
+            ✕
+          </button>
+        </div>
+        <QuarterPicker
+          bare
+          totalQuarters={totalQuarters}
+          selected={quarters}
+          quarterActions={quarterActions}
+          onChange={apply}
+        />
+        <p className="text-[11px] text-suaza-ink-faint">
+          전부 해제하면 불참으로 이동합니다.
+        </p>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
