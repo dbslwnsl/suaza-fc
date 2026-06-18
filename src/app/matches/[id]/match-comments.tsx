@@ -9,6 +9,7 @@ import {
   updateMatchComment,
 } from "@/lib/matches/actions";
 import { formatPostDate } from "@/lib/board/helpers";
+import { LikersLine, type Liker } from "../../board/[id]/post-actions";
 
 export type MatchComment = {
   id: string;
@@ -20,6 +21,7 @@ export type MatchComment = {
   author: { name: string; avatar_url: string | null } | null;
   like_count: number;
   liked_by_me: boolean;
+  likers: Liker[];
 };
 
 type CommentWithReplies = MatchComment & { replies: MatchComment[] };
@@ -90,6 +92,7 @@ export default function MatchCommentSection({
         author: { name: myName ?? "", avatar_url: myAvatarUrl },
         like_count: 0,
         liked_by_me: false,
+        likers: [],
       },
     ]);
     // 2) 저장 후 실제 행(id·시각)으로 교체. 실패하면 임시 항목 제거(롤백).
@@ -411,6 +414,7 @@ function CommentItem({
             </div>
           </div>
         )}
+        {!isTemp && <LikersLine likers={comment.likers} small />}
       </div>
 
       {replying && (

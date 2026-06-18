@@ -118,29 +118,45 @@ export default async function MatchDetailPage({
   const commentIds = (commentsRaw ?? []).map((c) => c.id as string);
   const likeCountByComment = new Map<string, number>();
   const likedCommentIds = new Set<string>();
+  const likersByComment = new Map<
+    string,
+    { id: string; name: string; avatar_url: string | null }[]
+  >();
   if (commentIds.length > 0) {
     const { data: commentLikeRows } = await supabase
       .from("match_comment_likes")
-      .select("comment_id, user_id")
+      .select("comment_id, user_id, user:profiles(name, avatar_url)")
       .in("comment_id", commentIds);
-    for (const r of commentLikeRows ?? []) {
+    for (const r of (commentLikeRows ?? []) as unknown as {
+      comment_id: string;
+      user_id: string;
+      user: { name: string; avatar_url: string | null } | null;
+    }[]) {
       likeCountByComment.set(
         r.comment_id,
         (likeCountByComment.get(r.comment_id) ?? 0) + 1,
       );
       if (r.user_id === user.id) likedCommentIds.add(r.comment_id);
+      const arr = likersByComment.get(r.comment_id) ?? [];
+      arr.push({
+        id: r.user_id,
+        name: r.user?.name ?? "(알 수 없음)",
+        avatar_url: r.user?.avatar_url ?? null,
+      });
+      likersByComment.set(r.comment_id, arr);
     }
   }
 
   const comments = (
     (commentsRaw ?? []) as unknown as Omit<
       MatchComment,
-      "like_count" | "liked_by_me"
+      "like_count" | "liked_by_me" | "likers"
     >[]
   ).map((c) => ({
     ...c,
     like_count: likeCountByComment.get(c.id) ?? 0,
     liked_by_me: likedCommentIds.has(c.id),
+    likers: likersByComment.get(c.id) ?? [],
   })) as MatchComment[];
 
   type VotePlayer = {
