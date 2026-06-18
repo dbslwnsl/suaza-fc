@@ -20,11 +20,8 @@ import {
   type Match,
 } from "@/lib/matches/helpers";
 import PastMatchCard from "./matches/past-match-card";
-import {
-  CATEGORY_LABEL,
-  formatPostDate,
-  type PostCategory,
-} from "@/lib/board/helpers";
+import NoticeCard from "./notice-card";
+import { type PostCategory } from "@/lib/board/helpers";
 import {
   aggregateSeason,
   pointsForParticipation,
@@ -46,34 +43,6 @@ type NoticeRow = {
   created_at: string;
   author: { name: string; avatar_url: string | null } | null;
 };
-
-function NoticeAvatar({
-  name,
-  src,
-}: {
-  name: string | null;
-  src: string | null;
-}) {
-  const initial = name?.charAt(0) || "?";
-  return (
-    <div
-      className="relative shrink-0 w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center"
-      aria-hidden
-    >
-      {src ? (
-        <Image
-          src={src}
-          alt={name ?? "프로필"}
-          fill
-          sizes="40px"
-          className="object-cover"
-        />
-      ) : (
-        <span className="text-sm font-bold text-suaza-ink">{initial}</span>
-      )}
-    </div>
-  );
-}
 
 function PositionBadge({ position }: { position: Position }) {
   const color = POSITION_COLOR[position];
@@ -628,38 +597,7 @@ export default async function Home() {
 
         {/* Latest Notice (항상 표시 — 없으면 안내) */}
         {notice ? (
-          <Link
-            href={`/board/${notice.id}`}
-            className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border hover:bg-gray-50 transition flex flex-col gap-2"
-          >
-            <div className="flex items-center gap-3">
-              <NoticeAvatar
-                name={notice.author?.name ?? null}
-                src={notice.author?.avatar_url ?? null}
-              />
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="font-bold text-suaza-ink truncate">
-                  {notice.author?.name ?? ""}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-suaza-ink-muted">
-                    {formatPostDate(notice.created_at)}
-                  </span>
-                  <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium shrink-0">
-                    {notice.category && notice.category !== "notice"
-                      ? CATEGORY_LABEL[notice.category]
-                      : "공지"}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <span className="font-bold text-suaza-ink truncate">
-              {notice.title}
-            </span>
-            <p className="text-sm text-suaza-ink-muted whitespace-pre-wrap line-clamp-3">
-              {notice.content}
-            </p>
-          </Link>
+          <NoticeCard notice={notice} />
         ) : (
           <div className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border flex items-center gap-2">
             <span className="text-[11px] px-2 py-0.5 rounded bg-gray-200 text-gray-600 font-medium">
