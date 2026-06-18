@@ -49,7 +49,7 @@ export default function PostList({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 카테고리 필터 — 전 화면 버튼형 칩 (좁으면 가로 스크롤) */}
+      {/* 카테고리 필터 — 전 화면 버튼형 칩 (좁으면 가로 스크롤). 끝에 새 글(+) 버튼. */}
       <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
         <CategoryChip
           label="전체"
@@ -64,6 +64,14 @@ export default function PostList({
             onClick={() => setFilter(c)}
           />
         ))}
+        <Link
+          href="/board/new"
+          aria-label="새 글 작성"
+          title="새 글 작성"
+          className="shrink-0 inline-flex items-center justify-center px-2 desktop:px-3 py-0.5 desktop:py-1 rounded-full bg-suaza-ink text-white text-xs desktop:text-sm font-medium whitespace-nowrap hover:opacity-90 transition"
+        >
+          +새글
+        </Link>
       </div>
 
       {filtered.length === 0 ? (
@@ -105,7 +113,7 @@ function CategoryChip({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition shrink-0 ${
+      className={`inline-flex items-center px-2 desktop:px-3 py-0.5 desktop:py-1 rounded-full text-xs desktop:text-sm font-medium whitespace-nowrap transition shrink-0 ${
         active
           ? "bg-suaza-ink text-white border border-suaza-ink"
           : "bg-white text-suaza-ink border border-suaza-border hover:bg-gray-100"
