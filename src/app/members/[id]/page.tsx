@@ -426,7 +426,7 @@ function Stat({
   label: string;
   value: number;
   tone?: "primary";
-  /** 시즌 카테고리 순위 (있으면 정수). 1~3위는 메달, 그 외는 alwaysShowRank 일 때만 표기. */
+  /** 시즌 카테고리 순위 (있으면 정수). 1~3위는 "N위" 뱃지, 그 외는 alwaysShowRank 일 때만 표기. */
   rank?: number | null;
   /** true 면 4위 이상도 "N위" 뱃지로 표기 (포인트용). */
   alwaysShowRank?: boolean;
@@ -435,24 +435,14 @@ function Stat({
 }) {
   const valueCls = tone === "primary" ? "text-blue-700" : "text-suaza-ink";
   const labelCls = tone === "primary" ? "text-blue-600" : "text-suaza-ink-muted";
-  const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
-  // 메달이 없는데 alwaysShowRank 이면 "N위" 텍스트 뱃지 (포인트 전용)
-  const showTextBadge = !medal && alwaysShowRank && rank != null;
+  // 1~3위는 모든 항목에서 "N위" 텍스트 뱃지로 표기. 포인트(alwaysShowRank)는 4위 이상도 표기.
+  const showTextBadge = rank != null && (alwaysShowRank || rank <= 3);
   return (
     <div
       className={`relative flex flex-col items-center justify-center gap-1 py-1 ${
         showDivider ? "border-l border-suaza-border" : ""
       }`}
     >
-      {medal && (
-        <span
-          className="absolute -top-3 right-0.5 text-sm leading-none"
-          aria-label={`${label} 시즌 ${rank}위`}
-          title={`${label} 시즌 ${rank}위`}
-        >
-          {medal}
-        </span>
-      )}
       {showTextBadge && (
         <span
           className={`absolute -top-3 right-0 px-1 py-0.5 rounded-full text-[9px] font-bold leading-none text-suaza-ink ${
