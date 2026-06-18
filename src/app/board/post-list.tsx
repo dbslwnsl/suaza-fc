@@ -193,16 +193,19 @@ function PostCard({
             <span className="text-suaza-ink-muted">
               {formatPostDate(post.created_at)}
             </span>
-            {/* 공지 카테고리는 카테고리 뱃지가 "공지"를 표시하므로 중복 방지 */}
-            {post.is_notice && post.category !== "notice" && (
-              <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium">
-                공지
+            {/* 카테고리(공지/자유 등) 뱃지는 우측 정렬 */}
+            <span className="ml-auto flex items-center gap-2">
+              {/* 공지 카테고리는 카테고리 뱃지가 "공지"를 표시하므로 중복 방지 */}
+              {post.is_notice && post.category !== "notice" && (
+                <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium">
+                  공지
+                </span>
+              )}
+              <span
+                className={`text-[11px] px-2 py-0.5 rounded font-medium ${categoryBadgeClass(post.category, post.is_notice)}`}
+              >
+                {CATEGORY_LABEL[post.category]}
               </span>
-            )}
-            <span
-              className={`text-[11px] px-2 py-0.5 rounded font-medium ${categoryBadgeClass(post.category, post.is_notice)}`}
-            >
-              {CATEGORY_LABEL[post.category]}
             </span>
           </div>
         </div>
