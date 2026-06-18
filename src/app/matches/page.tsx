@@ -101,7 +101,7 @@ export default async function MatchesPage({
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[800px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
         {/* Header */}
-        <header className="flex items-center justify-between gap-3 flex-wrap">
+        <header className="flex items-center gap-3">
           <div className="flex items-center gap-3">
             <svg
               className="w-9 h-9 shrink-0 text-suaza-ink"
@@ -122,14 +122,6 @@ export default async function MatchesPage({
               일정 & 결과
             </h1>
           </div>
-          {isStaff && (
-            <Link
-              href="/matches/new"
-              className="text-xs font-medium px-3 py-1.5 rounded-md bg-suaza-ink text-white hover:opacity-90 transition shrink-0 whitespace-nowrap self-center"
-            >
-              + 새 경기
-            </Link>
-          )}
         </header>
 
         {message && (
@@ -165,16 +157,17 @@ export default async function MatchesPage({
 
         {/* 예정된 경기 — 날씨는 Suspense 로 streaming. 페이지 첫 paint 가 외부 API 응답에
             의존하지 않도록 카드는 즉시 표시되고 날씨만 비동기로 채워진다. */}
-        {upcoming.length > 0 && (
+        {(upcoming.length > 0 || isStaff) && (
           <Suspense
             fallback={
               <UpcomingMatchesSection
                 matches={upcoming}
                 weathers={upcoming.map(() => null)}
+                isStaff={isStaff}
               />
             }
           >
-            <UpcomingMatchesWithWeather matches={upcoming} />
+            <UpcomingMatchesWithWeather matches={upcoming} isStaff={isStaff} />
           </Suspense>
         )}
 
@@ -182,21 +175,36 @@ export default async function MatchesPage({
         {past.length > 0 && <PastMatchesSection matches={past} />}
 
         {/* Empty state */}
-        {live.length === 0 && upcoming.length === 0 && past.length === 0 && (
-          <p className="text-suaza-ink-muted text-sm text-center py-12">
-            등록된 경기가 없습니다.
-          </p>
-        )}
+        {live.length === 0 &&
+          upcoming.length === 0 &&
+          past.length === 0 &&
+          !isStaff && (
+            <p className="text-suaza-ink-muted text-sm text-center py-12">
+              등록된 경기가 없습니다.
+            </p>
+          )}
       </div>
     </main>
   );
 }
 
-async function UpcomingMatchesWithWeather({ matches }: { matches: Match[] }) {
+async function UpcomingMatchesWithWeather({
+  matches,
+  isStaff,
+}: {
+  matches: Match[];
+  isStaff: boolean;
+}) {
   const weathers = await Promise.all(
     matches.map((m) => fetchWeather(m.location, m.match_date)),
   );
-  return <UpcomingMatchesSection matches={matches} weathers={weathers} />;
+  return (
+    <UpcomingMatchesSection
+      matches={matches}
+      weathers={weathers}
+      isStaff={isStaff}
+    />
+  );
 }
 
 function SectionHeader({

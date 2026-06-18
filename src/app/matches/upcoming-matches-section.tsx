@@ -11,9 +11,12 @@ const DESKTOP_LIMIT = 4;
 export default function UpcomingMatchesSection({
   matches,
   weathers,
+  isStaff = false,
 }: {
   matches: Match[];
   weathers: (WeatherInfo | null)[];
+  /** true 면 헤더 우측에 "+ 새 경기" 버튼 표시 */
+  isStaff?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const moreOnMobile = matches.length > MOBILE_LIMIT;
@@ -22,10 +25,27 @@ export default function UpcomingMatchesSection({
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <h2 className="text-lg font-bold text-suaza-ink">예정된 경기</h2>
-        <span className="text-sm text-suaza-ink-muted">· {matches.length}경기</span>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-bold text-suaza-ink">예정된 경기</h2>
+          <span className="text-sm text-suaza-ink-muted">
+            · {matches.length}경기
+          </span>
+        </div>
+        {isStaff && (
+          <Link
+            href="/matches/new"
+            className="shrink-0 whitespace-nowrap text-xs font-medium px-3 py-1.5 rounded-md bg-suaza-ink text-white hover:opacity-90 transition"
+          >
+            + 새 경기
+          </Link>
+        )}
       </div>
+      {matches.length === 0 && (
+        <p className="text-sm text-suaza-ink-muted py-2">
+          예정된 경기가 없습니다.
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {matches.map((m, i) => {
           let hideCls = "";
