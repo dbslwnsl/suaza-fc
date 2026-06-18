@@ -18,6 +18,7 @@ import {
   MIN_TOTAL_QUARTERS,
   UNIFORM_COLORS,
   isMatchStarted,
+  isAttendanceVoteLocked,
   isQuarterAction,
   maxQuartersForDuration,
   type QuarterAction,
@@ -984,33 +985,21 @@ type AttendanceStatus = (typeof ATTENDANCE_VALUES)[number];
 
 /**
  * 본인 출석 투표가 허용되는지.
- * - 회장(manager)/감독(coach): 항상 허용
- * - 일반 회원: 경기 시작 전 + 투표 마감 전에만 허용
+ * 참석/불참/미정 버튼(본인 투표)은 경기 시작·종료·마감 후 역할과 무관하게 잠긴다.
+ * 매니저·감독은 버튼 대신 드래그앤드랍 보드(setAttendanceFor 등)로 변경한다.
  */
 async function memberVoteAllowed(
   supabase: Awaited<ReturnType<typeof createClient>>,
   matchId: string,
-  userId: string,
 ): Promise<boolean> {
-  const [{ data: me }, { data: match }] = await Promise.all([
-    supabase.from("profiles").select("role").eq("id", userId).single(),
-    supabase
-      .from("matches")
-      .select("status, match_date, vote_deadline, vote_closed_at")
-      .eq("id", matchId)
-      .single(),
-  ]);
-  if (me?.role === "manager" || me?.role === "coach") return true;
+  const { data: match } = await supabase
+    .from("matches")
+    .select("status, match_date, vote_deadline, vote_closed_at")
+    .eq("id", matchId)
+    .single();
   if (!match) return false;
-  if (isMatchStarted(match)) return false;
-  if (match.vote_closed_at) return false;
-  if (
-    match.vote_deadline &&
-    Date.now() > new Date(match.vote_deadline).getTime()
-  ) {
-    return false;
-  }
-  return true;
+  // 홈/경기상세 UI 와 동일한 잠금 기준 사용
+  return !isAttendanceVoteLocked(match);
 }
 
 /**
@@ -1101,7 +1090,7 @@ export async function setAttendance(
     redirect(`${redirectTo}?error=${encodeURIComponent("올바르지 않은 값입니다")}`);
   }
 
-  if (!(await memberVoteAllowed(supabase, matchId, user.id))) {
+  if (!(await memberVoteAllowed(supabase, matchId))) {
     redirect(
       `${redirectTo}?error=${encodeURIComponent("투표가 마감되어 변경할 수 없습니다")}`,
     );
@@ -1159,7 +1148,7 @@ export async function voteAttendance(matchId: string, status: AttendanceStatus) 
   if (!ATTENDANCE_VALUES.includes(status)) return;
 
   // 마감/시작 후엔 매니저·감독만 변경 가능
-  if (!(await memberVoteAllowed(supabase, matchId, user.id))) {
+  if (!(await memberVoteAllowed(supabase, matchId))) {
     revalidatePath(`/matches/${matchId}`);
     return;
   }
@@ -1212,7 +1201,7 @@ export async function setMyAttendingQuarters(
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  if (!(await memberVoteAllowed(supabase, matchId, user.id))) {
+  if (!(await memberVoteAllowed(supabase, matchId))) {
     revalidatePath(`/matches/${matchId}`);
     return;
   }

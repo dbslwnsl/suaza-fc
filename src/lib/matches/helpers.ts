@@ -200,6 +200,23 @@ export function isMatchStarted(m: Pick<Match, "status" | "match_date">): boolean
   return false;
 }
 
+/**
+ * 출석 투표(참석/불참/미정 버튼)가 잠겼는지 여부 — 홈/경기상세/서버 액션 공통 기준.
+ * 잠금 사유: 경기 시작 · 수동 종료(vote_closed_at) · 마감시간 경과(vote_deadline).
+ * 역할과 무관하게 잠긴다(매니저·감독 포함). 매니저·감독은 버튼 대신
+ * 경기상세의 드래그앤드랍 보드로 출석을 변경한다(setAttendanceFor 등, requireStaff).
+ */
+export function isAttendanceVoteLocked(
+  m: Pick<Match, "status" | "match_date" | "vote_deadline" | "vote_closed_at">,
+  nowMs: number = Date.now(),
+): boolean {
+  if (isMatchStarted(m)) return true;
+  if (m.vote_closed_at != null) return true;
+  if (m.vote_deadline != null && nowMs > new Date(m.vote_deadline).getTime())
+    return true;
+  return false;
+}
+
 export type Result = "win" | "draw" | "lose";
 
 export const RESULT_LABEL: Record<Result, string> = {

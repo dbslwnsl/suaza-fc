@@ -16,6 +16,7 @@ import {
   MATCH_STATUS_LABEL,
   formatMatchDate,
   isMatchStarted,
+  isAttendanceVoteLocked,
   type Match,
 } from "@/lib/matches/helpers";
 import PastMatchCard from "./matches/past-match-card";
@@ -720,14 +721,7 @@ export default async function Home() {
               isManager={profile?.role === "manager"}
               totalQuarters={upcoming.total_quarters ?? 4}
               quarterActions={upcoming.quarter_actions ?? null}
-              locked={
-                isMatchStarted(upcoming) ||
-                ((upcoming.vote_closed_at != null ||
-                  (!!upcoming.vote_deadline &&
-                    nowMs >
-                      new Date(upcoming.vote_deadline).getTime())) &&
-                  profile?.role !== "manager")
-              }
+              locked={isAttendanceVoteLocked(upcoming, nowMs)}
               lockedMessage={
                 isMatchStarted(upcoming)
                   ? "🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다"

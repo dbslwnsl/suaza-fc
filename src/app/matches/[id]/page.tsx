@@ -34,6 +34,7 @@ import {
   MATCH_STATUS_LABEL,
   getTeamName,
   isMatchStarted,
+  isAttendanceVoteLocked,
   type Match,
 } from "@/lib/matches/helpers";
 import { fetchWeatherDebug, failureMessage } from "@/lib/weather";
@@ -513,11 +514,7 @@ export default async function MatchDetailPage({
                     deadlineStr={deadlineStr}
                     voteClosed={voteClosed}
                     deadlinePassed={deadlinePassed}
-                    locked={
-                      forcedAbsent ||
-                      isStarted ||
-                      ((deadlinePassed || voteClosed) && !isStaff)
-                    }
+                    locked={forcedAbsent || isAttendanceVoteLocked(m)}
                     lockedMessage={
                       injuredLock
                         ? (

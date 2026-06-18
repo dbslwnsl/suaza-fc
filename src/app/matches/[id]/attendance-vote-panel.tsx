@@ -650,13 +650,12 @@ export function AttendanceCardVote({
 
   return (
     <>
-      {/* My response */}
+      {/* My response — 잠기면 역할과 무관하게 동일한 안내를 보여준다.
+          매니저·감독은 아래 보드(드래그앤드랍)로 출석을 변경한다. */}
       {locked ? (
-        isManager ? null : (
-          <div className="bg-gray-50 rounded-xl p-3 text-center text-xs text-suaza-ink-muted">
-            {lockedMessage}
-          </div>
-        )
+        <div className="bg-gray-50 rounded-xl p-3 text-center text-xs text-suaza-ink-muted">
+          {lockedMessage}
+        </div>
       ) : (
         <div className="bg-red-50/50 rounded-xl p-3 flex flex-col gap-2">
           <div className="flex items-center gap-2">
