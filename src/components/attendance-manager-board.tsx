@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { quarterShortLabel } from "@/lib/matches/helpers";
 
 // 터치 기기 여부 — SSR 안전하게 읽기 (마운트 후 클라이언트 값). 변하지 않으므로 구독은 no-op.
 const subscribeNoop = () => () => {};
@@ -194,26 +193,6 @@ export default function AttendanceManagerBoard({
     m.attending_quarters == null || m.attending_quarters.length >= totalQuarters;
   const full = byStatus.attending.filter(isFull);
   const partial = byStatus.attending.filter((m) => !isFull(m));
-  // 일부 참여를 "동일한 참여 쿼터"끼리 묶는다 — 같은 쿼터 조합의 멤버는 한 라인에.
-  const partialGroups = (() => {
-    const map = new Map<string, { quarters: number[]; members: Member[] }>();
-    for (const m of partial) {
-      const qs = [...(m.attending_quarters ?? [])].sort((a, b) => a - b);
-      const key = qs.join(",");
-      const g = map.get(key);
-      if (g) g.members.push(m);
-      else map.set(key, { quarters: qs, members: [m] });
-    }
-    const groups = [...map.values()];
-    // 그룹 정렬: 참여 쿼터 많은 순 → 쿼터 조합 사전순
-    groups.sort(
-      (a, b) =>
-        b.quarters.length - a.quarters.length ||
-        a.quarters.join(",").localeCompare(b.quarters.join(",")),
-    );
-    return groups;
-  })();
-
   return (
     <div className="flex flex-col gap-3">
       {/* 전체 참여 — 참석 드롭 타깃 */}
@@ -248,7 +227,7 @@ export default function AttendanceManagerBoard({
       {/* 일부 참여 — 드롭 타깃 아님(쿼터는 본인이 선택). 끌어내기만 가능.
           DropSection 과 동일한 패딩/테두리로 좌측 정렬을 맞춤. */}
       {partial.length > 0 && (
-        <div className="flex flex-col gap-1.5 p-1.5 border border-transparent">
+        <div className="flex flex-col gap-2 p-1.5 border border-transparent">
           <span className="self-start inline-flex items-center gap-1.5 text-xs font-bold text-suaza-ink">
             <span
               className="shrink-0 w-1.5 h-1.5 rounded-full"
@@ -256,36 +235,27 @@ export default function AttendanceManagerBoard({
             />
             일부 참여 {partial.length}
           </span>
-          <ul className="flex flex-col gap-1.5">
-            {partialGroups.map((g) => (
-              <li
-                key={g.quarters.join(",")}
-                className="flex items-start justify-between gap-2"
-              >
-                {/* 같은 쿼터에 참여하는 멤버들을 한 라인에 모아 표기 (많아지면 줄바꿈) */}
-                <div className="flex flex-wrap items-center gap-1 min-w-0">
-                  {g.members.map((m) => (
-                    <Chip
-                      key={m.id}
-                      member={m}
-                      chipClass="border-green-300 text-suaza-ink"
-                      onDragStateChange={setDragging}
-                      readonly={readonly}
-                      isTouch={isTouch}
-                      pointerDrag={pointerDrag}
-                    />
-                  ))}
-                </div>
-                {/* 참여 쿼터 — 여러 줄이어도 첫 줄 높이에 맞춰 상단 고정 */}
-                <div className="shrink-0 flex items-center h-6">
-                  <QuarterDots
-                    quarters={g.quarters}
-                    quarterActions={quarterActions}
-                  />
-                </div>
-              </li>
+          {/* 멤버별 칸: 이름 + 참여 쿼터 세그먼트 바.
+              칸을 이름 칩 폭에 맞춰(flex, 고정폭 X) 바가 이름 폭과 동일해진다. */}
+          <div className="flex flex-wrap gap-x-3 gap-y-2.5">
+            {partial.map((m) => (
+              <div key={m.id} className="flex flex-col items-center gap-1">
+                <Chip
+                  member={m}
+                  chipClass="border-green-300 text-suaza-ink"
+                  onDragStateChange={setDragging}
+                  readonly={readonly}
+                  isTouch={isTouch}
+                  pointerDrag={pointerDrag}
+                  compact
+                />
+                <QuarterSegments
+                  quarters={m.attending_quarters ?? null}
+                  totalQuarters={totalQuarters}
+                />
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       )}
 
@@ -468,29 +438,28 @@ function DropSection({
   );
 }
 
-function QuarterDots({
+// 참여 쿼터 세그먼트 바 — 쿼터 선택기와 비슷하게, 참여 쿼터는 초록 채움/그 외 회색.
+// quarters == null 이면 전체 참여(모두 채움).
+function QuarterSegments({
   quarters,
-  quarterActions,
+  totalQuarters,
 }: {
   quarters: number[] | null;
-  quarterActions?: (string | null)[] | null;
+  totalQuarters: number;
 }) {
-  const cls =
-    "w-4 h-4 rounded-full bg-green-500 text-white flex items-center justify-center text-[9px] font-bold leading-none";
-  if (quarters == null) {
-    return (
-      <span className={cls} title="전체 참여">
-        A
-      </span>
-    );
-  }
   return (
-    <div className="flex items-center gap-0.5 shrink-0">
-      {quarters.map((q) => (
-        <span key={q} className={cls} title={`${q}Q`}>
-          {quarterShortLabel(q - 1, quarterActions)}
-        </span>
-      ))}
+    <div className="flex w-full gap-px">
+      {Array.from({ length: totalQuarters }, (_, i) => {
+        const on = quarters == null || quarters.includes(i + 1);
+        return (
+          <span
+            key={i}
+            className={`flex-1 h-1.5 first:rounded-l-sm last:rounded-r-sm ${
+              on ? "bg-green-500" : "bg-gray-200"
+            }`}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -503,6 +472,7 @@ function Chip({
   readonly,
   isTouch,
   pointerDrag,
+  compact = false,
 }: {
   member: Member;
   chipClass?: string;
@@ -512,6 +482,8 @@ function Chip({
   /** 터치 기기 여부 — 네이티브 draggable 을 끄고 포인터 드래그를 사용 */
   isTouch?: boolean;
   pointerDrag?: PointerDrag;
+  /** true 면 좌우 패딩을 줄여 이름에 딱 맞는 좁은 칩 */
+  compact?: boolean;
 }) {
   const usePointer = !!isTouch && !readonly && !!pointerDrag;
   // 마우스(비터치)에서만 네이티브 HTML5 드래그 사용
@@ -541,7 +513,9 @@ function Chip({
       style={usePointer ? { touchAction: "pan-y" } : undefined}
       className={`select-none ${
         readonly ? "cursor-default" : "cursor-grab active:cursor-grabbing"
-      } inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs border bg-white ${
+      } inline-flex items-center ${
+        compact ? "gap-0.5 px-1" : "gap-1 px-2.5"
+      } py-0.5 rounded-full text-xs border bg-white ${
         readonly ? "" : "hover:bg-gray-50"
       } ${chipClass} ${muted ? "opacity-80" : ""}`}
     >
