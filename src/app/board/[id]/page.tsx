@@ -202,30 +202,28 @@ export default async function PostDetailPage({
         ) : (
           <>
             <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* 공지 카테고리는 카테고리 뱃지가 "공지"를 표시하므로 중복 방지 */}
-                {p.is_notice && p.category !== "notice" && (
-                  <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium">
-                    공지
-                  </span>
-                )}
-                {p.category && (
-                  <span
-                    className={`text-[11px] px-2 py-0.5 rounded font-medium ${categoryBadgeClass(p.category, p.is_notice)}`}
-                  >
-                    {CATEGORY_LABEL[p.category]}
-                  </span>
-                )}
-                <h1 className="text-xl sm:text-2xl font-bold text-suaza-ink">
-                  {p.title}
-                </h1>
-              </div>
+              <h1 className="text-xl sm:text-2xl font-bold text-suaza-ink">
+                {p.title}
+              </h1>
               <div className="text-sm text-suaza-ink-muted flex items-center justify-between gap-2">
-                <div className="flex gap-2 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
                   <span className="truncate">
                     {p.author?.name ?? "(알 수 없음)"}
                   </span>
                   <span className="shrink-0">{formatPostDate(p.created_at)}</span>
+                  {/* 카테고리/공지 뱃지 — 날짜 바로 옆 */}
+                  {p.is_notice && p.category !== "notice" && (
+                    <span className="shrink-0 text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium">
+                      공지
+                    </span>
+                  )}
+                  {p.category && (
+                    <span
+                      className={`shrink-0 text-[11px] px-2 py-0.5 rounded font-medium ${categoryBadgeClass(p.category, p.is_notice)}`}
+                    >
+                      {CATEGORY_LABEL[p.category]}
+                    </span>
+                  )}
                 </div>
                 {canEdit && (
                   <div className="flex items-center gap-3 shrink-0">
