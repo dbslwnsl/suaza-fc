@@ -73,7 +73,7 @@ export default function NoticeCard({ notice }: { notice: Notice }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-left bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border hover:bg-gray-50 transition flex flex-col gap-2 w-full"
+        className="text-left bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border desktop:hover:bg-gray-50 transition flex flex-col gap-2 w-full"
       >
         <div className="flex items-center gap-3">
           <Avatar
