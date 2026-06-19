@@ -17,6 +17,10 @@
 }
 
 :root {
+  /* 사이트가 색상 모드를 직접 관리한다고 선언 — 삼성 인터넷 등의 "강제 다크"가
+     페이지 색을 임의로 재계산하지 않고 아래 정의한 팔레트를 그대로 쓰도록 한다. */
+  color-scheme: light dark;
+
   --background: #ffffff;
   --foreground: #171717;
 
@@ -74,4 +78,69 @@ body {
   -webkit-text-fill-color: var(--suaza-ink);
   caret-color: var(--suaza-ink);
   transition: background-color 9999s ease-in-out 0s;
+}
+
+/* ============================================================
+   다크 테마 — 시스템/브라우저가 다크로 보고할 때(prefers-color-scheme: dark).
+   1) 시맨틱 토큰을 다크 팔레트로 재정의 → text-suaza-ink / bg-suaza-bg / border 등 자동 전환
+   2) 앱 전반에서 하드코딩으로 쓰인 중립색·틴트 표면을 다크용으로 매핑
+   (브랜드 강조색 red/green/position 점 등 채도 높은 색은 그대로 유지)
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0d1017;
+    --foreground: #e6e8ec;
+
+    --suaza-bg: #0d1017;
+    --suaza-ink: #e6e8ec;
+    --suaza-ink-muted: #9aa3b2;
+    --suaza-ink-faint: #6f7787;
+    --suaza-button: #3a4b5c;
+    --suaza-accent: #f0524f;
+    --suaza-border: #2b313c;
+    --suaza-divider: #232a36;
+    --suaza-placeholder: #6f7787;
+  }
+
+  /* 중립 표면 (카드·입력·드롭다운 등) */
+  .bg-white { background-color: #161b24; }
+  .bg-gray-50 { background-color: #1a2029; }
+  .bg-gray-100 { background-color: #1f262f; }
+  .bg-gray-200 { background-color: #2a313c; }
+  .bg-gray-300 { background-color: #39414e; }
+  .hover\:bg-gray-50:hover { background-color: #222934; }
+  .hover\:bg-gray-100:hover { background-color: #272f3a; }
+  .hover\:bg-gray-200:hover { background-color: #2f3744; }
+
+  /* 회색 계열 글자 */
+  .text-gray-400 { color: #8990a0; }
+  .text-gray-500 { color: #99a1b0; }
+  .text-gray-600 { color: #aab1bf; }
+  .text-gray-700 { color: #c3c9d4; }
+  .text-black { color: #e6e8ec; }
+
+  /* 회색 테두리 */
+  .border-gray-200 { border-color: #2b313c; }
+  .border-gray-300 { border-color: #39414e; }
+
+  /* 강조 틴트 표면 — 밝은 파스텔을 어두운 톤으로 (텍스트 색은 유지해도 대비 확보) */
+  .bg-red-50 { background-color: #2a1517; }
+  .bg-red-100 { background-color: #3a1a1c; }
+  .bg-green-50 { background-color: #112019; }
+  .bg-green-100 { background-color: #16291f; }
+  .bg-emerald-100 { background-color: #16291f; }
+  .bg-amber-50 { background-color: #241c0e; }
+  .bg-amber-100 { background-color: #2e2410; }
+  .bg-blue-50 { background-color: #0f1c2e; }
+  .bg-purple-100 { background-color: #221a33; }
+  .bg-violet-100 { background-color: #221a33; }
+
+  /* 자동완성 박스도 다크 표면으로 */
+  .login-input:-webkit-autofill,
+  .login-input:-webkit-autofill:hover,
+  .login-input:-webkit-autofill:focus,
+  .login-input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px #161b24 inset;
+    box-shadow: 0 0 0 1000px #161b24 inset;
+  }
 }
