@@ -2535,7 +2535,7 @@ function PitchViewToggle({
     { key: "B", label: teamBName },
   ];
   return (
-    <div className="inline-flex items-center gap-1 rounded-xl bg-gray-100 p-0.5 shadow-sm">
+    <div className="flex flex-1 min-w-0 items-center gap-1 rounded-xl bg-gray-100 p-0.5 shadow-sm desktop:inline-flex desktop:flex-none">
       {opts.map((o) => {
         const active = o.key === value;
         return (
@@ -2543,7 +2543,7 @@ function PitchViewToggle({
             key={o.key}
             type="button"
             onClick={() => onChange(o.key)}
-            className={`min-w-[56px] h-7 px-3 rounded-lg text-xs font-bold transition ${
+            className={`flex-1 desktop:flex-none desktop:min-w-[56px] h-7 px-3 rounded-lg text-xs font-bold transition ${
               active
                 ? "bg-white text-suaza-ink shadow-sm"
                 : "text-suaza-ink-muted hover:text-suaza-ink"
