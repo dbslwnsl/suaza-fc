@@ -107,58 +107,6 @@ export type VotePlayer = {
   isRefereeKing?: boolean;
 };
 
-// 부심 깃발 SVG — 노/빨 격자
-function LinesmanFlag() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden>
-      <rect x="3" y="2" width="1.6" height="20" rx="0.5" fill="#1F2937" />
-      <rect x="4.6" y="3" width="7" height="6" fill="#FACC15" />
-      <rect x="11.6" y="3" width="7" height="6" fill="#EF4444" />
-      <rect x="4.6" y="9" width="7" height="6" fill="#EF4444" />
-      <rect x="11.6" y="9" width="7" height="6" fill="#FACC15" />
-      <rect
-        x="4.6"
-        y="3"
-        width="14"
-        height="12"
-        fill="none"
-        stroke="rgba(0,0,0,0.25)"
-        strokeWidth="0.4"
-      />
-    </svg>
-  );
-}
-
-// 시즌 카테고리 1위 딱지 — 기록 버튼과 동일한 이모지/아이콘.
-// 공동 1위면 여러 개. 라벨 없이 아이콘만 (부상 + 배지와 동일한 톤).
-function KingBadges({ p }: { p: VotePlayer }) {
-  const items: { key: string; icon: React.ReactNode; title: string }[] = [];
-  if (p.isGoalKing)
-    items.push({ key: "goal", icon: "⚽", title: "시즌 득점왕" });
-  if (p.isAssistKing)
-    items.push({ key: "assist", icon: "🅰", title: "시즌 어시왕" });
-  if (p.isCleanSheetKing)
-    items.push({ key: "cs", icon: "🛡️", title: "시즌 CS왕" });
-  if (p.isRefereeKing)
-    items.push({ key: "ref", icon: <LinesmanFlag />, title: "시즌 심판왕" });
-  if (items.length === 0) return null;
-  return (
-    <>
-      {items.map((it) => (
-        <span
-          key={it.key}
-          className="shrink-0 inline-flex items-center justify-center w-4 h-4 text-[14px] leading-none align-middle"
-          role="img"
-          aria-label={it.title}
-          title={it.title}
-        >
-          {it.icon}
-        </span>
-      ))}
-    </>
-  );
-}
-
 // 부상 표기용 빨강 + 배지 (명단 카드와 동일 디자인)
 export function InjuryBadge() {
   return (
@@ -1027,8 +975,7 @@ function AttendingByQuarterSection({
                   >
                     {m.is_injured && <InjuryBadge />}
                     {m.on_leave && <OnLeaveBadge />}
-                    <KingBadges p={m} />
-                    {m.name}
+                          {m.name}
                   </span>
                 ))}
               </div>
@@ -1065,8 +1012,7 @@ function AttendingByQuarterSection({
                         >
                           {m.is_injured && <InjuryBadge />}
                           {m.on_leave && <OnLeaveBadge />}
-                          <KingBadges p={m} />
-                          {m.name}
+                                      {m.name}
                         </span>
                       ))}
                     </div>
@@ -1188,7 +1134,6 @@ function MemberGroup({
             >
               {m.is_injured && <InjuryBadge />}
               {m.on_leave && <OnLeaveBadge />}
-              <KingBadges p={m} />
               {m.name}
             </span>
           ))
@@ -1222,8 +1167,7 @@ function AttendanceRow({
               <span key={m.id} className="inline-flex items-center gap-0.5">
                 {m.is_injured && <InjuryBadge />}
                 {m.on_leave && <OnLeaveBadge />}
-                <KingBadges p={m} />
-                {m.name}
+                  {m.name}
                 {i < members.length - 1 ? <span>,&nbsp;</span> : null}
               </span>
             ))
