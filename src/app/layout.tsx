@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 import BottomTabs from "@/components/bottom-tabs";
@@ -43,6 +43,12 @@ export const metadata: Metadata = {
     description: "SUAZA FC 축구 동호회 회원 전용 사이트",
     images: ["/suaza-emblem-original.png"],
   },
+};
+
+// 사이트가 라이트/다크를 직접 지원한다고 선언 → 삼성 인터넷 등이 자체 auto-dark 로
+// 색을 덧칠하지 않고, 우리가 정의한 다크 팔레트를 그대로 사용하게 한다.
+export const viewport: Viewport = {
+  colorScheme: "light dark",
 };
 
 export default async function RootLayout({
