@@ -73,7 +73,7 @@ export default function NoticeCard({ notice }: { notice: Notice }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-left bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border hover:bg-gray-50 transition flex flex-col gap-2 w-full"
+        className="text-left bg-white dark:bg-black dark:border-gray-700 sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border hover:bg-gray-50 dark:hover:bg-gray-900 transition flex flex-col gap-2 w-full"
       >
         <div className="flex items-center gap-3">
           <Avatar
@@ -81,21 +81,21 @@ export default function NoticeCard({ notice }: { notice: Notice }) {
             src={notice.author?.avatar_url ?? null}
           />
           <div className="flex flex-col gap-0.5 min-w-0">
-            <span className="font-bold text-suaza-ink truncate">
+            <span className="font-bold text-suaza-ink dark:text-white truncate">
               {notice.author?.name ?? ""}
             </span>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-suaza-ink-muted">
+              <span className="text-xs text-suaza-ink-muted dark:text-gray-300">
                 {formatPostDate(notice.created_at)}
               </span>
               <CategoryBadge category={notice.category} />
             </div>
           </div>
         </div>
-        <span className="font-bold text-suaza-ink truncate">
+        <span className="font-bold text-suaza-ink dark:text-white truncate">
           {notice.title}
         </span>
-        <p className="text-sm text-suaza-ink-muted whitespace-pre-wrap line-clamp-3">
+        <p className="text-sm text-suaza-ink-muted dark:text-gray-300 whitespace-pre-wrap line-clamp-3">
           {notice.content}
         </p>
       </button>
