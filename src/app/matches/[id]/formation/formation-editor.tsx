@@ -1222,6 +1222,10 @@ export default function FormationEditor({
         quarterTabs={quarters.map((q, i) => ({
           id: q.id,
           label: gameQuarters[i]?.label ?? q.id,
+          // 선수가 한 명이라도 배치된 쿼터면 채워진(초록) 점
+          filled:
+            q.assignments.some(Boolean) ||
+            (q.teamB?.assignments.some(Boolean) ?? false),
         }))}
         activeQuarterIdx={activeIdx}
         onQuarterChange={(i) => {
@@ -2531,7 +2535,7 @@ function PitchViewToggle({
     { key: "B", label: teamBName },
   ];
   return (
-    <div className="inline-flex items-center rounded-full border border-suaza-border bg-white p-0.5 shadow-sm">
+    <div className="inline-flex items-center gap-1 rounded-xl bg-gray-100 p-0.5 shadow-sm">
       {opts.map((o) => {
         const active = o.key === value;
         return (
@@ -2539,9 +2543,9 @@ function PitchViewToggle({
             key={o.key}
             type="button"
             onClick={() => onChange(o.key)}
-            className={`min-w-[56px] h-7 px-3 rounded-full text-xs font-semibold transition ${
+            className={`min-w-[56px] h-7 px-3 rounded-lg text-xs font-bold transition ${
               active
-                ? "bg-suaza-button text-white shadow-sm"
+                ? "bg-white text-suaza-ink shadow-sm"
                 : "text-suaza-ink-muted hover:text-suaza-ink"
             }`}
           >
@@ -2587,17 +2591,18 @@ function DesktopRosterPane({
       }`}
     >
       {showRibbon && ribbonTabs.length > 0 && (
-        <div className="overflow-x-auto -mb-px">
-          <div className="flex gap-1 px-3 w-max">
+        <div className="pb-2">
+          {/* 세그먼트 알약형 쿼터 탭 (모바일과 동일 스타일) */}
+          <div className="flex gap-1 bg-gray-100 rounded-xl p-0.5">
             {includeAllTab && (
               <button
                 key="ALL"
                 type="button"
                 onClick={() => onAllClick?.()}
-                className={`shrink-0 min-w-[36px] h-8 px-2 rounded-t-lg text-xs font-bold transition border-x border-t ${
+                className={`flex-1 h-7 rounded-lg text-[11px] font-bold transition ${
                   isAllActive
-                    ? "bg-white border-suaza-border text-suaza-button"
-                    : "bg-suaza-bg border-transparent text-suaza-ink-muted hover:text-suaza-ink"
+                    ? "bg-white text-suaza-button shadow-sm"
+                    : "text-suaza-ink-muted hover:text-suaza-ink"
                 }`}
               >
                 ALL
@@ -2610,10 +2615,10 @@ function DesktopRosterPane({
                   key={q.id}
                   type="button"
                   onClick={() => onRibbonChange(i)}
-                  className={`shrink-0 min-w-[36px] h-8 px-2 rounded-t-lg text-xs font-bold transition border-x border-t ${
+                  className={`flex-1 h-7 rounded-lg text-xs font-bold transition ${
                     active
-                      ? "bg-white border-suaza-border text-suaza-button"
-                      : "bg-suaza-bg border-transparent text-suaza-ink-muted hover:text-suaza-ink"
+                      ? "bg-white text-suaza-ink shadow-sm"
+                      : "text-suaza-ink-muted hover:text-suaza-ink"
                   }`}
                 >
                   {q.label}
@@ -2701,7 +2706,7 @@ function PlayerRosterMobile({
   /** 회장·감독(양 팀 편집) 여부 — true 면 명단 카드 위 쿼터 탭 숨김 (운동장 위 탭 사용) */
   fullAccess?: boolean;
   /** 회장·감독 외(코치·주장·일반)용 — 선수명단 카드 상단에 쿼터 탭 노출 */
-  quarterTabs?: { id: string; label: string }[];
+  quarterTabs?: { id: string; label: string; filled?: boolean }[];
   activeQuarterIdx?: number;
   onQuarterChange?: (idx: number) => void;
   /** 종료 경기 임베드 — 맨 앞 "ALL" 탭 추가 */
@@ -2798,20 +2803,21 @@ function PlayerRosterMobile({
 
   return (
     <div className="desktop-lg:hidden flex flex-col">
-      {/* 쿼터 탭 리본 — 카드 상단에 폴더탭처럼 붙음 (모든 사용자).
+      {/* 쿼터 탭 — 세그먼트 알약형(활성=흰 카드) + 상단 상태 점(배치 있음=초록, 없음=빈 원).
           종료 경기는 맨 앞에 "ALL" 탭(전체 합계 기록 보기) 추가. */}
       {quarterTabs && quarterTabs.length > 0 && (
-        <div className="overflow-x-auto -mb-px">
-          <div className="flex gap-1 px-3 w-max">
+        <div className="pb-2">
+          {/* 세그먼트 탭 */}
+          <div className="flex gap-1 bg-gray-100 rounded-xl p-0.5">
             {includeAllTab && (
               <button
                 key="ALL"
                 type="button"
                 onClick={() => onAllClick?.()}
-                className={`shrink-0 min-w-[32px] h-7 px-2 rounded-t-lg text-xs font-bold transition border-x border-t ${
+                className={`flex-1 h-7 rounded-lg text-[11px] font-bold transition ${
                   isAllActive
-                    ? "bg-white border-suaza-border text-suaza-button"
-                    : "bg-suaza-bg border-transparent text-suaza-ink-muted hover:text-suaza-ink"
+                    ? "bg-white text-suaza-button shadow-sm"
+                    : "text-suaza-ink-muted hover:text-suaza-ink"
                 }`}
               >
                 ALL
@@ -2824,10 +2830,10 @@ function PlayerRosterMobile({
                   key={q.id}
                   type="button"
                   onClick={() => onQuarterChange?.(i)}
-                  className={`shrink-0 min-w-[32px] h-7 px-2 rounded-t-lg text-xs font-bold transition border-x border-t ${
+                  className={`flex-1 h-7 rounded-lg text-xs font-bold transition ${
                     active
-                      ? "bg-white border-suaza-border text-suaza-button"
-                      : "bg-suaza-bg border-transparent text-suaza-ink-muted hover:text-suaza-ink"
+                      ? "bg-white text-suaza-ink shadow-sm"
+                      : "text-suaza-ink-muted hover:text-suaza-ink"
                   }`}
                 >
                   {q.label}
