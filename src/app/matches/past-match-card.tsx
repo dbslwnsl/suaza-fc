@@ -58,14 +58,29 @@ export default function PastMatchCard({ match }: { match: Match }) {
                 ? `${getTeamName(match, "A")} vs ${getTeamName(match, "B")}`
                 : `vs ${match.opponent}`}
             </span>
-            <span
-              className={`text-xs font-medium px-2 py-0.5 rounded shrink-0 ${
-                isIntra
-                  ? "bg-purple-100 text-purple-700"
-                  : "bg-emerald-100 text-emerald-700"
-              }`}
-            >
-              {isIntra ? "자체전" : "상대전"}
+            <span className="shrink-0 flex items-center gap-1.5">
+              <span
+                className={`text-xs font-medium px-2 py-0.5 rounded ${
+                  isIntra
+                    ? "bg-purple-100 text-purple-700"
+                    : "bg-emerald-100 text-emerald-700"
+                }`}
+              >
+                {isIntra ? "자체전" : "상대전"}
+              </span>
+              {/* 진입(상세 보기) 힌트 — 예정 경기 카드와 동일 */}
+              <svg
+                className="w-4 h-4 text-suaza-ink-faint"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
             </span>
           </div>
           <div className="text-xs text-suaza-ink-muted flex flex-col gap-0.5">
