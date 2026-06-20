@@ -328,23 +328,33 @@ export default async function MemberDetailPage({
   // 메달(시즌 1~3위)·순위 뱃지·포인트 강조 기능은 그대로 유지한다.
   const cardStats = [totals[0], totals[1], totals[2], totals[3], totals[5]];
   const statsGrid = (
-    <div className="grid grid-cols-5">
-      {cardStats.map((t, i) => (
-        <Stat
-          key={t.label}
-          label={t.label}
-          value={t.value}
-          tone={t.tone}
-          rank={t.rank ?? null}
-          alwaysShowRank={t.alwaysShowRank}
-          showDivider={i > 0}
-        />
-      ))}
+    <div className="w-full flex flex-col gap-3">
+      {/* 헤더: 막대 그래프 아이콘 + "시즌 기록" */}
+      <div className="flex items-center gap-1.5">
+        <svg viewBox="0 0 24 24" className="w-[15px] h-[15px]" aria-hidden>
+          <rect x="3" y="13" width="4.5" height="8" rx="1" fill="#33BD73" />
+          <rect x="9.75" y="8" width="4.5" height="13" rx="1" fill="#338CF2" />
+          <rect x="16.5" y="4" width="4.5" height="17" rx="1" fill="#FCC733" />
+        </svg>
+        <span className="text-sm font-bold text-suaza-ink">시즌 기록</span>
+      </div>
+      <div className="grid grid-cols-5">
+        {cardStats.map((t) => (
+          <Stat
+            key={t.label}
+            label={t.label}
+            value={t.value}
+            tone={t.tone}
+            rank={t.rank ?? null}
+            alwaysShowRank={t.alwaysShowRank}
+          />
+        ))}
+      </div>
     </div>
   );
 
   return (
-    <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
+    <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 pt-0 pb-8 sm:py-12">
       <div className="max-w-[600px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
         {message && (
           <p className="-mt-2 p-3 bg-green-50 text-green-700 rounded-lg text-sm">
@@ -421,7 +431,6 @@ function Stat({
   tone,
   rank,
   alwaysShowRank = false,
-  showDivider = false,
 }: {
   label: string;
   value: number;
@@ -430,36 +439,38 @@ function Stat({
   rank?: number | null;
   /** true 면 4위 이상도 "N위" 뱃지로 표기 (포인트용). */
   alwaysShowRank?: boolean;
-  /** 좌측 세로 구분선 (첫 칸 제외) */
-  showDivider?: boolean;
 }) {
-  const valueCls = tone === "primary" ? "text-blue-700" : "text-suaza-ink";
-  const labelCls = tone === "primary" ? "text-blue-600" : "text-suaza-ink-muted";
+  const valueCls = tone === "primary" ? "text-blue-600" : "text-suaza-ink";
+  const labelCls = tone === "primary" ? "text-blue-600" : "text-[#99A3B8]";
   // 1~3위는 모든 항목에서 "N위" 텍스트 뱃지로 표기. 포인트(alwaysShowRank)는 4위 이상도 표기.
   const showTextBadge = rank != null && (alwaysShowRank || rank <= 3);
   return (
-    <div
-      className={`relative flex flex-col items-center justify-center gap-1 py-1 ${
-        showDivider ? "border-l border-suaza-border" : ""
-      }`}
-    >
-      {showTextBadge && (
+    <div className="flex flex-col items-center justify-start gap-1">
+      <span className={`text-2xl font-bold tabular-nums ${valueCls}`}>
+        {value}
+      </span>
+      <span className={`text-xs font-medium whitespace-nowrap ${labelCls}`}>
+        {label}
+      </span>
+      {showTextBadge && rank != null && (
         <span
-          className={`absolute -top-3 right-0 px-1 py-0.5 rounded-full text-[9px] font-bold leading-none text-suaza-ink ${
-            tone === "primary" ? "bg-blue-100" : "bg-gray-200"
-          }`}
+          className="mt-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none text-white"
+          style={{
+            backgroundColor:
+              rank === 1
+                ? "#F5A623"
+                : rank === 2
+                  ? "#9AA4B2"
+                  : rank === 3
+                    ? "#C8743E"
+                    : "#64748B",
+          }}
           aria-label={`${label} 시즌 ${rank}위`}
           title={`${label} 시즌 ${rank}위`}
         >
           {rank}위
         </span>
       )}
-      <span className={`text-xl sm:text-2xl font-bold tabular-nums ${valueCls}`}>
-        {value}
-      </span>
-      <span className={`text-[11px] sm:text-xs whitespace-nowrap ${labelCls}`}>
-        {label}
-      </span>
     </div>
   );
 }

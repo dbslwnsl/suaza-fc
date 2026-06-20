@@ -162,21 +162,15 @@ export default function ProfileEditForm({
   // 카드 + 포지션 + 주발 (편집/읽기 공통 레이아웃)
   const sections = (
     <>
-      {/* 상단 신원 카드 */}
-      <section className="rounded-2xl border border-suaza-border p-4 sm:p-5 flex flex-col gap-4">
+      {/* 상단 신원 영역 (카드 없이 평평하게) */}
+      <section className="flex flex-col gap-4">
         <div className="flex items-start gap-3 sm:gap-5 min-w-0">
-          {/* 아바타 + 중앙 하단 뱃지 — 가입 입력 단계엔 "사진필수", 그 외엔 직책 */}
+          {/* 아바타 — 가입 입력 단계엔 "사진필수" 표시 (직책은 이름 옆으로 이동) */}
           <div className="relative shrink-0">
             {avatar}
-            {setupMode ? (
+            {setupMode && (
               <span className="absolute left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 z-10 whitespace-nowrap text-[11px] leading-none px-2 py-1 rounded-full ring-2 ring-white shadow-sm bg-suaza-accent text-white">
                 사진*
-              </span>
-            ) : (
-              <span
-                className={`absolute left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 z-10 whitespace-nowrap text-[11px] leading-none px-2 py-1 rounded-full ring-2 ring-white shadow-sm ${TITLE_BADGE[title] ?? TITLE_BADGE.player}`}
-              >
-                {TITLE_LABEL[title] ?? title}
               </span>
             )}
           </div>
@@ -186,6 +180,14 @@ export default function ProfileEditForm({
               <h1 className="text-lg sm:text-xl font-bold text-suaza-ink">
                 {initial.name}
               </h1>
+              {/* 직책 뱃지 — 이름 옆 */}
+              {!setupMode && (
+                <span
+                  className={`text-[11px] leading-none px-2 py-0.5 rounded-full ${TITLE_BADGE[title] ?? TITLE_BADGE.player}`}
+                >
+                  {TITLE_LABEL[title] ?? title}
+                </span>
+              )}
               {/* 가입 입력 단계에선 등번호·생년월일을 아래 전용 입력으로 받으므로 카드 인라인 표시는 숨김 */}
               {!setupMode && (
                 <InlineEditable
@@ -205,19 +207,21 @@ export default function ProfileEditForm({
                   inputClassName={`${inlineInputCls} w-[60px] text-center`}
                 />
               )}
-              {!setupMode && (
-                <InlineEditable
-                  type="date"
-                  value={birth}
-                  onCommit={setBirth}
-                  readonly
-                  ariaLabel="생년월일"
-                  renderDisplay={(v) => (v ? formatBirth(v) : "생년월일 미설정")}
-                  displayClassName="ml-auto text-xs text-suaza-ink-faint whitespace-nowrap"
-                  inputClassName={`${inlineInputCls} w-[150px] ml-auto`}
-                />
-              )}
             </div>
+
+            {/* 2행: 생년월일 (이름 아랫줄) */}
+            {!setupMode && (
+              <InlineEditable
+                type="date"
+                value={birth}
+                onCommit={setBirth}
+                readonly
+                ariaLabel="생년월일"
+                renderDisplay={(v) => (v ? formatBirth(v) : "생년월일 미설정")}
+                displayClassName="text-xs text-suaza-ink-faint whitespace-nowrap"
+                inputClassName={`${inlineInputCls} w-[150px]`}
+              />
+            )}
 
             {/* 2행: 이메일 */}
             {email && (
@@ -398,19 +402,237 @@ export default function ProfileEditForm({
     </>
   );
 
-  // 읽기 전용: 폼/저장 없이 동일 레이아웃만 렌더
-  if (readonly) {
-    return (
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center gap-3">
-          <UsersIcon className="w-9 h-9 text-suaza-ink shrink-0" />
-          <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
-            프로필
-          </h1>
-        </div>
-        {sections}
+  // 포지션/주발 드롭다운 (카드 디자인용 — 라벨 위, 드롭다운 아래, 가로 3등분)
+  const positionGrid = (
+    <div className="w-full rounded-2xl bg-[#F7F7FA] dark:bg-[#1a2029] px-1 py-3 grid grid-cols-3 divide-x divide-gray-200">
+      <div className="flex flex-col items-center gap-2 px-1.5">
+        <span className="text-[11px] font-medium text-[#99A3B8]">주포지션</span>
+        {readonly ? (
+          <PositionPill pos={primary} />
+        ) : (
+          <Dropdown
+            value={primary}
+            placeholder="선택"
+            rounded="rounded-full"
+            colorText
+            tint
+            bordered={false}
+            showChevron={false}
+            belowChevron
+            triggerClassName="w-[41px] h-[29px]"
+            padding="p-0"
+            weight="font-bold"
+            textSize="text-[14px]"
+            options={POSITIONS.map((p) => ({
+              value: p,
+              label: p,
+              color: POSITION_COLOR[p],
+            }))}
+            onChange={(v) => {
+              const next = v as Position | null;
+              const ns = next && secondary === next ? null : secondary;
+              setPrimary(next);
+              if (next && secondary === next) setSecondary(null);
+              persistFields({
+                positions: [next, ns].filter((p): p is Position => p != null),
+              });
+            }}
+          />
+        )}
       </div>
-    );
+      <div className="flex flex-col items-center gap-2 px-1.5">
+        <span className="text-[11px] font-medium text-[#99A3B8]">부포지션</span>
+        {readonly ? (
+          <PositionPill pos={secondary} />
+        ) : (
+          <Dropdown
+            value={secondary}
+            placeholder="없음"
+            rounded="rounded-full"
+            colorText
+            tint
+            bordered={false}
+            showChevron={false}
+            belowChevron
+            triggerClassName="w-[41px] h-[29px]"
+            padding="p-0"
+            weight="font-bold"
+            textSize="text-[14px]"
+            allowClear
+            clearLabel="없음"
+            options={POSITIONS.filter((p) => p !== primary).map((p) => ({
+              value: p,
+              label: p,
+              color: POSITION_COLOR[p],
+            }))}
+            onChange={(v) => {
+              const next = v as Position | null;
+              setSecondary(next);
+              persistFields({
+                positions: [primary, next].filter(
+                  (p): p is Position => p != null,
+                ),
+              });
+            }}
+          />
+        )}
+      </div>
+      <div className="flex flex-col items-center gap-2 px-1.5">
+        <span className="text-[11px] font-medium text-[#99A3B8]">주발</span>
+        {readonly ? (
+          <span className="text-[14px] font-bold text-[#12171F] dark:text-suaza-ink">
+            {foot ? FOOT_LABEL[foot] : "—"}
+          </span>
+        ) : (
+          <Dropdown
+            value={foot}
+            placeholder="선택"
+            rounded="rounded-full"
+            bordered={false}
+            showChevron={false}
+            belowChevron
+            tint
+            fit
+            mutedPill
+            padding="p-0"
+            weight="font-bold"
+            textSize="text-[14px]"
+            options={PREFERRED_FEET.map((f) => ({
+              value: f,
+              label: FOOT_LABEL[f],
+            }))}
+            onChange={(v) => {
+              const next = v as PreferredFoot | null;
+              setFoot(next);
+              persistFields({ preferred_foot: next });
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+
+  // 본인 편집·읽기 전용 — 첨부 디자인(그라데이션 헤더 + 겹친 아바타) 카드
+  const card = (
+    <div className="flex flex-col gap-4">
+      {/* 그라데이션 헤더 — 엠블럼 색(네이비). 모바일은 가로 전체(풀블리드) */}
+      <div className="relative h-20 -mx-6 sm:mx-0 rounded-t-lg sm:rounded-2xl bg-gradient-to-br from-[#3a5070] to-[#1d2e3e]">
+        <span className="absolute top-1/2 -translate-y-1/2 right-6 sm:right-5 text-[34px] font-bold text-white/25 tabular-nums leading-none">
+          #{jersey || "--"}
+        </span>
+      </div>
+
+      <div className="-mt-16 flex flex-col items-center gap-4">
+        {/* 아바타 — 헤더에 겹침 */}
+        <div className="rounded-full">{avatar}</div>
+
+          {/* 이름 + 직책 */}
+          <div className="-mt-2 flex flex-col items-center gap-0">
+            <div className="flex items-center gap-1">
+              <h1 className="text-[23px] font-bold text-[#12171F] dark:text-suaza-ink">
+                {initial.name}
+              </h1>
+              <span
+                className={`text-[11px] font-bold leading-none px-2.5 py-1 rounded-full ${TITLE_BADGE[title] ?? TITLE_BADGE.player}`}
+                style={{ color: "#454F61" }}
+              >
+                {TITLE_LABEL[title] ?? title}
+              </span>
+            </div>
+            {/* 별명 */}
+            <InlineEditable
+              type="text"
+              value={nickname}
+              onCommit={(v) => {
+                const nv = v.slice(0, 10);
+                setNickname(nv);
+                persistFields({ nickname: nv.trim() || null });
+              }}
+              readonly={readonly}
+              maxLength={10}
+              placeholder="별명"
+              ariaLabel="별명 수정"
+              renderDisplay={(v) => (
+                <span
+                  className="inline-flex items-center gap-1 font-medium text-[13px]"
+                  style={{ color: "#EF3E3E" }}
+                >
+                  {v && `@${v}`}
+                  {!readonly && <span aria-hidden>✏️</span>}
+                </span>
+              )}
+              displayClassName="rounded-full hover:bg-gray-50 transition"
+              inputClassName={`${inlineInputCls} w-[150px] text-center`}
+            />
+          </div>
+
+          {/* 생년월일 / 이메일 */}
+          <div className="w-full rounded-2xl bg-[#F7F7FA] dark:bg-[#1a2029]">
+            <div className="flex items-center justify-between px-4 py-3.5 gap-2">
+              <span className="flex items-center gap-2 text-[12px] font-medium text-[#99A3B8] shrink-0">
+                <span aria-hidden>🎂</span> 생년월일
+              </span>
+              <span className="text-[13px] font-semibold text-[#12171F] dark:text-suaza-ink">
+                {birth ? formatBirth(birth) : "미설정"}
+              </span>
+            </div>
+            {email && (
+              <div className="flex items-center justify-between px-4 py-3.5 gap-2 min-w-0">
+                <span className="flex items-center gap-2 text-[12px] font-medium text-[#99A3B8] shrink-0">
+                  <span aria-hidden>✉️</span> 이메일
+                </span>
+                <span className="text-[13px] font-semibold text-[#12171F] dark:text-suaza-ink truncate">
+                  {email}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* 주포지션 / 부포지션 / 주발 */}
+          {positionGrid}
+
+          {/* 시즌 기록 — 포지션 카드 아래 */}
+          {stats}
+
+          {/* 부상 / 장기불참 */}
+          {!hideStatus && (
+            <div className="w-full grid grid-cols-2 gap-3">
+              <StatusButton
+                label="부상"
+                icon={
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="w-3.5 h-3.5"
+                    fill="currentColor"
+                    aria-hidden
+                  >
+                    <path d="M9 2h6v7h7v6h-7v7H9v-7H2V9h7z" />
+                  </svg>
+                }
+                active={injured}
+                onColor="#EF3E3E"
+                onBg="rgba(239,62,62,0.10)"
+                readonly={!statusEditable}
+                onClick={toggleInjured}
+              />
+              <StatusButton
+                label="장기불참"
+                icon="🚫"
+                active={onLeave}
+                onColor="#1F2937"
+                onBg="rgba(31,41,55,0.08)"
+                readonly={!statusEditable}
+                onClick={toggleOnLeave}
+              />
+            </div>
+          )}
+      </div>
+    </div>
+  );
+
+  // 읽기 전용
+  if (readonly) {
+    return <div className="font-display flex flex-col gap-6">{card}</div>;
   }
 
   // 가입 첫 입력 단계 — 계정이 아직 없으므로 폼 제출(updateProfile)로 저장/가입한다.
@@ -460,26 +682,17 @@ export default function ProfileEditForm({
 
   // 본인 편집 — 저장 버튼 없이 변경 즉시 자동 저장
   return (
-    <div className="flex flex-col gap-6">
-      {/* 제목 + 자동 저장 표시 (카드 밖 상단) */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <UsersIcon className="w-9 h-9 text-suaza-ink shrink-0" />
-          <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
-            프로필
-          </h1>
-        </div>
-        <span
-          className={`text-xs shrink-0 transition-opacity ${
-            busy ? "opacity-100 text-suaza-ink-muted" : "opacity-0"
-          }`}
-          aria-live="polite"
-        >
-          저장 중…
-        </span>
-      </div>
-
-      {sections}
+    <div className="font-display relative">
+      {/* 자동 저장 표시 — 레이아웃 공간을 차지하지 않도록 오버레이 */}
+      <span
+        className={`absolute left-1 top-1 z-10 text-[11px] transition-opacity ${
+          busy ? "opacity-100 text-white/70" : "opacity-0"
+        }`}
+        aria-live="polite"
+      >
+        저장 중…
+      </span>
+      {card}
     </div>
   );
 }
@@ -595,6 +808,77 @@ function StatusPill({
   }`;
   const style = active ? { backgroundColor: onBg, color: onColor } : undefined;
   const inner = label;
+  if (readonly) {
+    return (
+      <span className={cls} style={style}>
+        {inner}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={active}
+      onClick={onClick}
+      className={cls}
+      style={style}
+    >
+      {inner}
+    </button>
+  );
+}
+
+// 읽기 전용 포지션 표시 — 글자 크기에 맞는 캡슐, 배경 = 포지션색 12% 알파.
+function PositionPill({ pos }: { pos: Position | null }) {
+  if (!pos) {
+    return (
+      <span className="text-[14px] font-bold text-suaza-ink-faint">—</span>
+    );
+  }
+  const c = POSITION_COLOR[pos];
+  return (
+    <span
+      className="inline-flex items-center justify-center w-[41px] h-[29px] rounded-full text-[14px] font-bold leading-none"
+      style={{ color: c, backgroundColor: `${c}1F` }}
+    >
+      {pos}
+    </span>
+  );
+}
+
+// 부상/장기불참 — 가로 꽉 찬 아웃라인 버튼 (활성 시 색 채움). 첨부 디자인용.
+function StatusButton({
+  label,
+  icon,
+  active,
+  onColor,
+  onBg,
+  onClick,
+  readonly = false,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  active: boolean;
+  onColor: string;
+  onBg: string;
+  onClick: () => void;
+  readonly?: boolean;
+}) {
+  const cls = `inline-flex items-center justify-center gap-1.5 h-10 rounded-xl border text-sm font-bold transition ${
+    active
+      ? ""
+      : `border-suaza-border text-suaza-ink bg-white${readonly ? "" : " hover:bg-gray-50"}`
+  }`;
+  const style = active
+    ? { backgroundColor: onBg, color: onColor, borderColor: onColor }
+    : undefined;
+  const inner = (
+    <>
+      <span aria-hidden>{icon}</span>
+      {label}
+    </>
+  );
   if (readonly) {
     return (
       <span className={cls} style={style}>

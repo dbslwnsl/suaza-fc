@@ -399,14 +399,12 @@ function MemberCard({
               )}
               {m.onLeave && (
                 <span
-                  className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-[4px] bg-suaza-ink-muted text-white font-bold leading-none"
+                  className="shrink-0 inline-flex items-center justify-center w-4 h-4 text-[13px] leading-none"
                   role="img"
                   aria-label="장기불참"
                   title="장기불참"
                 >
-                  <svg viewBox="0 0 24 24" className="w-3 h-3" fill="currentColor" aria-hidden>
-                    <rect x="3" y="10" width="18" height="4" rx="1" />
-                  </svg>
+                  🚫
                 </span>
               )}
             </div>
