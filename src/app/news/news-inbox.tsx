@@ -125,7 +125,7 @@ export default function NewsInbox({ initial }: { initial: NewsItem[] }) {
   return (
     <>
       {/* 제목 + 모두 읽음 + 카테고리 필터 */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-6">
         <header className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <svg
@@ -162,10 +162,10 @@ export default function NewsInbox({ initial }: { initial: NewsItem[] }) {
                 key={f.key}
                 type="button"
                 onClick={() => setFilter(f.key)}
-                className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition ${
+                className={`inline-flex items-center px-2 desktop:px-3 py-0.5 desktop:py-1 rounded-full text-xs desktop:text-sm font-medium whitespace-nowrap transition shrink-0 ${
                   active
-                    ? "bg-suaza-button text-white"
-                    : "bg-suaza-bg text-suaza-ink-muted hover:text-suaza-ink"
+                    ? "bg-suaza-ink text-white border border-suaza-ink"
+                    : "bg-white text-suaza-ink border border-suaza-border hover:bg-gray-100"
                 }`}
               >
                 {f.label}
