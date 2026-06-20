@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 import BottomTabs from "@/components/bottom-tabs";
+import DevRoleSwitcher from "@/components/dev-role-switcher";
 import { createClient } from "@/lib/supabase/server";
 
 const notoSansKR = Noto_Sans_KR({
@@ -72,6 +73,18 @@ export default async function RootLayout({
     newsBadge = count ?? 0;
   }
 
+  // 개발 전용 직책 전환기 — NEXT_PUBLIC_DEV_TOOLS=1 일 때만, 로그인 상태에서 표시.
+  const devTools = process.env.NEXT_PUBLIC_DEV_TOOLS === "1";
+  let devTitle: string | null = null;
+  if (devTools && user) {
+    const { data: meTitle } = await supabase
+      .from("profiles")
+      .select("title")
+      .eq("id", user.id)
+      .single();
+    devTitle = (meTitle?.title as string | null) ?? "player";
+  }
+
   return (
     <html
       lang="ko"
@@ -80,6 +93,7 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
         {children}
         <BottomTabs newsBadge={newsBadge} />
+        {devTools && devTitle && <DevRoleSwitcher current={devTitle} />}
       </body>
     </html>
   );
