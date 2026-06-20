@@ -14,8 +14,6 @@ import {
   AttendanceCardVote,
   AttendanceCompactVote,
   AttendanceProvider,
-  InjuryBadge,
-  OnLeaveBadge,
 } from "./attendance-vote-panel";
 import NewMatchForm from "@/app/matches/new/new-match-form";
 import ScoreControl from "./score-control";
@@ -514,35 +512,13 @@ export default async function MatchDetailPage({
                     deadlineStr={deadlineStr}
                     voteClosed={voteClosed}
                     deadlinePassed={deadlinePassed}
-                    locked={forcedAbsent || isAttendanceVoteLocked(m)}
+                    locked={isAttendanceVoteLocked(m)}
                     lockedMessage={
-                      injuredLock
-                        ? (
-                          <>
-                            <span className="block">
-                              <InjuryBadge /> 부상 상태로 자동 불참 처리되었습니다
-                            </span>
-                            <span className="block">
-                              (프로필에서 부상 해제 시 투표 가능)
-                            </span>
-                          </>
-                        )
-                        : onLeaveLock
-                          ? (
-                            <>
-                              <span className="block">
-                                <OnLeaveBadge /> 장기불참 상태로 자동 불참 처리되었습니다
-                              </span>
-                              <span className="block">
-                                (프로필에서 장기불참 해제 시 투표 가능)
-                              </span>
-                            </>
-                          )
-                          : isStarted
-                          ? "🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다"
-                          : voteClosed
-                            ? "🔒 출석 투표가 종료되었습니다"
-                            : "🔒 투표가 마감되었습니다 (매니저·감독만 변경 가능)"
+                      isStarted
+                        ? "🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다"
+                        : voteClosed
+                          ? "🔒 출석 투표가 종료되었습니다"
+                          : "🔒 투표가 마감되었습니다 (매니저·감독만 변경 가능)"
                     }
                   />
                 </div>
@@ -1152,6 +1128,8 @@ export function AttendanceVote({
   meId,
   myName,
   myPositions = null,
+  myInjured = false,
+  myOnLeave = false,
   myStatus,
   myAttendingQuarters = null,
   byStatus,
@@ -1166,6 +1144,9 @@ export function AttendanceVote({
   meId: string;
   myName: string | null;
   myPositions?: string[] | null;
+  /** 본인 부상/장기불참 — 투표 시 상태 해제 확인 팝업 트리거용 */
+  myInjured?: boolean;
+  myOnLeave?: boolean;
   myStatus: string | null;
   myAttendingQuarters?: number[] | null;
   byStatus: {
@@ -1184,7 +1165,13 @@ export function AttendanceVote({
     <section className="flex flex-col gap-3">
       <AttendanceCompactVote
         matchId={matchId}
-        me={{ id: meId, name: myName ?? "", positions: myPositions }}
+        me={{
+          id: meId,
+          name: myName ?? "",
+          positions: myPositions,
+          is_injured: myInjured,
+          on_leave: myOnLeave,
+        }}
         myStatus={myStatus}
         myAttendingQuarters={myAttendingQuarters}
         byStatus={byStatus}

@@ -239,14 +239,42 @@ export async function setMemberStatus(
   }
 
   const admin = createAdminClient();
+
+  // 변경 전 상태 — "부상/장기불참 해제" 전환을 판별하기 위함.
+  const { data: prev } = await admin
+    .from("profiles")
+    .select("is_injured, on_leave")
+    .eq("id", profileId)
+    .single();
+  const wasBlocked = !!prev?.is_injured || !!prev?.on_leave;
+
   const { error } = await admin
     .from("profiles")
     .update({ is_injured: isInjured, on_leave: onLeave })
     .eq("id", profileId);
   if (error) return { ok: false, error: error.message };
 
+  // 부상/장기불참 → 정상으로 "해제"되면, 예정/진행 경기의 출석 투표를 삭제(=미투표)한다.
+  // (부상 중 자동 불참으로 보이던 표시가, 해제 후엔 어떤 투표 상태로도 남지 않도록.)
+  const nowBlocked = isInjured || onLeave;
+  if (wasBlocked && !nowBlocked) {
+    const { data: upcoming } = await admin
+      .from("matches")
+      .select("id")
+      .in("status", ["scheduled", "in_progress"]);
+    const ids = (upcoming ?? []).map((m) => m.id);
+    if (ids.length > 0) {
+      await admin
+        .from("match_attendances")
+        .delete()
+        .eq("player_id", profileId)
+        .in("match_id", ids);
+    }
+  }
+
   revalidatePath(`/members/${profileId}`);
   revalidatePath("/members");
+  revalidatePath("/matches");
   revalidatePath("/");
   return { ok: true };
 }

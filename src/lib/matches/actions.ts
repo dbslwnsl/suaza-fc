@@ -1690,6 +1690,22 @@ async function requireUser() {
 }
 
 /**
+ * 본인 프로필의 부상/장기불참 상태 해제 — 출석 투표 시 "상태 해제하고 투표" 확인에서 호출.
+ * 자기 자신만 변경하므로 일반 클라이언트(RLS 자기수정 허용)로 처리한다.
+ */
+export async function clearMyAttendanceBlock(): Promise<{ ok: boolean }> {
+  const { supabase, userId } = await requireUser();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ is_injured: false, on_leave: false })
+    .eq("id", userId);
+  if (error) return { ok: false };
+  revalidatePath("/");
+  revalidatePath("/members");
+  return { ok: true };
+}
+
+/**
  * 댓글 작성/수정/삭제 — 클라이언트가 자체 상태로 즉시 반영하므로 무거운 전체 페이지
  * revalidate 를 하지 않는다. 작성은 생성된 행(id·시각)을 반환해 클라이언트가 임시 항목을
  * 실제 항목으로 교체한다. (경기 상세는 동적 페이지라 재방문 시 서버에서 최신 목록을 다시 읽는다.)

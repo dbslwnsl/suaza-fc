@@ -89,7 +89,7 @@ export default async function Home() {
     supabase
       .from("profiles")
       .select(
-        "name, nickname, title, positions, role, avatar_url, jersey_number, preferred_foot",
+        "name, nickname, title, positions, role, avatar_url, jersey_number, preferred_foot, is_injured, on_leave",
       )
       .eq("id", user!.id)
       .single(),
@@ -233,6 +233,14 @@ export default async function Home() {
       | null;
     myStatus = m?.status ?? null;
     myAttendingQuarters = m?.attending_quarters ?? null;
+    // 부상/장기불참이면 예정 경기 투표를 자동으로 불참 표시 (경기상세와 동일)
+    const meBlocked =
+      !!(profile as { is_injured?: boolean | null })?.is_injured ||
+      !!(profile as { on_leave?: boolean | null })?.on_leave;
+    if (meBlocked) {
+      myStatus = "absent";
+      myAttendingQuarters = null;
+    }
   }
 
   // 누적 통계 (종료 경기만)
@@ -650,6 +658,8 @@ export default async function Home() {
               meId={user!.id}
               myName={profile?.name ?? null}
               myPositions={profile?.positions ?? null}
+              myInjured={!!(profile as { is_injured?: boolean | null })?.is_injured}
+              myOnLeave={!!(profile as { on_leave?: boolean | null })?.on_leave}
               myStatus={myStatus}
               myAttendingQuarters={myAttendingQuarters}
               byStatus={byStatus}

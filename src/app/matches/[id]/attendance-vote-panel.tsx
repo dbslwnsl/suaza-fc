@@ -11,6 +11,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
+  clearMyAttendanceBlock,
   setAttendanceFor,
   setAttendingQuartersFor,
   setMyAttendingQuarters,
@@ -210,7 +211,18 @@ function useOptimisticVote(
       ? overrides.get(myId) ?? null
       : (myStatus as Status | null);
 
-  const vote = (value: Status) => {
+  // 부상/장기불참 자기 자신 — 투표 시 "상태 해제 후 투표" 확인이 필요한지.
+  const [pendingVote, setPendingVote] = useState<Status | null>(null);
+  const [statusResolved, setStatusResolved] = useState(false);
+  const statusBlockKind: "injured" | "on_leave" | null = statusResolved
+    ? null
+    : me?.is_injured
+      ? "injured"
+      : me?.on_leave
+        ? "on_leave"
+        : null;
+
+  const performVote = (value: Status) => {
     if (!myId) return;
     // 토글: 이미 선택된 항목을 다시 누르면 미투표(null)
     const next: Status | null = optimisticStatus === value ? null : value;
@@ -220,6 +232,33 @@ function useOptimisticVote(
       await voteAttendance(matchId, value);
     });
   };
+
+  const vote = (value: Status) => {
+    if (!myId) return;
+    // 부상/장기불참 상태면 먼저 해제 여부를 확인한 뒤 투표한다.
+    if (statusBlockKind) {
+      setPendingVote(value);
+      return;
+    }
+    performVote(value);
+  };
+
+  // 확인 팝업에서 "해제하고 투표" 선택 — 프로필 상태 해제 후 그대로 투표 반영.
+  const confirmStatusChange = () => {
+    const value = pendingVote;
+    setPendingVote(null);
+    setStatusResolved(true);
+    startTransition(async () => {
+      await clearMyAttendanceBlock();
+      if (value && myId) {
+        const next: Status | null = optimisticStatus === value ? null : value;
+        addOverride({ playerId: myId, status: next });
+        setMyQuarters(null);
+        await voteAttendance(matchId, value);
+      }
+    });
+  };
+  const cancelStatusChange = () => setPendingVote(null);
 
   const setAttendingQuarters = (quarters: number[] | null) => {
     if (!myId || optimisticStatus !== "attending") return;
@@ -300,6 +339,10 @@ function useOptimisticVote(
     vote,
     setAttendingQuarters,
     drag,
+    pendingVote,
+    statusBlockKind,
+    confirmStatusChange,
+    cancelStatusChange,
     ...computed,
   };
 }
@@ -379,6 +422,55 @@ export function useAttendanceCtx(): AttendanceCtxValue {
   if (!ctx)
     throw new Error("useAttendanceCtx must be used within AttendanceProvider");
   return ctx;
+}
+
+// 부상/장기불참 회원이 투표를 누르면 상태 해제 여부를 묻는 확인 팝업.
+function StatusChangeModal({
+  open,
+  kind,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  kind: "injured" | "on_leave" | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open || typeof document === "undefined") return null;
+  const label = kind === "on_leave" ? "장기불참" : "부상";
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-6"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
+      <div className="relative w-full max-w-[320px] bg-white rounded-2xl shadow-xl p-5 flex flex-col gap-3">
+        <h3 className="font-bold text-suaza-ink">{label} 상태 해제</h3>
+        <p className="text-sm text-suaza-ink-muted leading-relaxed">
+          현재 <b className="text-suaza-ink">{label}</b> 상태로 자동 불참
+          처리되어 있어요. 상태를 해제하고 투표할까요?
+        </p>
+        <div className="flex gap-2 mt-1">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 h-10 rounded-lg border border-suaza-border text-suaza-ink font-medium hover:bg-gray-50 transition"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="flex-1 h-10 rounded-lg bg-suaza-accent text-white font-bold hover:opacity-90 transition"
+          >
+            해제하고 투표
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
 }
 
 function VoteButtons({
@@ -577,6 +669,10 @@ export function AttendanceCardVote({
     groups,
     nonVoters: nv,
     counts,
+    pendingVote,
+    statusBlockKind,
+    confirmStatusChange,
+    cancelStatusChange,
   } = useAttendanceCtx();
 
   // 본인 컨디션 — 미설정(null)은 기본 "보통"(3)으로 표시되며,
@@ -598,6 +694,12 @@ export function AttendanceCardVote({
 
   return (
     <>
+      <StatusChangeModal
+        open={pendingVote != null}
+        kind={statusBlockKind}
+        onConfirm={confirmStatusChange}
+        onCancel={cancelStatusChange}
+      />
       {/* My response — 잠기면 역할과 무관하게 동일한 안내를 보여준다.
           매니저·감독은 아래 보드(드래그앤드랍)로 출석을 변경한다. */}
       {locked ? (
@@ -771,6 +873,10 @@ export function AttendanceCompactVote({
     setAttendingQuarters,
     groups,
     counts,
+    pendingVote,
+    statusBlockKind,
+    confirmStatusChange,
+    cancelStatusChange,
   } = useOptimisticVote(
     matchId,
     myStatus,
@@ -782,6 +888,12 @@ export function AttendanceCompactVote({
 
   return (
     <>
+      <StatusChangeModal
+        open={pendingVote != null}
+        kind={statusBlockKind}
+        onConfirm={confirmStatusChange}
+        onCancel={cancelStatusChange}
+      />
       {locked ? (
         <div className="bg-gray-50 rounded-lg p-3 text-center text-xs text-suaza-ink-muted">
           {lockedMessage}
