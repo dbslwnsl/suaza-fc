@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { logout } from "@/lib/auth/actions";
 import {
   FOOT_LABEL,
   POSITION_COLOR,
@@ -357,13 +356,13 @@ export default async function Home() {
       <div className="max-w-[800px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-4">
         {/* Top bar */}
         <header className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="relative w-9 h-9 rounded-full overflow-hidden">
+          <div className="flex items-center gap-2.5">
+            <div className="relative w-7 h-7 rounded-lg overflow-hidden">
               <Image
                 src="/suaza-emblem.png"
                 alt="수아자FC"
                 fill
-                sizes="36px"
+                sizes="28px"
                 priority
                 className="object-cover"
               />
@@ -373,6 +372,27 @@ export default async function Home() {
             </span>
           </div>
           <div className="flex items-center gap-2">
+            {/* 알림 설정 — 설정 아이콘 왼쪽 */}
+            <Link
+              href="/settings/notifications"
+              aria-label="알림 설정"
+              title="알림 설정"
+              className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-md border border-suaza-border text-suaza-ink hover:bg-gray-100 transition"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="w-[13px] h-[13px] sm:w-[15px] sm:h-[15px]"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            </Link>
             {(profile?.title === "president" ||
               profile?.title === "head_coach") && (
               <Link
@@ -396,22 +416,14 @@ export default async function Home() {
                 </svg>
               </Link>
             )}
-            <form action={logout}>
-              <button
-                type="submit"
-                className="inline-flex items-center h-6 sm:h-7 px-2.5 text-xs border border-suaza-border rounded-md text-suaza-ink hover:bg-gray-100 transition"
-              >
-                로그아웃
-              </button>
-            </form>
           </div>
         </header>
 
         {/* Profile Card */}
-        <section className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-6 rounded-xl border sm:border-0 border-suaza-border flex flex-col gap-4">
+        <section className="flex flex-col gap-4">
           <div className="flex items-start gap-3 sm:gap-4">
             <div className="relative shrink-0">
-              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-gray-100 flex items-center justify-center">
                 {profile?.avatar_url ? (
                   <Image
                     src={profile.avatar_url}
@@ -457,6 +469,10 @@ export default async function Home() {
                     )}
                   </div>
 
+                  <span className="text-suaza-ink-muted text-xs">
+                    {user!.email}
+                  </span>
+
                   {(positions.length > 0 || foot) && (
                     <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
                       {positions.map((p) => (
@@ -476,10 +492,6 @@ export default async function Home() {
                       )}
                     </div>
                   )}
-
-                  <span className="text-suaza-ink-muted text-xs">
-                    {user!.email}
-                  </span>
                 </>
               ) : (
                 <>
@@ -496,30 +508,10 @@ export default async function Home() {
             {profile && (
               <div className="flex items-center gap-1.5 shrink-0">
                 <Link
-                  href="/settings/notifications"
-                  aria-label="알림 설정"
-                  title="알림 설정"
-                  className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-md border border-suaza-border text-suaza-ink hover:bg-gray-100 transition"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="w-[13px] h-[13px] sm:w-[15px] sm:h-[15px]"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden
-                  >
-                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                  </svg>
-                </Link>
-                <Link
                   href={`/members/${user!.id}`}
                   aria-label="프로필 수정"
                   title="프로필 수정"
-                  className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-md border border-red-200 text-suaza-accent bg-red-50 hover:bg-red-100 transition"
+                  className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-md border border-suaza-border text-suaza-ink hover:bg-gray-100 transition"
                 >
                   <svg
                     viewBox="0 0 24 24"
