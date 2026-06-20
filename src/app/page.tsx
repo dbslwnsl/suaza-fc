@@ -372,27 +372,6 @@ export default async function Home() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            {/* 알림 설정 — 설정 아이콘 왼쪽 */}
-            <Link
-              href="/settings/notifications"
-              aria-label="알림 설정"
-              title="알림 설정"
-              className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-md border border-suaza-border text-suaza-ink hover:bg-gray-100 transition"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="w-[13px] h-[13px] sm:w-[15px] sm:h-[15px]"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-              </svg>
-            </Link>
             {(profile?.title === "president" ||
               profile?.title === "head_coach") && (
               <Link
@@ -438,13 +417,6 @@ export default async function Home() {
                   </span>
                 )}
               </div>
-              {profile && profile.title && profile.title !== "player" && (
-                <span
-                  className={`absolute left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 z-10 whitespace-nowrap text-[11px] leading-none px-2 py-1 rounded-full ring-2 ring-white shadow-sm ${TITLE_BADGE[profile.title as MemberTitle]}`}
-                >
-                  {TITLE_LABEL[profile.title as MemberTitle]}
-                </span>
-              )}
             </div>
 
             <div className="flex-1 self-stretch flex flex-col justify-between gap-1 min-w-0">
@@ -454,6 +426,13 @@ export default async function Home() {
                     <span className="font-bold text-suaza-ink text-lg leading-tight">
                       {profile.name}
                     </span>
+                    {profile.title && (
+                      <span
+                        className={`text-[11px] leading-none px-2 py-0.5 rounded-full ${TITLE_BADGE[profile.title as MemberTitle]}`}
+                      >
+                        {TITLE_LABEL[profile.title as MemberTitle]}
+                      </span>
+                    )}
                     {profile.jersey_number != null && (
                       <span
                         className="font-bold text-sm leading-tight"
@@ -508,6 +487,26 @@ export default async function Home() {
             {profile && (
               <div className="flex items-center gap-1.5 shrink-0">
                 <Link
+                  href="/settings/notifications"
+                  aria-label="알림 설정"
+                  title="알림 설정"
+                  className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-md border border-suaza-border text-suaza-ink hover:bg-gray-100 transition"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="w-[13px] h-[13px] sm:w-[15px] sm:h-[15px]"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
+                </Link>
+                <Link
                   href={`/members/${user!.id}`}
                   aria-label="프로필 수정"
                   title="프로필 수정"
@@ -533,7 +532,6 @@ export default async function Home() {
 
           {profile && (
             <>
-              <div className="h-px bg-suaza-border" />
               <div className="grid grid-cols-5">
                 {homeStats.map((s, i) => {
                   const medal =
@@ -555,7 +553,7 @@ export default async function Home() {
                   return (
                     <div
                       key={s.label}
-                      className={`relative flex flex-col items-center gap-1 ${
+                      className={`relative flex flex-col items-center gap-0 sm:gap-1 ${
                         i > 0 ? "border-l border-suaza-border" : ""
                       }`}
                     >
