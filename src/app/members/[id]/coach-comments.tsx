@@ -329,12 +329,6 @@ function CommentThread({
       {/* 액션: 좋아요 / 답글 (구분선 위) */}
       {!isTemp && (
         <div className="mt-3 pt-3 border-t border-suaza-border/70 flex items-center gap-4">
-          <LikeButton
-            liked={comment.liked_by_me}
-            count={comment.like_count}
-            showLabel
-            onToggle={() => onToggleLike(comment.id)}
-          />
           <button
             type="button"
             onClick={() => setReplying((v) => !v)}
@@ -363,6 +357,12 @@ function CommentThread({
               <span className="tabular-nums">{comment.replies.length}</span>
             )}
           </button>
+          <LikeButton
+            liked={comment.liked_by_me}
+            count={comment.like_count}
+            showLabel
+            onToggle={() => onToggleLike(comment.id)}
+          />
         </div>
       )}
 
@@ -375,12 +375,16 @@ function CommentThread({
 
       {/* 답글 스레드 */}
       {comment.replies.length > 0 && (
-        <ul className="mt-3 flex flex-col gap-2 pl-9">
+        <ul className="mt-3 ml-1 flex flex-col gap-2 border-l-2 border-suaza-border pl-3">
           {comment.replies.map((r) => (
             <li key={r.id}>
               <ReplyCard
                 reply={r}
                 canEdit={r.author_id === myUserId}
+                canWrite={canWrite}
+                myName={myName}
+                myAvatarUrl={myAvatarUrl}
+                onCreate={onCreate}
                 onUpdate={onUpdate}
                 onDelete={onDelete}
                 onToggleLike={onToggleLike}
@@ -423,6 +427,8 @@ function CommentBody({
   const edited =
     comment.updated_at && comment.updated_at !== comment.created_at;
   const authorTitle = (comment.author?.title ?? "player") as MemberTitle;
+  // 최상위 코멘트는 감독/코치일 때만 직책 표기 (답글은 누구도 표기 안 함)
+  const showTitle = authorTitle === "head_coach" || authorTitle === "coach";
 
   if (editing) {
     return (
@@ -455,7 +461,7 @@ function CommentBody({
             <span className="font-bold text-suaza-ink text-[13px] truncate">
               {comment.author?.name ?? "(알 수 없음)"}
             </span>
-            <RoleBadge title={authorTitle} />
+            {showTitle && <RoleBadge title={authorTitle} />}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -490,20 +496,32 @@ function CommentBody({
 function ReplyCard({
   reply,
   canEdit,
+  canWrite,
+  myName,
+  myAvatarUrl,
+  onCreate,
   onUpdate,
   onDelete,
   onToggleLike,
 }: {
   reply: CoachComment;
   canEdit: boolean;
+  canWrite: boolean;
+  myName: string | null;
+  myAvatarUrl: string | null;
+  onCreate: (
+    parentId: string | null,
+    content: string,
+    matchId: string | null,
+  ) => void;
   onUpdate: (commentId: string, content: string) => void;
   onDelete: (commentId: string) => void;
   onToggleLike: (commentId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [replying, setReplying] = useState(false);
   const [draft, setDraft] = useState(reply.content);
   const isTemp = reply.id.startsWith("temp-");
-  const authorTitle = (reply.author?.title ?? "player") as MemberTitle;
 
   if (editing) {
     return (
@@ -529,20 +547,19 @@ function ReplyCard({
         isTemp ? "opacity-60" : ""
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <Avatar
             name={reply.author?.name ?? null}
             src={reply.author?.avatar_url ?? null}
-            size={28}
+            size={26}
           />
-          <span className="font-bold text-suaza-ink text-sm truncate">
+          <span className="font-bold text-suaza-ink text-[13px] truncate">
             {reply.author?.name ?? "(알 수 없음)"}
           </span>
-          <RoleBadge title={authorTitle} />
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[11px] text-suaza-ink-faint">
+          <span className="text-[10px] text-suaza-ink-faint">
             {formatDateTime(reply.created_at)}
           </span>
           {canEdit && !isTemp && (
@@ -559,11 +576,56 @@ function ReplyCard({
       <p className="text-sm text-suaza-ink whitespace-pre-wrap leading-relaxed">
         {reply.content}
       </p>
+
+      {/* 액션: 답글 / 좋아요 */}
       {!isTemp && (
-        <LikeButton
-          liked={reply.liked_by_me}
-          count={reply.like_count}
-          onToggle={() => onToggleLike(reply.id)}
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => setReplying((v) => !v)}
+            aria-expanded={replying}
+            className={`inline-flex items-center gap-1.5 text-[12px] font-bold transition ${
+              replying
+                ? "text-suaza-ink"
+                : "text-suaza-ink-muted hover:text-suaza-ink"
+            }`}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            답글
+          </button>
+          <LikeButton
+            liked={reply.liked_by_me}
+            count={reply.like_count}
+            showLabel
+            onToggle={() => onToggleLike(reply.id)}
+          />
+        </div>
+      )}
+
+      {/* 좋아요 누른 사람 */}
+      {!isTemp && reply.likers.length > 0 && <Likers likers={reply.likers} />}
+
+      {/* 답글 입력 — 답글 버튼을 눌렀을 때만 (1단계라 부모 코멘트로 달림) */}
+      {canWrite && !isTemp && replying && (
+        <ReplyComposer
+          myName={myName}
+          myAvatarUrl={myAvatarUrl}
+          onSubmit={(content) => {
+            onCreate(reply.id, content, null);
+            setReplying(false);
+          }}
         />
       )}
     </div>
@@ -784,7 +846,7 @@ function EditDeleteMenu({
       <button
         type="button"
         onClick={onEdit}
-        className="text-[11px] px-1.5 py-0.5 rounded text-suaza-ink-muted hover:text-suaza-ink hover:bg-gray-100 transition"
+        className="text-[10px] px-1.5 py-0.5 rounded text-suaza-ink-muted hover:text-suaza-ink hover:bg-gray-100 transition"
       >
         수정
       </button>
@@ -793,7 +855,7 @@ function EditDeleteMenu({
         onClick={() => {
           if (window.confirm("삭제하시겠습니까?")) onDelete();
         }}
-        className="text-[11px] px-1.5 py-0.5 rounded text-red-500 hover:text-red-600 hover:bg-red-50 transition"
+        className="text-[10px] px-1.5 py-0.5 rounded text-red-500 hover:text-red-600 hover:bg-red-50 transition"
       >
         삭제
       </button>
