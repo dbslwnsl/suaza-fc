@@ -242,7 +242,7 @@ export default function CoachCommentSection({
       <div className="flex items-center gap-2">
         <h2 className="text-suaza-ink text-lg font-bold">감독·코치 코멘트</h2>
         {items.length > 0 && (
-          <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-suaza-ink text-white text-xs font-bold">
+          <span className="inline-flex items-center justify-center w-[22px] h-[17px] rounded-full bg-suaza-ink text-white text-[11px] font-bold">
             {items.length}
           </span>
         )}
@@ -878,13 +878,13 @@ function ReplyComposer({
         autoFocus
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="답글을 입력하세요…"
-        className="flex-1 min-w-0 h-[30px] px-3 rounded-full border border-suaza-border bg-suaza-bg/40 text-sm text-suaza-ink placeholder:text-suaza-ink-faint focus:outline-none focus:border-suaza-button"
+        placeholder="답글을 입력하세요"
+        className="flex-1 min-w-0 h-[30px] px-3 rounded-full border border-suaza-border bg-suaza-bg/40 text-[12px] font-normal text-suaza-ink placeholder:text-suaza-ink-faint focus:outline-none"
       />
       <button
         type="submit"
         disabled={!value.trim()}
-        className="shrink-0 h-[30px] px-4 rounded-full bg-suaza-accent text-white text-sm font-bold hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+        className="shrink-0 h-[30px] px-4 rounded-full bg-suaza-accent text-white text-[11px] font-bold hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
       >
         등록
       </button>

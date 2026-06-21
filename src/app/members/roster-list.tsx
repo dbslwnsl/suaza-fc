@@ -303,6 +303,7 @@ function MemberCard({
   return (
     <Link
       href={`/members/${m.id}`}
+      prefetch={false}
       className={`block p-4 desktop:p-5 rounded-xl transition ${
         isMe
           ? "border-2 border-suaza-accent bg-red-50/60 hover:bg-red-50"
