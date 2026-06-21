@@ -450,34 +450,34 @@ function CommentBody({
 
   return (
     <div className="flex flex-col gap-2.5">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <Avatar
             name={comment.author?.name ?? null}
             src={comment.author?.avatar_url ?? null}
             size={26}
           />
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="font-bold text-suaza-ink text-[13px] truncate">
-              {comment.author?.name ?? "(알 수 없음)"}
+          <div className="flex flex-col min-w-0 leading-tight">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="font-bold text-suaza-ink text-[13px] truncate">
+                {comment.author?.name ?? "(알 수 없음)"}
+              </span>
+              {showTitle && <RoleBadge title={authorTitle} />}
+            </div>
+            <span className="text-[10px] text-suaza-ink-faint">
+              {formatDateTime(comment.created_at)}
             </span>
-            {showTitle && <RoleBadge title={authorTitle} />}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[10px] text-suaza-ink-faint">
-            {formatDateTime(comment.created_at)}
-          </span>
-          {canEdit && !isTemp && (
-            <EditDeleteMenu
-              onEdit={() => {
-                setDraft(comment.content);
-                setEditing(true);
-              }}
-              onDelete={() => onDelete(comment.id)}
-            />
-          )}
-        </div>
+        {canEdit && !isTemp && (
+          <EditDeleteMenu
+            onEdit={() => {
+              setDraft(comment.content);
+              setEditing(true);
+            }}
+            onDelete={() => onDelete(comment.id)}
+          />
+        )}
       </div>
 
       {comment.match && <MatchChip match={comment.match} />}
@@ -547,31 +547,31 @@ function ReplyCard({
         isTemp ? "opacity-60" : ""
       }`}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <Avatar
             name={reply.author?.name ?? null}
             src={reply.author?.avatar_url ?? null}
             size={26}
           />
-          <span className="font-bold text-suaza-ink text-[13px] truncate">
-            {reply.author?.name ?? "(알 수 없음)"}
-          </span>
+          <div className="flex flex-col min-w-0 leading-tight">
+            <span className="font-bold text-suaza-ink text-[13px] truncate">
+              {reply.author?.name ?? "(알 수 없음)"}
+            </span>
+            <span className="text-[10px] text-suaza-ink-faint">
+              {formatDateTime(reply.created_at)}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[10px] text-suaza-ink-faint">
-            {formatDateTime(reply.created_at)}
-          </span>
-          {canEdit && !isTemp && (
-            <EditDeleteMenu
-              onEdit={() => {
-                setDraft(reply.content);
-                setEditing(true);
-              }}
-              onDelete={() => onDelete(reply.id)}
-            />
-          )}
-        </div>
+        {canEdit && !isTemp && (
+          <EditDeleteMenu
+            onEdit={() => {
+              setDraft(reply.content);
+              setEditing(true);
+            }}
+            onDelete={() => onDelete(reply.id)}
+          />
+        )}
       </div>
       <p className="text-sm text-suaza-ink whitespace-pre-wrap leading-relaxed">
         {reply.content}
