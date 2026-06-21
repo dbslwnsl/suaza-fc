@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { addStatDefinition } from "@/lib/stats/actions";
@@ -50,6 +51,24 @@ export default async function StatSettingsPage({
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[600px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
         <header className="flex flex-col gap-2">
+          <Link
+            href="/settings"
+            className="inline-flex w-fit items-center gap-1 text-sm text-suaza-ink-muted transition hover:text-suaza-ink"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+            설정
+          </Link>
           <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
             기록 항목 관리
           </h1>

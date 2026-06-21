@@ -235,17 +235,16 @@ export default async function Home() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            {(profile?.title === "president" ||
-              profile?.title === "head_coach") && (
+            {profile && (
               <Link
                 href="/settings"
-                aria-label="감독 설정"
-                title="감독 설정"
-                className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 border border-suaza-border rounded-md text-suaza-ink hover:bg-gray-100 transition"
+                aria-label="설정"
+                title="설정"
+                className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 text-suaza-ink hover:text-suaza-ink-muted transition"
               >
                 <svg
                   viewBox="0 0 24 24"
-                  className="w-[13px] h-[13px] sm:w-[15px] sm:h-[15px]"
+                  className="w-[18px] h-[18px] sm:w-5 sm:h-5"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth={2}
@@ -253,8 +252,9 @@ export default async function Home() {
                   strokeLinejoin="round"
                   aria-hidden
                 >
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  <path d="M3 6h18" />
+                  <path d="M3 12h18" />
+                  <path d="M3 18h18" />
                 </svg>
               </Link>
             )}
@@ -285,30 +285,52 @@ export default async function Home() {
             <div className="flex-1 self-stretch flex flex-col justify-between gap-1 min-w-0">
               {profile ? (
                 <>
-                  <div className="flex items-center gap-x-1.5 gap-y-1 flex-wrap">
-                    <span className="font-bold text-suaza-ink text-lg leading-tight">
-                      {profile.name}
-                    </span>
-                    {profile.title && (
-                      <span
-                        className={`text-[11px] leading-none px-2 py-0.5 rounded-full ${TITLE_BADGE[profile.title as MemberTitle]}`}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-x-1.5 gap-y-1 flex-wrap min-w-0">
+                      <span className="font-bold text-suaza-ink text-lg leading-tight">
+                        {profile.name}
+                      </span>
+                      {profile.title && (
+                        <span
+                          className={`text-[11px] leading-none px-2 py-0.5 rounded-full ${TITLE_BADGE[profile.title as MemberTitle]}`}
+                        >
+                          {TITLE_LABEL[profile.title as MemberTitle]}
+                        </span>
+                      )}
+                      {profile.jersey_number != null && (
+                        <span
+                          className="font-bold text-sm leading-tight"
+                          style={{ color: "#338CF2" }}
+                        >
+                          #{profile.jersey_number}
+                        </span>
+                      )}
+                      {profile.nickname && (
+                        <span className="hidden pointer-fine:inline text-suaza-ink-muted text-sm">
+                          ({profile.nickname})
+                        </span>
+                      )}
+                    </div>
+                    <Link
+                      href={`/members/${user!.id}`}
+                      aria-label="프로필 더보기"
+                      title="프로필 더보기"
+                      className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-suaza-ink-muted hover:text-suaza-ink transition"
+                    >
+                      더보기
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="w-3.5 h-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden
                       >
-                        {TITLE_LABEL[profile.title as MemberTitle]}
-                      </span>
-                    )}
-                    {profile.jersey_number != null && (
-                      <span
-                        className="font-bold text-sm leading-tight"
-                        style={{ color: "#338CF2" }}
-                      >
-                        #{profile.jersey_number}
-                      </span>
-                    )}
-                    {profile.nickname && (
-                      <span className="hidden pointer-fine:inline text-suaza-ink-muted text-sm">
-                        ({profile.nickname})
-                      </span>
-                    )}
+                        <path d="M9 6l6 6-6 6" />
+                      </svg>
+                    </Link>
                   </div>
 
                   <span className="text-suaza-ink-muted text-xs">
@@ -347,50 +369,6 @@ export default async function Home() {
               )}
             </div>
 
-            {profile && (
-              <div className="flex items-center gap-1.5 shrink-0">
-                <Link
-                  href="/settings/notifications"
-                  aria-label="알림 설정"
-                  title="알림 설정"
-                  className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-md border border-suaza-border text-suaza-ink hover:bg-gray-100 transition"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="w-[13px] h-[13px] sm:w-[15px] sm:h-[15px]"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden
-                  >
-                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                  </svg>
-                </Link>
-                <Link
-                  href={`/members/${user!.id}`}
-                  aria-label="프로필 수정"
-                  title="프로필 수정"
-                  className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-md border border-suaza-border text-suaza-ink hover:bg-gray-100 transition"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="w-[13px] h-[13px] sm:w-[15px] sm:h-[15px]"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden
-                  >
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                  </svg>
-                </Link>
-              </div>
-            )}
           </div>
         </section>
 
