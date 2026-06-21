@@ -21,16 +21,6 @@ import {
 import PastMatchCard from "./matches/past-match-card";
 import NoticeCard from "./notice-card";
 import { type PostCategory } from "@/lib/board/helpers";
-import {
-  aggregateSeason,
-  pointsForParticipation,
-  pointValueMap,
-  seasonRank,
-  yearRange,
-  type ParticipationRow as SeasonPartRow,
-  type PlayerSeasonStat,
-  type StatDef,
-} from "@/lib/stats/helpers";
 import { AttendanceVote } from "./matches/[id]/page";
 import { computeSeasonKings } from "@/lib/stats/kings";
 
@@ -68,9 +58,6 @@ export default async function Home() {
   // 시각이 지난 경기 자동 진행/완료 처리 (조회 전)
   await supabase.rpc("auto_progress_due_matches");
 
-  // 시즌(달력 연도) 순위 산정용 — 홈 통계 카드 메달/순위 뱃지
-  const seasonYear = new Date().getFullYear();
-  const { from: seasonFrom, to: seasonTo } = yearRange(seasonYear);
   // 출석 마감 판정용 현재 시각 — 서버 컴포넌트라 요청당 1회 실행이라 안전.
   // (react-hooks/purity 는 클라이언트 재렌더를 가정한 규칙이라 여기선 예외 처리)
   // eslint-disable-next-line react-hooks/purity
@@ -81,9 +68,6 @@ export default async function Home() {
     { data: latestNotice },
     { data: upcomingMatch },
     { data: lastMatch },
-    { data: partsRaw },
-    { data: statDefsRaw },
-    { data: seasonMatchesRaw },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -115,21 +99,6 @@ export default async function Home() {
       .in("status", ["done", "canceled"])
       .order("match_date", { ascending: false })
       .limit(2),
-    supabase
-      .from("match_participations")
-      .select("goals, assists, custom_stats, match:matches(match_date, status)")
-      .eq("player_id", user!.id)
-      .is("archived_at", null),
-    supabase
-      .from("stat_definitions")
-      .select("key, label, sort_order, point_value")
-      .is("hidden_at", null),
-    supabase
-      .from("matches")
-      .select("id, match_date")
-      .eq("status", "done")
-      .gte("match_date", seasonFrom)
-      .lt("match_date", seasonTo),
   ]);
 
   const upcoming = upcomingMatch as Match | null;
@@ -241,112 +210,6 @@ export default async function Home() {
       myAttendingQuarters = null;
     }
   }
-
-  // 누적 통계 (종료 경기만)
-  type Part = {
-    goals: number;
-    assists: number;
-    custom_stats: Record<string, number> | null;
-    match: { match_date: string; status: string } | null;
-  };
-  const done = ((partsRaw ?? []) as unknown as Part[]).filter(
-    (p) => p.match?.status === "done",
-  );
-  // 포인트: 경기별 계산 (기준일 이전 = 수동 입력, 이후 = 항목 기준점수)
-  const statDefs = (statDefsRaw ?? []) as StatDef[];
-  const pvMap = pointValueMap(statDefs);
-
-  // ── 시즌 순위 (메달/순위 뱃지/포인트 강조) — 프로필 카드와 동일 로직 ──
-  const seasonMatchRows = (seasonMatchesRaw ?? []) as {
-    id: string;
-    match_date: string;
-  }[];
-  const seasonMatchIds = seasonMatchRows.map((m) => m.id);
-  const seasonMatchDateById = new Map(
-    seasonMatchRows.map((m) => [m.id, m.match_date]),
-  );
-  const { data: seasonPartsRaw } = seasonMatchIds.length
-    ? await supabase
-        .from("match_participations")
-        .select(
-          "match_id, player_id, goals, assists, custom_stats, player:profiles(id, name, jersey_number)",
-        )
-        .in("match_id", seasonMatchIds)
-        .is("archived_at", null)
-    : { data: [] as SeasonPartRow[] };
-  const seasonParts = (seasonPartsRaw ?? []) as unknown as SeasonPartRow[];
-  const seasonStatsMap = new Map<string, PlayerSeasonStat>(
-    aggregateSeason(seasonParts, statDefs).map((s) => [s.player_id, s]),
-  );
-  const myId = user!.id;
-  // Dense ranking: 동률은 같은 순위. 본인 값이 0 이하면 순위 없음(null).
-  const rankInCategory = (
-    getter: (s: PlayerSeasonStat) => number,
-  ): number | null => {
-    const myStat = seasonStatsMap.get(myId);
-    if (!myStat) return null;
-    return seasonRank(
-      getter(myStat),
-      Array.from(seasonStatsMap.values(), getter),
-    );
-  };
-  const attendanceRank = rankInCategory((s) => s.appearances ?? 0);
-  const goalRank = rankInCategory((s) => s.goals ?? 0);
-  const assistRank = rankInCategory((s) => s.assists ?? 0);
-  const cleanSheetRank = rankInCategory((s) => s.custom?.clean_sheets ?? 0);
-
-  // 포인트는 경기별 가중치 계산 → 별도 맵으로 집계 후 순위 산정
-  const seasonPointsByPlayer = new Map<string, number>();
-  for (const p of seasonParts) {
-    const pts = pointsForParticipation(
-      p,
-      seasonMatchDateById.get(p.match_id),
-      pvMap,
-    );
-    seasonPointsByPlayer.set(
-      p.player_id,
-      (seasonPointsByPlayer.get(p.player_id) ?? 0) + pts,
-    );
-  }
-  const pointsRank = seasonRank(
-    seasonPointsByPlayer.get(myId) ?? 0,
-    seasonPointsByPlayer.values(),
-  );
-
-  const homeStats: {
-    label: string;
-    value: number;
-    tone?: "primary";
-    rank?: number | null;
-    alwaysShowRank?: boolean;
-  }[] = [
-    { label: "출전", value: done.length, rank: attendanceRank },
-    {
-      label: "골",
-      value: done.reduce((a, p) => a + (p.goals ?? 0), 0),
-      rank: goalRank,
-    },
-    {
-      label: "어시",
-      value: done.reduce((a, p) => a + (p.assists ?? 0), 0),
-      rank: assistRank,
-    },
-    {
-      label: "클린시트",
-      value: done.reduce((a, p) => a + (p.custom_stats?.clean_sheets ?? 0), 0),
-      rank: cleanSheetRank,
-    },
-    {
-      label: "포인트",
-      value: done.reduce(
-        (a, p) => a + pointsForParticipation(p, p.match?.match_date, pvMap),
-        0,
-      ),
-      tone: "primary",
-      rank: pointsRank,
-      alwaysShowRank: true,
-    },
-  ];
 
   const positions = (profile?.positions ?? []) as Position[];
   const foot = (profile?.preferred_foot ?? null) as PreferredFoot | null;
@@ -529,68 +392,6 @@ export default async function Home() {
               </div>
             )}
           </div>
-
-          {profile && (
-            <>
-              <div className="grid grid-cols-5">
-                {homeStats.map((s, i) => {
-                  const medal =
-                    s.rank === 1
-                      ? "🥇"
-                      : s.rank === 2
-                        ? "🥈"
-                        : s.rank === 3
-                          ? "🥉"
-                          : null;
-                  const showTextBadge =
-                    !medal && s.alwaysShowRank && s.rank != null;
-                  const valueCls =
-                    s.tone === "primary" ? "text-blue-700" : "text-suaza-ink";
-                  const labelCls =
-                    s.tone === "primary"
-                      ? "text-blue-600"
-                      : "text-suaza-ink-muted";
-                  return (
-                    <div
-                      key={s.label}
-                      className={`relative flex flex-col items-center gap-0 sm:gap-1 ${
-                        i > 0 ? "border-l border-suaza-border" : ""
-                      }`}
-                    >
-                      {medal && (
-                        <span
-                          className="absolute -top-3 right-0.5 text-sm leading-none"
-                          aria-label={`${s.label} 시즌 ${s.rank}위`}
-                          title={`${s.label} 시즌 ${s.rank}위`}
-                        >
-                          {medal}
-                        </span>
-                      )}
-                      {showTextBadge && (
-                        <span
-                          className={`absolute -top-3 right-0 px-1 py-0.5 rounded-full text-[9px] font-bold leading-none text-suaza-ink ${
-                            s.tone === "primary" ? "bg-blue-100" : "bg-gray-200"
-                          }`}
-                          aria-label={`${s.label} 시즌 ${s.rank}위`}
-                          title={`${s.label} 시즌 ${s.rank}위`}
-                        >
-                          {s.rank}위
-                        </span>
-                      )}
-                      <span
-                        className={`text-xl sm:text-2xl font-bold tabular-nums ${valueCls}`}
-                      >
-                        {s.value}
-                      </span>
-                      <span className={`text-[11px] sm:text-xs ${labelCls}`}>
-                        {s.label}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
         </section>
 
         {/* Latest Notice (항상 표시 — 없으면 안내) */}
