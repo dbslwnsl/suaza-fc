@@ -523,11 +523,19 @@ export async function setMemberTitle(profileId: string, title: string) {
 // 낙관적 UI 용으로 redirect 없이 revalidate 만 수행.
 // ─────────────────────────────────────────────────────────────
 
+export type CreatedCoachComment = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  parent_id: string | null;
+};
+
 export async function createCoachComment(
   memberId: string,
   content: string,
   matchId: string | null = null,
-) {
+  parentId: string | null = null,
+): Promise<CreatedCoachComment | null> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -535,15 +543,62 @@ export async function createCoachComment(
   if (!user) redirect("/login");
 
   const trimmed = content.trim();
-  if (!trimmed) return;
+  if (!trimmed) return null;
 
-  await supabase.from("coach_comments").insert({
-    member_id: memberId,
-    author_id: user.id,
-    content: trimmed,
-    match_id: matchId,
-  });
+  // 1단계만 허용: 답글의 답글이면 부모 코멘트로 평탄화
+  let effectiveParent: string | null = parentId;
+  if (parentId) {
+    const { data: parent } = await supabase
+      .from("coach_comments")
+      .select("parent_id")
+      .eq("id", parentId)
+      .single();
+    if (parent?.parent_id) effectiveParent = parent.parent_id as string;
+  }
+
+  const { data } = await supabase
+    .from("coach_comments")
+    .insert({
+      member_id: memberId,
+      author_id: user.id,
+      content: trimmed,
+      // 답글에는 경기 연결 없음 — 최상위 코멘트만 match_id 사용
+      match_id: effectiveParent ? null : matchId,
+      parent_id: effectiveParent,
+    })
+    .select("id, created_at, updated_at, parent_id")
+    .single();
+
   revalidatePath(`/members/${memberId}`);
+  return (data as CreatedCoachComment | null) ?? null;
+}
+
+// 코멘트/답글 좋아요 토글 — 본인 행 추가/삭제. 낙관적 UI 라 revalidate 없음.
+export async function toggleCoachCommentLike(commentId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: existing } = await supabase
+    .from("coach_comment_likes")
+    .select("comment_id")
+    .eq("comment_id", commentId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase
+      .from("coach_comment_likes")
+      .delete()
+      .eq("comment_id", commentId)
+      .eq("user_id", user.id);
+  } else {
+    await supabase
+      .from("coach_comment_likes")
+      .insert({ comment_id: commentId, user_id: user.id });
+  }
 }
 
 export async function updateCoachComment(

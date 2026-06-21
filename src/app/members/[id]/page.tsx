@@ -106,7 +106,7 @@ export default async function MemberDetailPage({
     supabase
       .from("coach_comments")
       .select(
-        "id, content, created_at, updated_at, author_id, match_id, match:matches(id, match_date, opponent), author:profiles!coach_comments_author_id_fkey(name, title, avatar_url)",
+        "id, content, created_at, updated_at, author_id, parent_id, match_id, match:matches(id, match_date, opponent), author:profiles!coach_comments_author_id_fkey(name, title, avatar_url)",
       )
       .eq("member_id", id)
       .order("created_at", { ascending: true }),
@@ -181,8 +181,47 @@ export default async function MemberDetailPage({
   // 직책 부여 권한 — 회장(president)만.
   const canAssignTitles = myTitle === "president";
   const isCoachingStaff = myTitle === "head_coach" || myTitle === "coach";
-  const coachComments = (coachCommentsRaw ?? []) as unknown as CoachComment[];
   const showCoachComments = isCoachingStaff || isSelf;
+
+  // 코멘트/답글 좋아요 집계 (경기 댓글과 동일 패턴)
+  const ccRaw = (coachCommentsRaw ?? []) as unknown as Omit<
+    CoachComment,
+    "like_count" | "liked_by_me" | "likers"
+  >[];
+  const ccIds = ccRaw.map((c) => c.id);
+  const ccLikeCount = new Map<string, number>();
+  const ccLikedByMe = new Set<string>();
+  const ccLikers = new Map<
+    string,
+    { id: string; name: string; avatar_url: string | null }[]
+  >();
+  if (ccIds.length > 0) {
+    const { data: likeRows } = await supabase
+      .from("coach_comment_likes")
+      .select("comment_id, user_id, user:profiles(name, avatar_url)")
+      .in("comment_id", ccIds);
+    for (const r of (likeRows ?? []) as unknown as {
+      comment_id: string;
+      user_id: string;
+      user: { name: string; avatar_url: string | null } | null;
+    }[]) {
+      ccLikeCount.set(r.comment_id, (ccLikeCount.get(r.comment_id) ?? 0) + 1);
+      if (r.user_id === user.id) ccLikedByMe.add(r.comment_id);
+      const arr = ccLikers.get(r.comment_id) ?? [];
+      arr.push({
+        id: r.user_id,
+        name: r.user?.name ?? "(알 수 없음)",
+        avatar_url: r.user?.avatar_url ?? null,
+      });
+      ccLikers.set(r.comment_id, arr);
+    }
+  }
+  const coachComments: CoachComment[] = ccRaw.map((c) => ({
+    ...c,
+    like_count: ccLikeCount.get(c.id) ?? 0,
+    liked_by_me: ccLikedByMe.has(c.id),
+    likers: ccLikers.get(c.id) ?? [],
+  }));
 
   // 코멘트 연결용: 이 회원이 참가한 '종료된' 경기 목록 (최신순, 중복 제거)
   const playedMatches = (() => {
@@ -401,7 +440,8 @@ export default async function MemberDetailPage({
             myName={me?.name ?? null}
             myTitle={myTitle}
             myAvatarUrl={me?.avatar_url ?? null}
-            canWrite={isCoachingStaff}
+            canWrite={showCoachComments}
+            isCoachingStaff={isCoachingStaff}
             viewerIsSelf={isSelf}
           />
         )}
