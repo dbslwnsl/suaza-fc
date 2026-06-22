@@ -35,7 +35,7 @@ export default function UpcomingMatchesSection({
         {isStaff && (
           <Link
             href="/matches/new"
-            className="shrink-0 whitespace-nowrap text-xs font-medium px-3 py-1.5 rounded-md bg-suaza-ink text-white hover:opacity-90 transition"
+            className="inline-flex items-center justify-center shrink-0 whitespace-nowrap h-6 px-3 text-[11px] font-medium rounded-md bg-suaza-ink text-white hover:opacity-90 transition"
           >
             + 새 경기
           </Link>
