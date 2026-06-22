@@ -775,7 +775,7 @@ function Likers({ likers, mini }: { likers: Liker[]; mini?: boolean }) {
           className={`text-suaza-ink-muted ${mini ? "text-[11px]" : "text-xs"}`}
         >
           <span className="font-medium text-suaza-ink">{names}</span>
-          {"이 좋아해요"}
+          {"님이 좋아해요"}
         </span>
       </button>
       {open && <LikersSheet likers={likers} onClose={() => setOpen(false)} />}
