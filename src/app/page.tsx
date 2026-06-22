@@ -372,11 +372,14 @@ export default async function Home() {
           </div>
         </section>
 
+        {/* 프로필 카드 폭에 맞춘 공지 위 가로 구분선 */}
+        <div className="h-px bg-suaza-border" />
+
         {/* Latest Notice (항상 표시 — 없으면 안내) */}
         {notice ? (
           <NoticeCard notice={notice} />
         ) : (
-          <div className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <span className="text-[11px] px-2 py-0.5 rounded bg-gray-200 text-gray-600 font-medium">
               공지
             </span>
@@ -386,9 +389,12 @@ export default async function Home() {
           </div>
         )}
 
+        {/* 공지 아래 가로 구분선 */}
+        <div className="h-px bg-suaza-border" />
+
         {/* Upcoming Match + Attendance */}
         {upcoming && (
-          <section className="bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border flex flex-col gap-3">
+          <section className="flex flex-col gap-3">
             <Link
               href={`/matches/${upcoming.id}`}
               className="flex flex-col gap-1 hover:opacity-80"
@@ -451,6 +457,8 @@ export default async function Home() {
         {/* 지난 경기 — 일정&결과 페이지와 동일한 카드 디자인. 최근 2건. */}
         {recentMatches.length > 0 && (
           <section className="flex flex-col gap-3">
+            {/* "지난 경기" 위 가로 구분선 */}
+            <div className="h-px bg-suaza-border" />
             <h2 className="text-lg font-bold text-suaza-ink">지난 경기</h2>
             <div className="flex flex-col gap-3">
               {recentMatches.map((m) => (

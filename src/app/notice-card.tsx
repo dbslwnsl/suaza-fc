@@ -4,11 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
-import {
-  CATEGORY_LABEL,
-  formatPostDate,
-  type PostCategory,
-} from "@/lib/board/helpers";
+import { type PostCategory } from "@/lib/board/helpers";
 
 type Notice = {
   id: string;
@@ -19,11 +15,56 @@ type Notice = {
   author: { name: string; avatar_url: string | null } | null;
 };
 
-function Avatar({ name, src }: { name: string | null; src: string | null }) {
+// "2026.06.16 18:16" 형태 (Asia/Seoul 고정)
+function formatNoticeDate(iso: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Seoul",
+  }).formatToParts(new Date(iso));
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("year")}.${get("month")}.${get("day")} ${get("hour")}:${get("minute")}`;
+}
+
+const AVATAR_COLORS = [
+  "#3B82F6",
+  "#8B5CF6",
+  "#F97316",
+  "#10B981",
+  "#EF4444",
+  "#14B8A6",
+  "#F59E0B",
+  "#EC4899",
+];
+function colorFor(name: string | null): string {
+  const s = name || "?";
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+function Avatar({
+  name,
+  src,
+  size = 22,
+}: {
+  name: string | null;
+  src: string | null;
+  size?: number;
+}) {
   const initial = name?.charAt(0) || "?";
   return (
-    <div
-      className="relative shrink-0 w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center"
+    <span
+      className="relative inline-flex shrink-0 rounded-full overflow-hidden items-center justify-center"
+      style={{
+        width: size,
+        height: size,
+        backgroundColor: src ? "#f3f4f6" : colorFor(name),
+      }}
       aria-hidden
     >
       {src ? (
@@ -31,21 +72,53 @@ function Avatar({ name, src }: { name: string | null; src: string | null }) {
           src={src}
           alt={name ?? "프로필"}
           fill
-          sizes="40px"
+          sizes={`${size}px`}
           className="object-cover"
         />
       ) : (
-        <span className="text-sm font-bold text-suaza-ink">{initial}</span>
+        <span
+          className="font-bold text-white"
+          style={{ fontSize: Math.round(size * 0.45) }}
+        >
+          {initial}
+        </span>
       )}
-    </div>
+    </span>
   );
 }
 
-function CategoryBadge({ category }: { category: PostCategory }) {
+function Megaphone() {
   return (
-    <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium shrink-0">
-      {category && category !== "notice" ? CATEGORY_LABEL[category] : "공지"}
-    </span>
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="text-suaza-accent shrink-0"
+      aria-hidden
+    >
+      <path d="m3 11 18-5v12L3 14v-3z" />
+      <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+    </svg>
+  );
+}
+
+// 좌측 "📢 공지" 라벨 + 우측 날짜·시간
+function NoticeHeader({ createdAt }: { createdAt: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="flex items-center gap-1.5">
+        <Megaphone />
+        <span className="font-bold text-suaza-ink text-sm">공지</span>
+      </span>
+      <span className="text-xs text-suaza-ink-muted shrink-0">
+        {formatNoticeDate(createdAt)}
+      </span>
+    </div>
   );
 }
 
@@ -70,35 +143,48 @@ export default function NoticeCard({ notice }: { notice: Notice }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="text-left bg-white sm:rounded-2xl sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-4 sm:p-5 rounded-xl border sm:border-0 border-suaza-border desktop:hover:bg-gray-50 transition flex flex-col gap-2 w-full"
-      >
-        <div className="flex items-center gap-3">
-          <Avatar
-            name={notice.author?.name ?? null}
-            src={notice.author?.avatar_url ?? null}
-          />
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <span className="font-bold text-suaza-ink truncate">
-              {notice.author?.name ?? ""}
-            </span>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-suaza-ink-muted">
-                {formatPostDate(notice.created_at)}
-              </span>
-              <CategoryBadge category={notice.category} />
-            </div>
-          </div>
-        </div>
-        <span className="font-bold text-suaza-ink truncate">
+      <div className="flex flex-col gap-2 w-full">
+        <NoticeHeader createdAt={notice.created_at} />
+        <span className="font-bold text-suaza-ink text-lg truncate">
           {notice.title}
         </span>
         <p className="text-sm text-suaza-ink-muted whitespace-pre-wrap line-clamp-3">
           {notice.content}
         </p>
-      </button>
+
+        {/* 작성자 + 자세히 보기 */}
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 min-w-0">
+            <Avatar
+              name={notice.author?.name ?? null}
+              src={notice.author?.avatar_url ?? null}
+            />
+            <span className="text-sm font-medium text-suaza-ink truncate">
+              {notice.author?.name ?? ""}
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="shrink-0 inline-flex items-center gap-0.5 text-sm font-medium text-suaza-ink-muted hover:text-suaza-ink transition"
+          >
+            자세히 보기
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
       {open &&
         typeof document !== "undefined" &&
@@ -119,22 +205,10 @@ export default function NoticeCard({ notice }: { notice: Notice }) {
                 <span className="w-9 h-1 rounded-full bg-gray-300" aria-hidden />
               </div>
 
-              {/* 헤더 — 작성자 / 닫기 */}
-              <div className="flex items-center gap-3 px-4 pt-3 pb-3 desktop:pt-4 border-b border-suaza-border">
-                <Avatar
-                  name={notice.author?.name ?? null}
-                  src={notice.author?.avatar_url ?? null}
-                />
-                <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                  <span className="font-bold text-suaza-ink truncate">
-                    {notice.author?.name ?? ""}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-suaza-ink-muted">
-                      {formatPostDate(notice.created_at)}
-                    </span>
-                    <CategoryBadge category={notice.category} />
-                  </div>
+              {/* 헤더 — 📢 공지 / 날짜 / 닫기 */}
+              <div className="flex items-center gap-2 px-4 pt-3 pb-3 desktop:pt-4 border-b border-suaza-border">
+                <div className="flex-1 min-w-0">
+                  <NoticeHeader createdAt={notice.created_at} />
                 </div>
                 <button
                   type="button"

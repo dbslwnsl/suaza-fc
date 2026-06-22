@@ -920,7 +920,6 @@ export function AttendanceCompactVote({
       </div>
 
       {/* 참석자 — 주 포지션(FW/MF/DF/GK)별 그룹 (팀 편성 카드와 동일 방식) */}
-      <div className="h-px bg-suaza-border" />
       <AttendingByPosition attending={groups.attending} />
     </>
   );
@@ -973,12 +972,9 @@ function AttendingByPosition({ attending }: { attending: VotePlayer[] }) {
           >
             {g.pos}
           </span>
-          <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
+          <div className="flex flex-wrap gap-x-2 flex-1 min-w-0">
             {g.members.map((m) => (
-              <span
-                key={m.id}
-                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs border border-green-300 bg-white text-suaza-ink"
-              >
+              <span key={m.id} className="text-xs text-suaza-ink leading-6">
                 {m.name}
               </span>
             ))}
