@@ -182,7 +182,7 @@ export default async function MatchInfoReadonly({ match }: { match: Match }) {
       {match.location && (
         <section className="bg-white rounded-2xl border border-suaza-border p-5 desktop:p-6 flex flex-col gap-2">
           <h3 className="text-sm font-bold text-suaza-ink inline-flex items-center gap-1.5">
-            <span aria-hidden>📍</span> 장소
+            장소
           </h3>
           <p className="text-xl font-bold text-suaza-ink">
             {match.location}

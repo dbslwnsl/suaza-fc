@@ -802,7 +802,6 @@ function VSCard({
           <>
             <span className="hidden desktop:inline text-suaza-ink-faint">·</span>
             <span className="inline-flex items-center gap-1 w-full desktop:w-auto justify-center">
-              <span>📍</span>
               {m.location}
               {m.status === "scheduled" && (
                 <Suspense fallback={null}>

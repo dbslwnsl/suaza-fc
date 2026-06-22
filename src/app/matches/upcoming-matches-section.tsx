@@ -124,32 +124,25 @@ function UpcomingMatchCard({
           </div>
         </div>
         <div className="bg-gray-50 rounded-lg p-3 flex flex-col gap-1.5">
-          <div className="text-sm text-suaza-ink font-medium flex items-center justify-between gap-2">
-            <span className="truncate">{dateStr}</span>
+          <div className="text-sm text-suaza-ink font-medium flex items-center gap-2 min-w-0">
+            <span className="shrink-0">{dateStr}</span>
             <span className="shrink-0 tabular-nums">{timeStr}</span>
+            {match.location && (
+              <span className="truncate font-normal text-suaza-ink-muted">
+                · {match.location}
+              </span>
+            )}
           </div>
-          {(match.location || weather) && (
-            <div className="text-xs text-suaza-ink-muted flex items-center justify-between gap-2">
-              {match.location ? (
-                <span className="flex items-center gap-1 min-w-0">
-                  <span>📍</span>
-                  <span className="truncate">{match.location}</span>
-                </span>
-              ) : (
-                <span />
-              )}
-              {weather && (
-                <span className="flex items-center gap-1.5 shrink-0 tabular-nums">
-                  <span className="text-sm">{weather.emoji}</span>
-                  <span className="text-suaza-ink font-medium">
-                    {weather.label}
-                  </span>
-                  <span>· {weather.tempMax}°</span>
-                  <span className="ml-1 text-sky-700">
-                    강수 {weather.precipitationProbability}%
-                  </span>
-                </span>
-              )}
+          {weather && (
+            <div className="text-xs text-suaza-ink-muted flex items-center gap-1.5 tabular-nums">
+              <span className="text-sm">{weather.emoji}</span>
+              <span className="text-suaza-ink font-medium">
+                {weather.label}
+              </span>
+              <span>· {weather.tempMax}°</span>
+              <span className="ml-1 text-sky-700">
+                강수 {weather.precipitationProbability}%
+              </span>
             </div>
           )}
         </div>

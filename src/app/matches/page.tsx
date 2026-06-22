@@ -305,7 +305,7 @@ function LiveMatchCard({
         <div className="flex items-center gap-4 text-sm text-white/80 flex-wrap">
           <span>📅 {dateStr}</span>
           <span>⏰ {timeStr} KICK-OFF</span>
-          {match.location && <span>📍 {match.location}</span>}
+          {match.location && <span>{match.location}</span>}
         </div>
       </div>
       {hasStats && (
