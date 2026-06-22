@@ -46,7 +46,7 @@ export default function UpcomingMatchesSection({
           예정된 경기가 없습니다.
         </p>
       )}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-0 divide-y divide-suaza-border sm:grid-cols-2 sm:gap-4 sm:divide-y-0">
         {matches.map((m, i) => {
           let hideCls = "";
           if (!expanded) {
@@ -57,7 +57,10 @@ export default function UpcomingMatchesSection({
             }
           }
           return (
-            <div key={m.id} className={hideCls}>
+            <div
+              key={m.id}
+              className={`${hideCls} py-4 first:pt-0 sm:py-0`.trim()}
+            >
               <UpcomingMatchCard match={m} weather={weathers[i] ?? null} />
             </div>
           );
@@ -90,6 +93,8 @@ function UpcomingMatchCard({
   weather: WeatherInfo | null;
 }) {
   const isIntra = match.opponent === "자체전";
+  // 좌측 컬러바·태그 색 — 자체전(보라) / 상대전(빨강)
+  const accent = isIntra ? "#8B5CF6" : "#F0524F";
   const dDay = computeDDay(match.match_date);
   const dateStr = formatLongDate(match.match_date);
   const timeStr = formatTime(match.match_date);
@@ -97,25 +102,28 @@ function UpcomingMatchCard({
   return (
     <Link
       href={`/matches/${match.id}`}
-      className="block bg-white rounded-xl border border-suaza-border p-5 hover:shadow-md transition"
+      className="block transition hover:opacity-70"
     >
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-base font-bold text-suaza-ink truncate min-w-0">
-            {isIntra
-              ? `${getTeamName(match, "A")} vs ${getTeamName(match, "B")}`
-              : `vs ${match.opponent}`}
-          </h3>
-          <div className="flex items-center gap-2 shrink-0">
+      <div className="flex gap-3">
+        <span
+          aria-hidden
+          className="w-1 shrink-0 self-stretch rounded-full"
+          style={{ backgroundColor: accent }}
+        />
+        <div className="flex flex-1 min-w-0 flex-col gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-base font-bold text-suaza-ink truncate min-w-0">
+              {isIntra
+                ? `${getTeamName(match, "A")} vs ${getTeamName(match, "B")}`
+                : `vs ${match.opponent}`}
+            </h3>
             <span
-              className={`text-xs font-medium ${
-                isIntra ? "text-purple-700" : "text-emerald-700"
-              }`}
+              className="shrink-0 text-xs font-medium"
+              style={{ color: accent }}
             >
               {isIntra ? "자체전" : "상대전"}
             </span>
           </div>
-        </div>
         <div className="flex flex-col gap-1.5">
           <div className="text-xs text-suaza-ink-muted flex items-center gap-2 min-w-0">
             <span className="shrink-0">{dateStr}</span>
@@ -146,6 +154,7 @@ function UpcomingMatchCard({
               )}
             </div>
           )}
+          </div>
         </div>
       </div>
     </Link>
