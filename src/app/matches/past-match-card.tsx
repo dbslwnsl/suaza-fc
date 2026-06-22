@@ -59,10 +59,8 @@ export default function PastMatchCard({ match }: { match: Match }) {
                 : `vs ${match.opponent}`}
             </span>
             <span
-              className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded ${
-                isIntra
-                  ? "bg-purple-100 text-purple-700"
-                  : "bg-emerald-100 text-emerald-700"
+              className={`shrink-0 text-xs font-medium ${
+                isIntra ? "text-purple-700" : "text-emerald-700"
               }`}
             >
               {isIntra ? "자체전" : "상대전"}

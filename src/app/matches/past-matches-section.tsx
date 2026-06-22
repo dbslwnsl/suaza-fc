@@ -27,7 +27,7 @@ export default function PastMatchesSection({
     <section className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-bold text-suaza-ink">지난 경기</h2>
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
           <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>
             전체
           </FilterButton>
@@ -79,7 +79,7 @@ function FilterButton({
     <button
       type="button"
       onClick={onClick}
-      className={`text-xs font-medium px-3 py-1.5 rounded-md transition ${
+      className={`inline-flex items-center justify-center h-6 px-3 text-[11px] font-medium rounded-md transition ${
         active
           ? "bg-suaza-ink text-white"
           : "text-suaza-ink-muted hover:text-suaza-ink"

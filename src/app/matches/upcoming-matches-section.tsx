@@ -107,42 +107,43 @@ function UpcomingMatchCard({
               : `vs ${match.opponent}`}
           </h3>
           <div className="flex items-center gap-2 shrink-0">
-            {dDay && (
-              <span className="text-xs font-medium px-2 py-0.5 rounded bg-amber-100 text-amber-700">
-                {dDay}
-              </span>
-            )}
             <span
-              className={`text-xs font-medium px-2 py-0.5 rounded ${
-                isIntra
-                  ? "bg-purple-100 text-purple-700"
-                  : "bg-emerald-100 text-emerald-700"
+              className={`text-xs font-medium ${
+                isIntra ? "text-purple-700" : "text-emerald-700"
               }`}
             >
               {isIntra ? "자체전" : "상대전"}
             </span>
           </div>
         </div>
-        <div className="bg-gray-50 rounded-lg p-3 flex flex-col gap-1.5">
-          <div className="text-sm text-suaza-ink font-medium flex items-center gap-2 min-w-0">
+        <div className="flex flex-col gap-1.5">
+          <div className="text-xs text-suaza-ink-muted flex items-center gap-2 min-w-0">
             <span className="shrink-0">{dateStr}</span>
             <span className="shrink-0 tabular-nums">{timeStr}</span>
-            {match.location && (
-              <span className="truncate font-normal text-suaza-ink-muted">
-                · {match.location}
+            {dDay && (
+              <span className="ml-auto shrink-0 text-xs font-medium text-amber-700">
+                {dDay}
               </span>
             )}
           </div>
-          {weather && (
-            <div className="text-xs text-suaza-ink-muted flex items-center gap-1.5 tabular-nums">
-              <span className="text-sm">{weather.emoji}</span>
-              <span className="text-suaza-ink font-medium">
-                {weather.label}
-              </span>
-              <span>· {weather.tempMax}°</span>
-              <span className="ml-1 text-sky-700">
-                강수 {weather.precipitationProbability}%
-              </span>
+          {(match.location || weather) && (
+            <div className="text-xs flex items-center gap-2 tabular-nums">
+              {match.location && (
+                <span className="truncate min-w-0 text-suaza-ink-muted">
+                  {match.location}
+                </span>
+              )}
+              {weather && (
+                <span className="inline-flex items-center gap-1.5 shrink-0 ml-auto">
+                  <span className="text-suaza-ink font-medium">
+                    {weather.tempMax}°
+                  </span>
+                  <span className="text-sm">{weather.emoji}</span>
+                  <span className="text-sky-700">
+                    강수 {weather.precipitationProbability}%
+                  </span>
+                </span>
+              )}
             </div>
           )}
         </div>
