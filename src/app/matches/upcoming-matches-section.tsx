@@ -111,28 +111,27 @@ function UpcomingMatchCard({
           style={{ backgroundColor: accent }}
         />
         <div className="flex flex-1 min-w-0 flex-col gap-3">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
             <h3 className="text-base font-bold text-suaza-ink truncate min-w-0">
               {isIntra
                 ? `${getTeamName(match, "A")} vs ${getTeamName(match, "B")}`
                 : `vs ${match.opponent}`}
             </h3>
-            <span
-              className="shrink-0 text-xs font-medium"
-              style={{ color: accent }}
-            >
-              {isIntra ? "자체전" : "상대전"}
-            </span>
           </div>
         <div className="flex flex-col gap-1.5">
           <div className="text-xs text-suaza-ink-muted flex items-center gap-2 min-w-0">
             <span className="shrink-0">{dateStr}</span>
             <span className="shrink-0 tabular-nums">{timeStr}</span>
-            {dDay && (
-              <span className="ml-auto shrink-0 text-xs font-medium text-amber-700">
-                {dDay}
+            <span className="ml-auto shrink-0 flex items-center gap-2">
+              {dDay && (
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                  {dDay}
+                </span>
+              )}
+              <span className="text-xs font-medium" style={{ color: accent }}>
+                {isIntra ? "자체전" : "상대전"}
               </span>
-            )}
+            </span>
           </div>
           {(match.location || weather) && (
             <div className="text-xs flex items-center gap-2 tabular-nums">

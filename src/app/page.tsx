@@ -460,9 +460,11 @@ export default async function Home() {
             {/* "지난 경기" 위 가로 구분선 */}
             <div className="h-px bg-suaza-border" />
             <h2 className="text-lg font-bold text-suaza-ink">지난 경기</h2>
-            <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 gap-0 divide-y divide-suaza-border">
               {recentMatches.map((m) => (
-                <PastMatchCard key={m.id} match={m} />
+                <div key={m.id} className="py-4 first:pt-0">
+                  <PastMatchCard match={m} />
+                </div>
               ))}
             </div>
           </section>

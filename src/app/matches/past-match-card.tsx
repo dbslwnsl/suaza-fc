@@ -7,6 +7,8 @@ import { getTeamName, type Match } from "@/lib/matches/helpers";
  */
 export default function PastMatchCard({ match }: { match: Match }) {
   const isIntra = match.opponent === "자체전";
+  // 좌측 세로 컬러바 — 자체전(보라) / 상대전(빨강). 예정된 경기 카드와 동일.
+  const accent = isIntra ? "#8B5CF6" : "#F0524F";
   const ourScore = match.our_score ?? 0;
   const oppScore = match.opponent_score ?? 0;
   // 표시되는 점수 기준으로 결과 산출 — 둘 다 미입력(=0/0)이어도 동률이면 무승부.
@@ -14,16 +16,24 @@ export default function PastMatchCard({ match }: { match: Match }) {
     ourScore > oppScore ? "win" : ourScore < oppScore ? "lose" : "draw";
   const dateStr = formatLongDate(match.match_date);
   const timeStr = formatTime(match.match_date);
+  // 매치업 — A팀 3 종료 1 B팀 (상대전은 수아자FC vs 상대팀). 취소 경기는 점수 없이.
+  // 자체전 팀명은 "팀" 접미사를 유지한다.
+  const teamLabel = (t: "A" | "B") => getTeamName(match, t);
+  const homeName = isIntra ? teamLabel("A") : "수아자FC";
+  const awayName = isIntra ? teamLabel("B") : match.opponent;
+  const statusWord = match.status === "canceled" ? "취소" : "종료";
   const resultLabel =
     match.status === "canceled"
       ? "취소"
-      : result === "draw"
-        ? "무승부"
-        : isIntra
-          ? `${getTeamName(match, result === "win" ? "A" : "B")}승`
-          : result === "win"
-            ? "수아자FC승"
-            : "수아자FC패";
+      : isIntra
+        ? result === "draw"
+          ? "무승부"
+          : `${teamLabel(result === "win" ? "A" : "B")}승`
+        : result === "win"
+          ? "승"
+          : result === "lose"
+            ? "패"
+            : "무";
   const resultClass =
     match.status === "canceled"
       ? "bg-gray-100 text-gray-500"
@@ -36,38 +46,47 @@ export default function PastMatchCard({ match }: { match: Match }) {
   return (
     <Link
       href={`/matches/${match.id}`}
-      className="block bg-white rounded-xl border border-suaza-border p-4 hover:bg-gray-50 transition"
+      className="block transition hover:opacity-70"
     >
-      <div className="flex items-center gap-5">
-        <div className="flex flex-col items-center gap-1 w-16 shrink-0">
-          <span
-            className={`text-xs font-bold px-2 py-0.5 rounded whitespace-nowrap ${resultClass}`}
-          >
-            {resultLabel}
-          </span>
-          {match.status !== "canceled" && (
-            <span className="text-xl font-bold text-suaza-ink tabular-nums">
-              {ourScore} : {oppScore}
-            </span>
-          )}
-        </div>
+      <div className="flex gap-3">
+        <span
+          aria-hidden
+          className="w-1 shrink-0 self-stretch rounded-full"
+          style={{ backgroundColor: accent }}
+        />
         <div className="flex-1 flex flex-col gap-1.5 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-bold text-suaza-ink truncate min-w-0">
-              {isIntra
-                ? `${getTeamName(match, "A")} vs ${getTeamName(match, "B")}`
-                : `vs ${match.opponent}`}
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-bold text-suaza-ink truncate min-w-0 tabular-nums">
+              {homeName}{" "}
+              {match.status !== "canceled" ? (
+                <>
+                  <span className="text-lg text-[#338CF2]">{ourScore}</span>{" "}
+                  <span className="text-xs font-normal text-suaza-ink-muted">
+                    {statusWord}
+                  </span>{" "}
+                  <span className="text-lg text-[#338CF2]">{oppScore}</span>{" "}
+                </>
+              ) : (
+                "vs "
+              )}
+              {awayName}
             </span>
             <span
-              className={`shrink-0 text-xs font-medium ${
-                isIntra ? "text-purple-700" : "text-emerald-700"
-              }`}
+              className={`ml-auto shrink-0 text-xs font-bold px-2 py-0.5 rounded whitespace-nowrap ${resultClass}`}
             >
-              {isIntra ? "자체전" : "상대전"}
+              {resultLabel}
             </span>
           </div>
           <div className="text-xs text-suaza-ink-muted flex flex-col gap-0.5">
-            <span>{dateStr} {timeStr}</span>
+            <div className="flex items-center gap-2">
+              <span>{dateStr} {timeStr}</span>
+              <span
+                className="ml-auto shrink-0 text-xs font-medium"
+                style={{ color: accent }}
+              >
+                {isIntra ? "자체전" : "상대전"}
+              </span>
+            </div>
             {match.location && <span>{match.location}</span>}
           </div>
         </div>
