@@ -53,6 +53,14 @@ export const CATEGORY_BADGE: Record<PostCategory, string> = {
   qna: "bg-violet-100 text-violet-700",
 };
 
+// 목록 좌측 세로 컬러바 색 — 카테고리(글 타입)별 단색
+export const CATEGORY_BAR_COLOR: Record<PostCategory, string> = {
+  notice: "#EF4444",
+  free: "#9CA3AF",
+  tactics: "#3B82F6",
+  qna: "#8B5CF6",
+};
+
 export function isPostCategory(v: string): v is PostCategory {
   return (POST_CATEGORIES as readonly string[]).includes(v);
 }

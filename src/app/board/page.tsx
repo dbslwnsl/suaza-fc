@@ -38,8 +38,7 @@ export default async function BoardPage({
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [{ data: postsRaw }, { data: commentsRaw }, { data: me }] =
-    await Promise.all([
+  const [{ data: postsRaw }, { data: commentsRaw }] = await Promise.all([
       supabase
         .from("posts")
         .select(
@@ -53,12 +52,10 @@ export default async function BoardPage({
           "id, post_id, content, created_at, updated_at, author_id, parent_id, author:profiles!post_comments_author_id_fkey(name, avatar_url)",
         )
         .order("created_at", { ascending: true }),
-      supabase.from("profiles").select("role").eq("id", user.id).single(),
     ]);
 
   const postRows = (postsRaw ?? []) as unknown as PostRow[];
   const commentRows = (commentsRaw ?? []) as unknown as CommentRow[];
-  const isManager = me?.role === "manager";
 
   // 인라인 확장 시에도 좋아요가 보이도록 댓글 좋아요 수·본인 여부를 집계한다.
   const commentIds = commentRows.map((c) => c.id);
@@ -196,11 +193,7 @@ export default async function BoardPage({
             아직 작성된 글이 없습니다.
           </p>
         ) : (
-          <PostList
-            posts={posts}
-            myUserId={user.id}
-            isManager={isManager}
-          />
+          <PostList posts={posts} />
         )}
       </div>
     </main>

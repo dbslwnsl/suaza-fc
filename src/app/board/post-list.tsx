@@ -5,13 +5,14 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   CATEGORY_LABEL,
+  CATEGORY_BAR_COLOR,
   POST_CATEGORIES,
   categoryBadgeClass,
   formatPostDate,
   type PostCategory,
 } from "@/lib/board/helpers";
-import CommentSection, { type Comment } from "./[id]/comment-section";
-import PostActions, { type Liker } from "./[id]/post-actions";
+import { type Comment } from "./[id]/comment-section";
+import { type Liker } from "./[id]/post-actions";
 
 export type ListPost = {
   id: string;
@@ -30,16 +31,7 @@ export type ListPost = {
 
 type Filter = "ALL" | PostCategory;
 
-export default function PostList({
-  posts,
-  myUserId,
-  isManager,
-}: {
-  posts: ListPost[];
-  myUserId: string;
-  isManager: boolean;
-}) {
-  const [openId, setOpenId] = useState<string | null>(null);
+export default function PostList({ posts }: { posts: ListPost[] }) {
   const [filter, setFilter] = useState<Filter>("ALL");
 
   const filtered = useMemo(
@@ -79,21 +71,12 @@ export default function PostList({
           해당 카테고리의 글이 없습니다.
         </p>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {filtered.map((p) => {
-            const open = p.id === openId;
-            return (
-              <li key={p.id}>
-                <PostCard
-                  post={p}
-                  open={open}
-                  onToggle={() => setOpenId(open ? null : p.id)}
-                  myUserId={myUserId}
-                  isManager={isManager}
-                />
-              </li>
-            );
-          })}
+        <ul className="flex flex-col divide-y divide-suaza-border">
+          {filtered.map((p) => (
+            <li key={p.id} className="py-4 first:pt-0 last:pb-0">
+              <PostCard post={p} />
+            </li>
+          ))}
         </ul>
       )}
     </div>
@@ -124,122 +107,88 @@ function CategoryChip({
   );
 }
 
-function PostCard({
-  post,
-  open,
-  onToggle,
-  myUserId,
-  isManager,
-}: {
-  post: ListPost;
-  open: boolean;
-  onToggle: () => void;
-  myUserId: string;
-  isManager: boolean;
-}) {
+function PostCard({ post }: { post: ListPost }) {
   const commentCount = post.comments.length;
 
   return (
-    <div className="border border-suaza-border rounded-lg overflow-hidden">
-      <div className="flex items-center gap-3 p-4">
-        {/* 좌측: 아바타 — 이름/제목 2줄에 걸쳐 세로 중앙 */}
-        <Link href={`/board/${post.id}`} className="shrink-0">
+    <Link href={`/board/${post.id}`} className="block transition hover:opacity-70">
+      <div className="flex gap-3">
+        {/* 좌측: 글 타입(카테고리) 색 세로바 */}
+        <span
+          aria-hidden
+          className="w-1 shrink-0 self-stretch rounded-full"
+          style={{ backgroundColor: CATEGORY_BAR_COLOR[post.category] }}
+        />
+        <div className="flex flex-1 min-w-0 flex-col gap-3">
+        {/* 헤더: 작성자 + 시간 / 카테고리 */}
+        <div className="flex items-center gap-2.5">
           <AuthorAvatar
             name={post.author?.name ?? null}
             src={post.author?.avatar_url ?? null}
           />
-        </Link>
-        {/* 우측: 1줄(제목 + 💬 + 펼치기) / 2줄(이름·날짜·게시글 타입) */}
-        <div className="flex-1 min-w-0 flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <Link href={`/board/${post.id}`} className="group flex-1 min-w-0">
-              <h3 className="font-bold text-suaza-ink truncate group-hover:underline">
-                {post.title}
-              </h3>
-            </Link>
-            {commentCount > 0 && (
-              <span className="shrink-0 inline-flex items-center gap-0.5 text-xs text-suaza-ink-muted">
-                <span aria-hidden>💬</span>
-                <span className="font-medium">{commentCount}</span>
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={onToggle}
-              aria-expanded={open}
-              aria-label={open ? "글 접기" : "글 펼치기"}
-              className="shrink-0 w-7 h-7 inline-flex items-center justify-center rounded-full text-suaza-ink-muted hover:text-suaza-ink hover:bg-gray-100 transition"
-            >
-              <svg
-                aria-hidden
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={`transition-transform ${open ? "rotate-180" : ""}`}
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap text-xs">
-            <span className="font-medium text-suaza-ink">
+          <div className="flex min-w-0 flex-col leading-tight">
+            <span className="truncate text-sm font-bold text-suaza-ink">
               {post.author?.name ?? "(알 수 없음)"}
             </span>
-            <span className="text-suaza-ink-muted">
+            <span className="text-[11px] text-suaza-ink-muted">
               {formatPostDate(post.created_at)}
             </span>
-            {/* 카테고리(공지/자유 등) 뱃지는 우측 정렬 */}
-            <span className="ml-auto flex items-center gap-2">
-              {/* 공지 카테고리는 카테고리 뱃지가 "공지"를 표시하므로 중복 방지 */}
-              {post.is_notice && post.category !== "notice" && (
-                <span className="text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium">
-                  공지
-                </span>
-              )}
-              <span
-                className={`text-[11px] px-2 py-0.5 rounded font-medium ${categoryBadgeClass(post.category, post.is_notice)}`}
-              >
-                {CATEGORY_LABEL[post.category]}
-              </span>
-            </span>
           </div>
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            {post.is_notice && post.category !== "notice" && (
+              <span className="rounded-full bg-suaza-accent px-2 py-0.5 text-[11px] font-medium text-white">
+                공지
+              </span>
+            )}
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${categoryBadgeClass(
+                post.category,
+                post.is_notice,
+              )}`}
+            >
+              {CATEGORY_LABEL[post.category]}
+            </span>
+          </span>
+        </div>
+
+        {/* 제목 */}
+        <h3 className="text-base font-bold leading-snug text-suaza-ink">
+          {post.title}
+        </h3>
+
+        {/* 본문 미리보기 (2줄) */}
+        <p className="line-clamp-2 text-sm leading-relaxed text-suaza-ink-muted">
+          {post.content}
+        </p>
+
+        {/* 좋아요 / 댓글 카운트 */}
+        <div className="flex items-center gap-4 text-sm font-medium text-suaza-ink-muted">
+          <span className="inline-flex items-center gap-1.5">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#F0524F" aria-hidden>
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+            {post.likeCount}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            {commentCount}
+          </span>
+        </div>
         </div>
       </div>
-
-      {open && (
-        <div className="border-t border-suaza-border bg-suaza-bg/30 p-4 flex flex-col gap-4">
-          <p className="text-suaza-ink whitespace-pre-wrap leading-relaxed text-sm">
-            {post.content}
-          </p>
-          {/* 좋아요(하트)·공유 + 누가 눌렀는지 — 상세 페이지와 동일 */}
-          <PostActions
-            postId={post.id}
-            initialLikes={post.likeCount}
-            initialLiked={post.likedByMe}
-            likers={post.likers}
-          />
-          <div className="flex justify-end">
-            <Link
-              href={`/board/${post.id}`}
-              className="text-xs text-suaza-ink-muted hover:text-suaza-ink hover:underline"
-            >
-              자세히 보기 ›
-            </Link>
-          </div>
-          <CommentSection
-            postId={post.id}
-            comments={post.comments}
-            myUserId={myUserId}
-            isManager={isManager}
-          />
-        </div>
-      )}
-    </div>
+    </Link>
   );
 }
 
