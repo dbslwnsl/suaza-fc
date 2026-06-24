@@ -166,12 +166,11 @@ export default function NoticeCard({ notice }: { notice: Notice }) {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="shrink-0 inline-flex items-center gap-0.5 text-sm font-medium text-suaza-ink-muted hover:text-suaza-ink transition"
+            className="shrink-0 inline-flex items-center gap-0.5 text-xs font-medium text-suaza-ink-muted hover:text-suaza-ink transition"
           >
-            자세히 보기
+            더보기
             <svg
-              width="16"
-              height="16"
+              className="w-4 h-4 text-suaza-ink-faint"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"

@@ -319,16 +319,16 @@ export default async function Home() {
                     >
                       더보기
                       <svg
+                        className="w-4 h-4 text-suaza-ink-faint"
                         viewBox="0 0 24 24"
-                        className="w-3.5 h-3.5"
                         fill="none"
                         stroke="currentColor"
-                        strokeWidth={2}
+                        strokeWidth="2.5"
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         aria-hidden
                       >
-                        <path d="M9 6l6 6-6 6" />
+                        <polyline points="9 18 15 12 9 6" />
                       </svg>
                     </Link>
                   </div>
@@ -459,7 +459,28 @@ export default async function Home() {
           <section className="flex flex-col gap-3">
             {/* "지난 경기" 위 가로 구분선 */}
             <div className="h-px bg-suaza-border" />
-            <h2 className="text-lg font-bold text-suaza-ink">지난 경기</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-bold text-suaza-ink">지난 경기</h2>
+              <Link
+                href="/matches"
+                aria-label="지난 경기 더보기"
+                className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-suaza-ink-muted hover:text-suaza-ink transition"
+              >
+                더보기
+                <svg
+                  className="w-4 h-4 text-suaza-ink-faint"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </Link>
+            </div>
             <div className="grid grid-cols-1 gap-0 divide-y divide-suaza-border">
               {recentMatches.map((m) => (
                 <div key={m.id} className="py-4 first:pt-0">
