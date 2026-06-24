@@ -315,9 +315,8 @@ export default async function Home() {
                       href={`/members/${user!.id}`}
                       aria-label="프로필 더보기"
                       title="프로필 더보기"
-                      className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-suaza-ink-muted hover:text-suaza-ink transition"
+                      className="inline-flex shrink-0 items-center text-suaza-ink-muted hover:text-suaza-ink transition"
                     >
-                      더보기
                       <svg
                         className="w-4 h-4 text-suaza-ink-faint"
                         viewBox="0 0 24 24"
@@ -464,9 +463,8 @@ export default async function Home() {
               <Link
                 href="/matches"
                 aria-label="지난 경기 더보기"
-                className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-suaza-ink-muted hover:text-suaza-ink transition"
+                className="inline-flex shrink-0 items-center text-suaza-ink-muted hover:text-suaza-ink transition"
               >
-                더보기
                 <svg
                   className="w-4 h-4 text-suaza-ink-faint"
                   viewBox="0 0 24 24"
