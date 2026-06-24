@@ -850,7 +850,6 @@ export function AttendanceCompactVote({
   totalQuarters = 4,
   quarterActions,
   locked = false,
-  lockedMessage = "🔒 투표가 마감되었습니다",
 }: {
   matchId: string;
   me: VotePlayer | null;
@@ -892,11 +891,7 @@ export function AttendanceCompactVote({
         onConfirm={confirmStatusChange}
         onCancel={cancelStatusChange}
       />
-      {locked ? (
-        <div className="bg-gray-50 rounded-lg p-3 text-center text-xs text-suaza-ink-muted">
-          {lockedMessage}
-        </div>
-      ) : (
+      {!locked && (
         <>
           <VoteButtons status={optimisticStatus} onVote={vote} tall />
           {optimisticStatus === "attending" && (

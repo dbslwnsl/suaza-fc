@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import Image from "next/image";
 import Link from "next/link";
 import { type PostCategory } from "@/lib/board/helpers";
 
@@ -30,63 +29,6 @@ function formatNoticeDate(iso: string): string {
   return `${get("year")}.${get("month")}.${get("day")} ${get("hour")}:${get("minute")}`;
 }
 
-const AVATAR_COLORS = [
-  "#3B82F6",
-  "#8B5CF6",
-  "#F97316",
-  "#10B981",
-  "#EF4444",
-  "#14B8A6",
-  "#F59E0B",
-  "#EC4899",
-];
-function colorFor(name: string | null): string {
-  const s = name || "?";
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return AVATAR_COLORS[h % AVATAR_COLORS.length];
-}
-
-function Avatar({
-  name,
-  src,
-  size = 22,
-}: {
-  name: string | null;
-  src: string | null;
-  size?: number;
-}) {
-  const initial = name?.charAt(0) || "?";
-  return (
-    <span
-      className="relative inline-flex shrink-0 rounded-full overflow-hidden items-center justify-center"
-      style={{
-        width: size,
-        height: size,
-        backgroundColor: src ? "#f3f4f6" : colorFor(name),
-      }}
-      aria-hidden
-    >
-      {src ? (
-        <Image
-          src={src}
-          alt={name ?? "프로필"}
-          fill
-          sizes={`${size}px`}
-          className="object-cover"
-        />
-      ) : (
-        <span
-          className="font-bold text-white"
-          style={{ fontSize: Math.round(size * 0.45) }}
-        >
-          {initial}
-        </span>
-      )}
-    </span>
-  );
-}
-
 function Megaphone() {
   return (
     <svg
@@ -107,14 +49,21 @@ function Megaphone() {
   );
 }
 
-// 좌측 "📢 공지" 라벨 + 우측 날짜·시간
+// "📢 공지" 라벨
+function NoticeLabel() {
+  return (
+    <span className="flex items-center gap-1.5">
+      <Megaphone />
+      <span className="font-bold text-suaza-ink text-lg">공지</span>
+    </span>
+  );
+}
+
+// 좌측 "📢 공지" 라벨 + 우측 날짜·시간 (모달 헤더용)
 function NoticeHeader({ createdAt }: { createdAt: string }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="flex items-center gap-1.5">
-        <Megaphone />
-        <span className="font-bold text-suaza-ink text-sm">공지</span>
-      </span>
+      <NoticeLabel />
       <span className="text-xs text-suaza-ink-muted shrink-0">
         {formatNoticeDate(createdAt)}
       </span>
@@ -144,25 +93,9 @@ export default function NoticeCard({ notice }: { notice: Notice }) {
   return (
     <>
       <div className="flex flex-col gap-2 w-full">
-        <NoticeHeader createdAt={notice.created_at} />
-        <span className="font-bold text-suaza-ink text-lg truncate">
-          {notice.title}
-        </span>
-        <p className="text-sm text-suaza-ink-muted whitespace-pre-wrap line-clamp-3">
-          {notice.content}
-        </p>
-
-        {/* 작성자 + 자세히 보기 */}
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <span className="flex items-center gap-1.5 min-w-0">
-            <Avatar
-              name={notice.author?.name ?? null}
-              src={notice.author?.avatar_url ?? null}
-            />
-            <span className="text-sm font-medium text-suaza-ink truncate">
-              {notice.author?.name ?? ""}
-            </span>
-          </span>
+        {/* 공지 라벨 + 더보기(>) 우측 정렬 */}
+        <div className="flex items-center justify-between gap-2">
+          <NoticeLabel />
           <button
             type="button"
             onClick={() => setOpen(true)}
@@ -183,6 +116,17 @@ export default function NoticeCard({ notice }: { notice: Notice }) {
             </svg>
           </button>
         </div>
+        <div className="flex flex-col gap-0.5">
+          <span className="font-bold text-suaza-ink text-base truncate">
+            {notice.title}
+          </span>
+          <span className="text-xs text-suaza-ink-muted">
+            {formatNoticeDate(notice.created_at)}
+          </span>
+        </div>
+        <p className="text-sm text-suaza-ink-muted whitespace-pre-wrap line-clamp-3">
+          {notice.content}
+        </p>
       </div>
 
       {open &&

@@ -14,7 +14,6 @@ import {
   MATCH_STATUS_BADGE,
   MATCH_STATUS_LABEL,
   formatMatchDate,
-  isMatchStarted,
   isAttendanceVoteLocked,
   type Match,
 } from "@/lib/matches/helpers";
@@ -102,6 +101,10 @@ export default async function Home() {
   ]);
 
   const upcoming = upcomingMatch as Match | null;
+  // 예정 경기 투표 잠금 여부(마감/종료/시작) — 날짜 라인 "투표마감" 표기 및 투표 패널 잠금에 공용.
+  const upcomingLocked = upcoming
+    ? isAttendanceVoteLocked(upcoming, nowMs)
+    : false;
   const recentMatches = (lastMatch ?? []) as Match[];
   const notice = latestNotice as unknown as NoticeRow | null;
 
@@ -423,8 +426,15 @@ export default async function Home() {
                   </svg>
                 </span>
               </span>
-              <span className="text-sm text-suaza-ink-muted truncate">
-                {formatMatchDate(upcoming.match_date)}
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="text-xs text-suaza-ink-muted truncate min-w-0">
+                  {formatMatchDate(upcoming.match_date)}
+                </span>
+                {upcomingLocked && (
+                  <span className="shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                    투표마감
+                  </span>
+                )}
               </span>
             </Link>
             <AttendanceVote
@@ -441,14 +451,7 @@ export default async function Home() {
               isManager={profile?.role === "manager"}
               totalQuarters={upcoming.total_quarters ?? 4}
               quarterActions={upcoming.quarter_actions ?? null}
-              locked={isAttendanceVoteLocked(upcoming, nowMs)}
-              lockedMessage={
-                isMatchStarted(upcoming)
-                  ? "🔒 경기 시작 후에는 출석 투표를 변경할 수 없습니다"
-                  : upcoming.vote_closed_at != null
-                    ? "🔒 출석 투표가 종료되었습니다"
-                    : "🔒 투표가 마감되었습니다 (매니저·감독만 변경 가능)"
-              }
+              locked={upcomingLocked}
             />
           </section>
         )}
