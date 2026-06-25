@@ -104,9 +104,13 @@ export default function NoticeCard({
         <div className="flex flex-col gap-0.5">
           {/* 제목 + 더보기(>) 우측 정렬 */}
           <div className="flex items-center justify-between gap-2">
-            <span className="font-bold text-suaza-ink text-base truncate min-w-0">
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="min-w-0 truncate text-left text-base font-bold text-suaza-ink hover:underline"
+            >
               {notice.title}
-            </span>
+            </button>
             <button
               type="button"
               onClick={() => setOpen(true)}
@@ -131,9 +135,13 @@ export default function NoticeCard({
             {formatNoticeDate(notice.created_at)}
           </span>
         </div>
-        <p className="text-sm text-suaza-ink-muted whitespace-pre-wrap line-clamp-3">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="text-left text-sm text-suaza-ink-muted whitespace-pre-wrap line-clamp-3 hover:text-suaza-ink transition"
+        >
           {notice.content}
-        </p>
+        </button>
       </div>
 
       {open &&
