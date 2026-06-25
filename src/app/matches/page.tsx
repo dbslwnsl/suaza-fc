@@ -138,11 +138,7 @@ export default async function MatchesPage({
         {/* 진행중인 경기 */}
         {live.length > 0 && (
           <section className="flex flex-col gap-4">
-            <SectionHeader
-              dotColor="#EF3E3E"
-              title="진행중인 경기"
-              count={live.length}
-            />
+            <SectionHeader dotColor="#EF3E3E" title="진행중인 경기" />
             <div className="flex flex-col gap-4">
               {live.map((m) => (
                 <LiveMatchCard
@@ -245,16 +241,6 @@ function LiveMatchCard({
   stats: LiveStats;
 }) {
   const isIntra = match.opponent === "자체전";
-  const totalMin = (match.duration_hours ?? 2) * 60;
-  const halfPoint = totalMin / 2;
-  const elapsedMin = Math.max(
-    0,
-    Math.floor((Date.now() - new Date(match.match_date).getTime()) / 60000),
-  );
-  const period = elapsedMin < halfPoint ? "전반" : "후반";
-  const periodMin = elapsedMin < halfPoint ? elapsedMin : elapsedMin - halfPoint;
-  const periodLabel = `${period} ${periodMin}'`;
-
   const ourScore = match.our_score ?? 0;
   const oppScore = match.opponent_score ?? 0;
   const dateStr = formatLongDate(match.match_date);
@@ -278,11 +264,10 @@ function LiveMatchCard({
           >
             {isIntra ? "자체전" : "상대전"}
           </span>
-          <span className="text-xs text-white/70 ml-1">{periodLabel}</span>
         </div>
         <Link
           href={`/matches/${match.id}`}
-          className="text-3xl desktop:text-[40px] font-bold tracking-wide self-start hover:opacity-80 transition"
+          className="text-2xl desktop:text-[40px] font-bold tracking-wide self-start hover:opacity-80 transition"
         >
           {isIntra ? (
             <>
@@ -302,9 +287,9 @@ function LiveMatchCard({
             </>
           )}
         </Link>
-        <div className="flex items-center gap-4 text-sm text-white/80 flex-wrap">
-          <span>📅 {dateStr}</span>
-          <span>⏰ {timeStr} KICK-OFF</span>
+        <div className="flex items-center gap-2 text-[12px] text-white/80 flex-wrap">
+          <span>{dateStr}</span>
+          <span>{timeStr} KICK-OFF</span>
           {match.location && <span>{match.location}</span>}
         </div>
       </div>
