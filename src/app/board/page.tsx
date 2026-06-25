@@ -22,7 +22,7 @@ type CommentRow = {
   updated_at: string;
   author_id: string;
   parent_id: string | null;
-  author: { name: string; avatar_url: string | null } | null;
+  author: { name: string; avatar_url: string | null; title: string | null } | null;
 };
 
 export default async function BoardPage({
@@ -49,7 +49,7 @@ export default async function BoardPage({
       supabase
         .from("post_comments")
         .select(
-          "id, post_id, content, created_at, updated_at, author_id, parent_id, author:profiles!post_comments_author_id_fkey(name, avatar_url)",
+          "id, post_id, content, created_at, updated_at, author_id, parent_id, author:profiles!post_comments_author_id_fkey(name, avatar_url, title)",
         )
         .order("created_at", { ascending: true }),
     ]);

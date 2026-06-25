@@ -52,13 +52,13 @@ export default async function PostDetailPage({
         .single(),
       supabase
         .from("profiles")
-        .select("role, title")
+        .select("role, title, name, avatar_url")
         .eq("id", user.id)
         .single(),
       supabase
         .from("post_comments")
         .select(
-          "id, content, created_at, updated_at, author_id, parent_id, author:profiles!post_comments_author_id_fkey(name, avatar_url)",
+          "id, content, created_at, updated_at, author_id, parent_id, author:profiles!post_comments_author_id_fkey(name, avatar_url, title)",
         )
         .eq("post_id", id)
         .order("created_at", { ascending: true }),
@@ -122,6 +122,9 @@ export default async function PostDetailPage({
   const myRole = me?.role ?? "player";
   const isManager = myRole === "manager";
   const myTitle = me?.title ?? "player";
+  const myName = (me as { name?: string | null } | null)?.name ?? null;
+  const myAvatarUrl =
+    (me as { avatar_url?: string | null } | null)?.avatar_url ?? null;
   // 타인 글 수정/삭제는 회장(president)만 가능. 그 외(감독 포함)는 본인 글만.
   const isPresident = myTitle === "president";
   const canEdit = isAuthor || isPresident;
@@ -261,6 +264,8 @@ export default async function PostDetailPage({
               postId={p.id}
               comments={comments}
               myUserId={user.id}
+              myName={myName}
+              myAvatarUrl={myAvatarUrl}
               isManager={isManager}
             />
           </>

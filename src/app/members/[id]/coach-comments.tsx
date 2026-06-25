@@ -12,6 +12,7 @@ import {
 import {
   TITLE_LABEL,
   TITLE_BADGE,
+  TITLE_BAR_COLOR,
   type MemberTitle,
 } from "@/lib/members/positions";
 
@@ -43,24 +44,6 @@ export type CoachComment = {
 };
 
 type CommentWithReplies = CoachComment & { replies: CoachComment[] };
-
-// ── 유틸 ───────────────────────────────────────────────────
-const AVATAR_COLORS = [
-  "#3B82F6",
-  "#8B5CF6",
-  "#F97316",
-  "#10B981",
-  "#EF4444",
-  "#14B8A6",
-  "#F59E0B",
-  "#EC4899",
-];
-function colorFor(name: string | null): string {
-  const s = name || "?";
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return AVATAR_COLORS[h % AVATAR_COLORS.length];
-}
 
 function matchDateLabel(iso: string): string {
   return new Intl.DateTimeFormat("ko-KR", {
@@ -310,7 +293,8 @@ function CommentThread({
 }) {
   const [replying, setReplying] = useState(false);
   const isTemp = comment.id.startsWith("temp-");
-  const accent = colorFor(comment.author?.name ?? null);
+  const accent =
+    TITLE_BAR_COLOR[(comment.author?.title ?? "player") as MemberTitle];
 
   return (
     <div

@@ -59,6 +59,17 @@ export const TITLE_BADGE: Record<MemberTitle, string> = {
   player: "bg-gray-100 text-gray-700",
 };
 
+// 댓글 좌측 액센트 바 색 — 직책별 단색 (TITLE_BADGE 와 같은 계열)
+export const TITLE_BAR_COLOR: Record<MemberTitle, string> = {
+  president: "#9333EA",
+  vice_president: "#A855F7",
+  treasurer: "#3B82F6",
+  auditor: "#F59E0B",
+  head_coach: "#EF4444",
+  coach: "#F97316",
+  player: "#9CA3AF",
+};
+
 // 시스템 권한 (manager / player) — 화면 표기 거의 안 함, 권한 분기용
 export const ROLE_LABEL: Record<string, string> = {
   manager: "매니저",
