@@ -785,12 +785,10 @@ function VSCard({
 
       <div className="flex items-center justify-center gap-2 desktop:gap-4 text-suaza-ink-muted text-sm flex-wrap">
         <span className="inline-flex items-center gap-1">
-          <span>📅</span>
           {formatMatchDateLong(m.match_date)}
         </span>
         <span className="hidden desktop:inline text-suaza-ink-faint">·</span>
         <span className="inline-flex items-center gap-1">
-          <span>⏰</span>
           {formatMatchTime(m.match_date)}
           {m.duration_hours ? (
             <span className="text-suaza-ink-faint">
