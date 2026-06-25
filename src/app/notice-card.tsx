@@ -71,8 +71,15 @@ function NoticeHeader({ createdAt }: { createdAt: string }) {
   );
 }
 
-/** 홈 공지 카드 — 클릭 시 본문을 팝업(모달)으로 표시. */
-export default function NoticeCard({ notice }: { notice: Notice }) {
+/** 홈 공지 카드 — 클릭 시 본문을 팝업(모달)으로 표시.
+ *  showLabel=false 면 "📢 공지" 라벨 숨김 (2번째 이후 공지용) */
+export default function NoticeCard({
+  notice,
+  showLabel = true,
+}: {
+  notice: Notice;
+  showLabel?: boolean;
+}) {
   const [open, setOpen] = useState(false);
 
   // 모달 열림 동안 body 스크롤 잠금 + ESC 닫기
@@ -93,33 +100,33 @@ export default function NoticeCard({ notice }: { notice: Notice }) {
   return (
     <>
       <div className="flex flex-col gap-2 w-full">
-        {/* 공지 라벨 + 더보기(>) 우측 정렬 */}
-        <div className="flex items-center justify-between gap-2">
-          <NoticeLabel />
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            aria-label="공지 더보기"
-            className="shrink-0 inline-flex items-center text-suaza-ink-muted hover:text-suaza-ink transition"
-          >
-            <svg
-              className="w-4 h-4 text-suaza-ink-faint"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
-        </div>
+        {showLabel && <NoticeLabel />}
         <div className="flex flex-col gap-0.5">
-          <span className="font-bold text-suaza-ink text-base truncate">
-            {notice.title}
-          </span>
+          {/* 제목 + 더보기(>) 우측 정렬 */}
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-bold text-suaza-ink text-base truncate min-w-0">
+              {notice.title}
+            </span>
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              aria-label="공지 더보기"
+              className="shrink-0 inline-flex items-center text-suaza-ink-muted hover:text-suaza-ink transition"
+            >
+              <svg
+                className="w-4 h-4 text-suaza-ink-faint"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          </div>
           <span className="text-xs text-suaza-ink-muted">
             {formatNoticeDate(notice.created_at)}
           </span>

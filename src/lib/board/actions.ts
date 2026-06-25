@@ -63,12 +63,21 @@ export async function createPost(formData: FormData) {
     redirect(`/board/new?error=${encodeURIComponent("내용을 입력해 주세요")}`);
   }
 
-  // 새 글을 공지로 등록하면 기존의 다른 공지를 모두 일반 글로 전환 (단일 공지 제약)
+  // 공지는 홈에 최대 3개까지 노출. 새 글을 공지로 등록하면 기존 공지 중
+  // 최신 2개만 남기고(새 글 포함 3개), 더 오래된 공지는 일반 글로 전환한다.
   if (isNotice) {
-    await supabase
+    const { data: existing } = await supabase
       .from("posts")
-      .update({ is_notice: false })
-      .eq("is_notice", true);
+      .select("id")
+      .eq("is_notice", true)
+      .order("created_at", { ascending: false });
+    const toClear = (existing ?? []).slice(2).map((p) => p.id);
+    if (toClear.length > 0) {
+      await supabase
+        .from("posts")
+        .update({ is_notice: false })
+        .in("id", toClear);
+    }
   }
 
   const { data, error } = await supabase
@@ -138,13 +147,22 @@ export async function updatePost(postId: string, formData: FormData) {
   // 노출 권한이 있는 경우에만 is_notice 갱신 (권한 없으면 기존값 유지)
   if (exposeAllowed) patch.is_notice = isNotice;
 
-  // 이 글을 공지로 전환하면 다른 모든 공지를 일반 글로 (단일 공지 제약)
+  // 공지는 홈에 최대 3개까지. 이 글을 공지로 두고, 다른 공지 중 최신 2개만 남기고
+  // 더 오래된 공지는 일반 글로 전환한다 (이 글 포함 3개 유지).
   if (exposeAllowed && isNotice) {
-    await supabase
+    const { data: others } = await supabase
       .from("posts")
-      .update({ is_notice: false })
+      .select("id")
       .eq("is_notice", true)
-      .neq("id", postId);
+      .neq("id", postId)
+      .order("created_at", { ascending: false });
+    const toClear = (others ?? []).slice(2).map((p) => p.id);
+    if (toClear.length > 0) {
+      await supabase
+        .from("posts")
+        .update({ is_notice: false })
+        .in("id", toClear);
+    }
   }
 
   const { error } = await supabase

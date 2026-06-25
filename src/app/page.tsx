@@ -82,8 +82,7 @@ export default async function Home() {
       )
       .eq("is_notice", true)
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .limit(3),
     supabase
       .from("matches")
       .select("*")
@@ -106,7 +105,7 @@ export default async function Home() {
     ? isAttendanceVoteLocked(upcoming, nowMs)
     : false;
   const recentMatches = (lastMatch ?? []) as Match[];
-  const notice = latestNotice as unknown as NoticeRow | null;
+  const notices = (latestNotice ?? []) as unknown as NoticeRow[];
 
   // 다가오는 경기 출석 데이터
   type VotePlayer = {
@@ -377,9 +376,15 @@ export default async function Home() {
         {/* 프로필 카드 폭에 맞춘 공지 위 가로 구분선 */}
         <div className="h-px bg-suaza-border" />
 
-        {/* Latest Notice (항상 표시 — 없으면 안내) */}
-        {notice ? (
-          <NoticeCard notice={notice} />
+        {/* 공지 — 최신순 최대 3개 (없으면 안내) */}
+        {notices.length > 0 ? (
+          <div className="flex flex-col divide-y divide-suaza-border border-l-2 border-suaza-accent pl-4">
+            {notices.map((n, i) => (
+              <div key={n.id} className="py-3 first:pt-0 last:pb-0">
+                <NoticeCard notice={n} showLabel={i === 0} />
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="flex items-center gap-2">
             <span className="text-[11px] px-2 py-0.5 rounded bg-gray-200 text-gray-600 font-medium">
