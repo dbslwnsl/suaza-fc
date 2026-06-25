@@ -741,7 +741,7 @@ function NewCommentForm({ postId }: { postId: string }) {
         fd.append("content", v);
         startTransition(() => createComment(postId, null, fd));
       }}
-      className="flex flex-col gap-2 rounded-xl border border-suaza-border bg-suaza-bg/30 p-3"
+      className="flex flex-col gap-2"
     >
       <textarea
         value={value}
@@ -754,7 +754,7 @@ function NewCommentForm({ postId }: { postId: string }) {
       <button
         type="submit"
         disabled={!value.trim()}
-        className="self-end rounded-lg bg-suaza-button px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        className="self-end inline-flex h-7 items-center justify-center rounded-lg bg-suaza-button px-4 text-[12px] font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
       >
         등록
       </button>

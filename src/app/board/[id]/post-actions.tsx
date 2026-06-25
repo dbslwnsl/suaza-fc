@@ -70,7 +70,7 @@ export default function PostActions({
         onClick={toggleLike}
         aria-pressed={liked}
         aria-label="좋아요"
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border transition ${
+        className={`inline-flex h-7 items-center gap-1.5 px-3 rounded-full text-[12px] font-medium border transition ${
           liked
             ? "border-red-200 bg-red-50 text-red-600"
             : "border-suaza-border text-suaza-ink-muted hover:bg-gray-50"
@@ -97,7 +97,7 @@ export default function PostActions({
         onClick={share}
         aria-label="게시글 링크 공유"
         title="게시글 링크 공유"
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border border-suaza-border text-suaza-ink-muted hover:bg-gray-50 transition"
+        className="inline-flex h-7 items-center gap-1.5 px-3 rounded-full text-[12px] font-medium border border-suaza-border text-suaza-ink-muted hover:bg-gray-50 transition"
       >
         <svg
           width="15"
