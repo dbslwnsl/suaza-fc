@@ -42,7 +42,7 @@ export default function PostFields({
                 type="button"
                 onClick={() => setCategory(c)}
                 aria-pressed={active}
-                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition shrink-0 ${
+                className={`inline-flex items-center justify-center h-[22px] px-3 rounded-full text-xs font-medium whitespace-nowrap transition shrink-0 ${
                   active
                     ? "bg-suaza-ink text-white border border-suaza-ink"
                     : "bg-white text-suaza-ink border border-suaza-border hover:bg-gray-100"

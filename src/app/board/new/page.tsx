@@ -92,7 +92,7 @@ export default async function NewPostPage({
 
           <button
             type="submit"
-            className="h-[52px] rounded-lg bg-suaza-button text-white text-base font-medium hover:opacity-90 transition"
+            className="px-3 py-1.5 rounded-lg border border-transparent bg-suaza-button text-white text-sm font-medium hover:opacity-90 transition"
           >
             등록
           </button>
