@@ -101,7 +101,7 @@ export default async function MatchDetailPage({
     supabase
       .from("match_comments")
       .select(
-        "id, content, created_at, updated_at, author_id, parent_id, author:profiles!match_comments_author_id_fkey(name, avatar_url)",
+        "id, content, created_at, updated_at, author_id, parent_id, author:profiles!match_comments_author_id_fkey(name, avatar_url, title)",
       )
       .eq("match_id", id)
       .order("created_at", { ascending: true }),
