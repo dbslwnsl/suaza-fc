@@ -136,7 +136,7 @@ function PostCard({ post }: { post: ListPost }) {
           </div>
           <span className="ml-auto flex shrink-0 items-center gap-1.5">
             {post.is_notice && post.category !== "notice" && (
-              <span className="rounded-full bg-suaza-accent px-2 py-0.5 text-[11px] font-medium text-white">
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
                 공지
               </span>
             )}

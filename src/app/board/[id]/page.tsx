@@ -216,7 +216,7 @@ export default async function PostDetailPage({
                   <span className="shrink-0">{formatPostDate(p.created_at)}</span>
                   {/* 카테고리/공지 뱃지 — 날짜 바로 옆 */}
                   {p.is_notice && p.category !== "notice" && (
-                    <span className="shrink-0 text-[11px] px-2 py-0.5 rounded bg-suaza-accent text-white font-medium">
+                    <span className="shrink-0 text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">
                       공지
                     </span>
                   )}
