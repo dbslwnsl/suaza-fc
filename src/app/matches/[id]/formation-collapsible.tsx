@@ -22,10 +22,9 @@ export default function FormationCollapsible({
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="flex items-center justify-between gap-2 bg-white desktop:bg-transparent border border-suaza-border desktop:border-0 rounded-2xl desktop:rounded-none p-4 desktop:p-0 hover:bg-gray-50 desktop:hover:bg-transparent transition"
+        className="flex items-center justify-between gap-2 transition"
       >
         <span className="inline-flex items-center gap-2 font-bold text-suaza-ink text-lg">
-          <span aria-hidden>⚽</span>
           포메이션
         </span>
         <span

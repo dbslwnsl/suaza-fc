@@ -2843,17 +2843,14 @@ function PlayerRosterMobile({
           </div>
         </div>
       )}
-      <div className="flex flex-col gap-3 rounded-2xl bg-white border border-suaza-border p-4">
-        <div>
-        <h3 className="text-base font-bold text-suaza-ink">
-          {matchLocked ? "출전선수" : "선수명단"}
-        </h3>
+      <div className="flex flex-col gap-3">
         {summaryStats && !matchLocked && (
-          <p className="text-xs text-suaza-ink-muted mt-0.5">
-            총 {summaryStats.total}명 평균 {summaryStats.avg}쿼터
-          </p>
+          <div>
+            <p className="text-xs text-suaza-ink-muted">
+              총 {summaryStats.total}명 평균 {summaryStats.avg}쿼터
+            </p>
+          </div>
         )}
-      </div>
       {isIntra ? (
         showOnlyTeam ? (
           // 본인 팀만 표시 — 단일 컬럼, zip 불필요

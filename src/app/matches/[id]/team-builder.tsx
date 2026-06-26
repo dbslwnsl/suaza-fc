@@ -326,7 +326,7 @@ export default function TeamBuilder({
   const total = attendees.length;
 
   return (
-    <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4 desktop:h-full">
+    <section className="flex flex-col gap-4 desktop:bg-white desktop:rounded-2xl desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] desktop:p-8 desktop:h-full">
       {/* 편성 결과 */}
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-bold text-suaza-ink text-lg">팀 편성 결과</h3>

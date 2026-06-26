@@ -457,6 +457,9 @@ export default async function MatchDetailPage({
           </h1>
         </header>
 
+        {/* 모바일 전용 섹션 구분선 — 헤더 ↔ 경기 요약 사이 */}
+        <div aria-hidden className="desktop:hidden -mx-6 h-2 bg-gray-100" />
+
         {message && (
           <p className="p-3 bg-green-50 text-green-700 rounded-lg text-sm">
             {message}
@@ -496,9 +499,22 @@ export default async function MatchDetailPage({
               mercenaries={mercenaries}
             >
             <div className="grid grid-cols-1 desktop:grid-cols-2 gap-4 desktop:items-stretch">
-              {/* 출석투표: 좌측 상단 — 취소 경기엔 숨김 (완료 경기는 조회용으로 노출) */}
+              {/* 모바일 전용 섹션 구분선 — "경기 요약" ↔ "포메이션" 사이.
+                  order-first 로 그리드 최상단(포메이션 위)에 위치, 데스크탑은 숨김. */}
               {m.status !== "canceled" && (
-                <div className="order-1 desktop:h-full">
+                <div
+                  aria-hidden
+                  className="order-first desktop:hidden -mx-6 h-2 bg-gray-100"
+                />
+              )}
+              {/* 출석투표: 좌측 상단 — 취소 경기엔 숨김 (완료 경기는 조회용으로 노출).
+                  우측 컬럼이 비는 경우(상대전 + 종료)엔 전체 폭으로 펼친다. */}
+              {m.status !== "canceled" && (
+                <div
+                  className={`order-1 desktop:h-full ${
+                    !isIntra && m.status === "done" ? "desktop:col-span-2" : ""
+                  }`}
+                >
                   <AttendanceCard
                     matchId={m.id}
                     myCondition={
@@ -522,6 +538,15 @@ export default async function MatchDetailPage({
                     }
                   />
                 </div>
+              )}
+
+              {/* 모바일 전용 섹션 구분선 — "출석" ↔ "팀 편성 결과" 사이 (자체전만).
+                  order-1 + DOM 순서로 출석 바로 아래에 위치, 데스크탑은 그리드라 숨김. */}
+              {isIntra && m.status !== "canceled" && (
+                <div
+                  aria-hidden
+                  className="order-1 desktop:hidden -mx-6 h-2 bg-gray-100"
+                />
               )}
               {/* 자체전 선발: 출석 우측 상단 (높이 맞춤) — 취소 경기엔 숨김.
                   지난(done) 경기는 편집 가능한 TeamBuilder 대신 결과만 표기. */}
@@ -587,6 +612,24 @@ export default async function MatchDetailPage({
                     </Suspense>
                   </FormationCollapsible>
                 </div>
+              )}
+
+              {/* 모바일 전용 섹션 구분선 — "포메이션" ↔ "출석" 사이.
+                  order-0 + DOM 순서로 포메이션 바로 아래에 위치, 데스크탑은 그리드라 숨김. */}
+              {m.status !== "canceled" && (
+                <div
+                  aria-hidden
+                  className="order-0 desktop:hidden -mx-6 h-2 bg-gray-100"
+                />
+              )}
+
+              {/* 모바일 전용 섹션 구분선 — "팀 편성 결과" ↔ "댓글" 사이 (자체전만).
+                  데스크탑은 2열 그리드라 불필요해 숨김. 화면 가로 full-bleed 두꺼운 띠. */}
+              {isIntra && m.status !== "canceled" && (
+                <div
+                  aria-hidden
+                  className="order-3 desktop:hidden -mx-6 h-2 bg-gray-100"
+                />
               )}
 
               {/* 댓글:
@@ -695,7 +738,7 @@ function VSCard({
   dDay: string | null;
 }) {
   return (
-    <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4">
+    <section className="flex flex-col gap-4 desktop:bg-white desktop:rounded-2xl desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] desktop:p-8">
       {/* 경기 유형 + 상태 + D-Day */}
       <div className="flex items-center justify-center gap-2 flex-wrap">
         <span
@@ -1004,7 +1047,7 @@ function AttendanceCard({
   lockedMessage?: ReactNode;
 }) {
   return (
-    <section className="bg-white rounded-2xl border border-suaza-border desktop:border-0 desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] p-5 desktop:p-8 flex flex-col gap-4 desktop:h-full">
+    <section className="flex flex-col gap-4 desktop:bg-white desktop:rounded-2xl desktop:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] desktop:p-8 desktop:h-full">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-baseline gap-2">
           <h2 className="font-bold text-suaza-ink text-lg">출석</h2>
