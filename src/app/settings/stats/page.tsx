@@ -1,5 +1,3 @@
-import Link from "next/link";
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { addStatDefinition } from "@/lib/stats/actions";
 import StatList from "./stat-list";
@@ -29,9 +27,8 @@ export default async function StatSettingsPage({
     .select("role")
     .eq("id", user.id)
     .single();
-  if (me?.role !== "manager") {
-    redirect(`/?error=${encodeURIComponent("감독만 접근할 수 있습니다")}`);
-  }
+  // 회장·감독(manager)만 수정 가능. 그 외 회원은 읽기 전용으로 열람.
+  const canEdit = me?.role === "manager";
 
   const { data: defs, error: defsError } = await supabase
     .from("stat_definitions")
@@ -51,24 +48,6 @@ export default async function StatSettingsPage({
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
       <div className="max-w-[600px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-6">
         <header className="flex flex-col gap-2">
-          <Link
-            href="/settings"
-            className="inline-flex w-fit items-center gap-1 text-sm text-suaza-ink-muted transition hover:text-suaza-ink"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <path d="M15 6l-6 6 6 6" />
-            </svg>
-            설정
-          </Link>
           <h1 className="text-2xl sm:text-[28px] font-bold text-suaza-ink">
             기록 항목 관리
           </h1>
@@ -103,29 +82,33 @@ export default async function StatSettingsPage({
           </div>
         )}
 
+        {/* 현재 항목 위 — 화면 가로 전체를 가르는 두꺼운 회색 구분띠 */}
+        <div aria-hidden className="-mx-6 sm:-mx-12 h-2 bg-gray-100" />
+
         {/* 정의 목록 */}
         <section className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between gap-2">
             <h2 className="font-bold text-suaza-ink">현재 항목</h2>
-            <span className="text-[11px] text-suaza-ink-faint">
-              우측 ☰ 를 길게 눌러 순서 변경
-            </span>
+            {canEdit && (
+              <span className="text-[11px] text-suaza-ink-faint">
+                우측 ☰ 를 길게 눌러 순서 변경
+              </span>
+            )}
           </div>
           {items.length === 0 ? (
             <p className="text-suaza-ink-muted text-sm">
               아직 추가된 항목이 없습니다.
             </p>
           ) : (
-            <StatList initial={items} />
+            <StatList initial={items} canEdit={canEdit} />
           )}
         </section>
 
-        {/* 추가 폼 */}
+        {/* 추가 폼 — 회장·감독만 노출 */}
+        {canEdit && (
         <form
           action={addStatDefinition}
-          className={`flex flex-col gap-3 p-4 border border-suaza-border rounded-lg ${
-            canAdd ? "" : "opacity-60"
-          }`}
+          className={`flex flex-col gap-3 ${canAdd ? "" : "opacity-60"}`}
         >
           <div className="flex items-baseline justify-between gap-2">
             <h2 className="font-bold text-suaza-ink">새 항목 추가</h2>
@@ -170,6 +153,7 @@ export default async function StatSettingsPage({
             추가
           </button>
         </form>
+        )}
       </div>
     </main>
   );

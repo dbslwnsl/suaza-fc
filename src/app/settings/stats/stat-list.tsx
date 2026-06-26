@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { Fragment, useRef, useState, useTransition } from "react";
 import {
   removeStatDefinition,
   reorderStatDefinitions,
@@ -18,7 +18,13 @@ type StatItem = {
 const PROTECTED_KEYS = new Set(["points", "goals", "assists", "attendance"]);
 const POINT_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-export default function StatList({ initial }: { initial: StatItem[] }) {
+export default function StatList({
+  initial,
+  canEdit = true,
+}: {
+  initial: StatItem[];
+  canEdit?: boolean;
+}) {
   const [items, setItems] = useState<StatItem[]>(initial);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -101,18 +107,20 @@ export default function StatList({ initial }: { initial: StatItem[] }) {
   };
 
   return (
-    <ul className="flex flex-col gap-2">
-      {items.map((d) => {
+    <ul className="flex flex-col">
+      {items.map((d, idx) => {
         const isAggregate = d.key === "points";
         const canDelete = !PROTECTED_KEYS.has(d.key) && d.label !== "포인트";
         const dragging = draggingKey === d.key;
+        // 포인트 띠 바로 아래 항목은 divide-y 얇은 선 제거
+        const afterPoints = idx > 0 && items[idx - 1].key === "points";
         return (
+          <Fragment key={d.key}>
           <li
-            key={d.key}
             data-stat-key={d.key}
-            className={`flex items-center justify-between gap-3 p-3 border border-suaza-border rounded-lg bg-white transition ${
-              dragging ? "ring-2 ring-suaza-button shadow-md" : ""
-            }`}
+            className={`flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0 transition ${
+              idx > 0 && !afterPoints ? "border-t border-suaza-border" : ""
+            } ${dragging ? "rounded-lg bg-suaza-bg" : ""}`}
           >
             <span className="font-medium text-suaza-ink min-w-0 truncate">
               {d.label}
@@ -126,7 +134,7 @@ export default function StatList({ initial }: { initial: StatItem[] }) {
                 >
                   합계
                 </span>
-              ) : (
+              ) : canEdit ? (
                 <label className="flex items-center gap-1 text-[11px] text-suaza-ink-muted">
                   <span className="hidden sm:inline">기준점수</span>
                   <select
@@ -143,7 +151,17 @@ export default function StatList({ initial }: { initial: StatItem[] }) {
                     ))}
                   </select>
                 </label>
+              ) : (
+                <span className="text-[11px] text-suaza-ink-muted">
+                  기준점수{" "}
+                  <span className="font-medium text-suaza-ink">
+                    {d.point_value}점
+                  </span>
+                </span>
               )}
+              {/* 삭제·순서변경 — 회장·감독만 */}
+              {canEdit && (
+                <>
               {canDelete ? (
                 <form action={removeStatDefinition.bind(null, d.key)}>
                   <button
@@ -193,8 +211,18 @@ export default function StatList({ initial }: { initial: StatItem[] }) {
                   <line x1="4" y1="16" x2="20" y2="16" />
                 </svg>
               </span>
+                </>
+              )}
             </div>
           </li>
+          {/* 포인트(합계) 아래 — 화면 가로 전체를 가르는 두꺼운 구분띠 */}
+          {isAggregate && (
+            <li
+              aria-hidden
+              className="-mx-6 sm:-mx-12 h-2 bg-gray-100"
+            />
+          )}
+          </Fragment>
         );
       })}
     </ul>
