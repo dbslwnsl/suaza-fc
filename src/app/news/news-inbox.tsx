@@ -195,56 +195,46 @@ export default function NewsInbox({ initial }: { initial: NewsItem[] }) {
             )}
           </div>
         ) : (
-          <ul className="rounded-2xl overflow-hidden border border-suaza-border/60">
-            {visible.map((n, i) => {
+          <ul className="flex flex-col divide-y divide-suaza-border">
+            {visible.map((n) => {
               const badge = badgeFor(n.type);
               const unread = n.read_at == null;
               return (
                 <li
                   key={n.id}
-                  className={`flex items-center gap-3 pl-4 pr-4 transition ${
-                    unread ? "bg-red-50/40" : "bg-white"
-                  } hover:bg-gray-50`}
+                  className="flex items-stretch gap-3 py-3 first:pt-0 last:pb-0"
                 >
+                  {/* 좌측: 알림 종류 색 세로바 (게시판 스타일) */}
+                  <span
+                    aria-hidden
+                    className="w-1 shrink-0 self-stretch rounded-full"
+                    style={{ backgroundColor: badge.color }}
+                  />
                   {/* 본문 클릭 → 이동(+읽음) */}
                   <button
                     type="button"
                     onClick={() => handleOpen(n)}
-                    className="flex flex-1 min-w-0 items-center gap-3 text-left"
+                    className="flex flex-1 min-w-0 items-start gap-2 text-left transition hover:opacity-70"
                   >
-                    <span
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl font-bold text-[15px] text-white"
-                      style={{ backgroundColor: badge.color }}
-                    >
-                      {badge.char}
-                    </span>
-                    <div
-                      className={`flex flex-1 min-w-0 items-start gap-2 py-3 ${
-                        i === visible.length - 1
-                          ? ""
-                          : "border-b border-gray-100"
-                      }`}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="font-bold text-suaza-ink text-[15px] leading-tight flex items-center gap-1.5">
-                          {unread && (
-                            <span
-                              className="inline-block w-2 h-2 shrink-0 rounded-full bg-suaza-accent"
-                              aria-label="안읽음"
-                            />
-                          )}
-                          <span className="truncate">{n.title}</span>
-                        </p>
-                        {n.body && (
-                          <p className="text-[13px] text-suaza-ink-muted mt-0.5 leading-snug line-clamp-2">
-                            {n.body}
-                          </p>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-suaza-ink text-[15px] leading-tight flex items-center gap-1.5">
+                        {unread && (
+                          <span
+                            className="inline-block w-2 h-2 shrink-0 rounded-full bg-suaza-accent"
+                            aria-label="안읽음"
+                          />
                         )}
-                      </div>
-                      <span className="shrink-0 text-[11px] text-suaza-ink-faint pt-0.5 tabular-nums">
-                        {relativeTime(n.created_at)}
-                      </span>
+                        <span className="truncate">{n.title}</span>
+                      </p>
+                      {n.body && (
+                        <p className="text-[13px] text-suaza-ink-muted mt-0.5 leading-snug line-clamp-2">
+                          {n.body}
+                        </p>
+                      )}
                     </div>
+                    <span className="shrink-0 text-[11px] text-suaza-ink-faint pt-0.5 tabular-nums">
+                      {relativeTime(n.created_at)}
+                    </span>
                   </button>
 
                   {/* 진입 없이 읽음 처리 — 안읽음일 때만 노출 */}
