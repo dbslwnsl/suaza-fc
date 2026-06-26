@@ -476,11 +476,10 @@ function MobileMatchCard({
       myCell.cleanSheets > 0 ||
       myCell.refereeCount > 0 ||
       myCell.mom > 0);
-  const showAbsent = !myCell && !match.intraNotJoined;
   return (
     <Link
       href={`/matches/${match.id}`}
-      className="relative block rounded-xl border border-suaza-border bg-white hover:bg-gray-50 transition pl-3 pr-3 py-3"
+      className="relative block pl-3 pr-3 py-3 transition hover:opacity-70"
     >
       <span
         aria-hidden
@@ -496,12 +495,8 @@ function MobileMatchCard({
             <span className="text-sm text-suaza-ink-muted truncate">
               vs {match.opponent}
             </span>
-            {/* 경기타입(상대) 오른편에 결과 배지 — 자체전 미배정은 '미참여' */}
-            {match.intraNotJoined ? (
-              <span className="inline-flex items-center text-[11px] text-suaza-ink-muted bg-gray-100 px-2 py-0.5 rounded-full font-medium">
-                미참여
-              </span>
-            ) : (
+            {/* 결과 배지 — 자체전 미배정(미출전)은 배지 없이 둘째 줄에 표기 */}
+            {!match.intraNotJoined && (
               <ResultBadge
                 result={match.myResult}
                 ourScore={match.myMine}
@@ -509,11 +504,13 @@ function MobileMatchCard({
               />
             )}
           </div>
-          {/* 두번째 라인: 본인 기록 칩(있는 것만) → 미출전이면 미출전.
-              자체전 미배정('미참여')일 땐 중복 표기하지 않는다. */}
-          {(hasChips || showAbsent) && (
+          {/* 두번째 라인: 출전 기록 없음 → "미출전" / 출전했으나 스탯 없음 → "기록없음" / 스탯 있으면 칩 */}
           <div className="flex items-center gap-1 flex-wrap">
-            {myCell ? (
+            {!myCell ? (
+              <span className="inline-flex items-center text-[11px] text-suaza-ink-muted bg-gray-100 px-2 py-0.5 rounded-full">
+                미출전
+              </span>
+            ) : hasChips ? (
               <>
                 {myCell.goals > 0 && (
                   <Chip
@@ -557,11 +554,10 @@ function MobileMatchCard({
               </>
             ) : (
               <span className="inline-flex items-center text-[11px] text-suaza-ink-muted bg-gray-100 px-2 py-0.5 rounded-full">
-                미출전
+                기록없음
               </span>
             )}
           </div>
-          )}
         </div>
         <div className="shrink-0 flex items-center gap-1.5 text-suaza-ink-muted text-sm">
           <span className="font-medium text-suaza-ink">
