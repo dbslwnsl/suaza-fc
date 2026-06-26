@@ -246,7 +246,7 @@ export default function AttendanceManagerBoard({
           DropSection 과 동일한 패딩/테두리로 좌측 정렬을 맞춤. */}
       {partial.length > 0 && (
         <div className="flex flex-col gap-2 p-1.5 border border-transparent">
-          <span className="self-start inline-flex items-center gap-1.5 text-xs font-bold text-suaza-ink">
+          <span className="self-start inline-flex items-center gap-1.5 text-base font-bold text-suaza-ink">
             <span
               className="shrink-0 w-1.5 h-1.5 rounded-full"
               style={{ backgroundColor: "#22C55E" }}
@@ -266,7 +266,6 @@ export default function AttendanceManagerBoard({
                   isTouch={isTouch}
                   pointerDrag={pointerDrag}
                   onClick={onMemberClick ? () => handleMemberClick(m) : undefined}
-                  compact
                 />
                 <QuarterSegments
                   quarters={m.attending_quarters ?? null}
@@ -443,7 +442,7 @@ function DropSection({
         dragging ? "border-suaza-border" : "border-transparent"
       } ${highlight ? hoverClass + " bg-blue-50" : ""}`}
     >
-      <span className="self-start inline-flex items-center gap-1.5 text-xs font-bold text-suaza-ink">
+      <span className="self-start inline-flex items-center gap-1.5 text-base font-bold text-suaza-ink">
         {dotColor && (
           <span
             className="shrink-0 w-1.5 h-1.5 rounded-full"
@@ -467,7 +466,7 @@ function QuarterSegments({
   totalQuarters: number;
 }) {
   return (
-    <div className="flex w-full gap-px">
+    <div className="flex w-[85%] gap-px">
       {Array.from({ length: totalQuarters }, (_, i) => {
         const on = quarters == null || quarters.includes(i + 1);
         return (

@@ -1058,7 +1058,7 @@ function AttendanceCard({
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {voteClosed || deadlinePassed ? (
-            <span className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600 font-medium">
+            <span className="inline-flex items-center h-7 px-2.5 rounded-md bg-gray-200 text-gray-600 text-xs font-medium">
               {voteClosed ? "종료됨" : "마감됨"}
             </span>
           ) : (
@@ -1071,7 +1071,7 @@ function AttendanceCard({
               <button
                 type="submit"
                 disabled={voteClosed || deadlinePassed}
-                className="text-xs font-medium px-2.5 py-1 rounded-md border border-red-300 text-red-600 hover:bg-red-50 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                className="inline-flex items-center h-7 px-2.5 rounded-md border border-red-300 text-red-600 text-xs font-medium hover:bg-red-50 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
               >
                 투표 종료
               </button>

@@ -1109,11 +1109,12 @@ function AttendingByQuarterSection({
                       {g.members.map((m) => (
                         <span
                           key={m.id}
-                          className="inline-flex items-center gap-0.5 text-xs font-medium text-suaza-ink"
+                          className="inline-flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full border bg-white text-suaza-ink"
+                          style={{ borderColor: "#22C55E" }}
                         >
                           {m.is_injured && <InjuryBadge />}
                           {m.on_leave && <OnLeaveBadge />}
-                                      {m.name}
+                          {m.name}
                         </span>
                       ))}
                     </div>
