@@ -91,3 +91,30 @@ export async function notifyMatchCommentLike(
   await recordForUsers([targetUserId], "match_comment_like", payload);
   return sendPushToUsers([targetUserId], payload);
 }
+
+/** 내 카드에 달린 감독·코치 코멘트(경기·프로필) — 해당 선수 본인에게 */
+export async function notifyCoachComment(
+  payload: PushPayload,
+  memberId: string,
+) {
+  await recordForUsers([memberId], "coach_comment", payload);
+  return sendPushToUsers([memberId], payload);
+}
+
+/** 내 감독·코치 코멘트에 달린 답글 — 부모 코멘트 작성자에게 */
+export async function notifyCoachCommentReply(
+  payload: PushPayload,
+  targetUserId: string,
+) {
+  await recordForUsers([targetUserId], "coach_comment", payload);
+  return sendPushToUsers([targetUserId], payload);
+}
+
+/** 내 감독·코치 코멘트에 달린 좋아요 — 코멘트 작성자에게 */
+export async function notifyCoachCommentLike(
+  payload: PushPayload,
+  targetUserId: string,
+) {
+  await recordForUsers([targetUserId], "coach_comment_like", payload);
+  return sendPushToUsers([targetUserId], payload);
+}

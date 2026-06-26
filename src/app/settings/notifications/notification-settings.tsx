@@ -38,6 +38,8 @@ const SECTIONS: { section: string; items: CategoryItem[] }[] = [
       { key: "match_schedule", char: "일", color: "#22C55E", title: "경기 일정 알람", desc: "새로운 경기가 등록될 때" },
       { key: "team_change", char: "팀", color: "#6366F1", title: "팀 편성 알람", desc: "내 팀 배정이 정해지거나 바뀔 때" },
       { key: "coach_note", char: "감", color: "#1D2E3E", title: "감독 전달사항 알람", desc: "감독 전달사항이 등록·수정될 때" },
+      { key: "coach_comment", char: "코", color: "#E11D48", title: "감독·코치 코멘트 알람", desc: "내 카드에 감독·코치 코멘트·답글이 달릴 때" },
+      { key: "coach_comment_like", char: "좋", color: "#EC4899", title: "감독·코치 코멘트 좋아요 알람", desc: "내 감독·코치 코멘트에 좋아요가 눌릴 때" },
       { key: "match_comment", char: "댓", color: "#0EA5E9", title: "경기 댓글 알람", desc: "경기에 새 댓글·답글이 달릴 때" },
       { key: "match_comment_like", char: "좋", color: "#EC4899", title: "경기 댓글 좋아요 알람", desc: "내 경기 댓글에 좋아요가 눌릴 때" },
       { key: "match_result", char: "결", color: "#1E293B", title: "경기 결과 알람", desc: "경기 결과가 입력될 때", comingSoon: true },
@@ -72,6 +74,8 @@ const DEFAULT_PREFS: Record<string, boolean> = {
   coach_note: true,
   match_comment: true,
   match_comment_like: true,
+  coach_comment: true,
+  coach_comment_like: true,
 };
 
 // 카테고리별 on/off 는 아직 서버 발송에 반영되지 않는 UI 상태 — 기기 로컬에 저장만 한다.

@@ -1751,15 +1751,18 @@ export async function createMatchComment(
   const trimmed = content.trim();
   if (!trimmed) return null;
 
-  // 1단계만 허용: 답글의 답글이면 부모 댓글로 평탄화
+  // 1단계만 허용: 저장 위치(parent_id)는 최상위로 평탄화하되,
+  // 알림 대상은 "내가 실제로 답글 단 그 댓글(직속 부모)"의 작성자다.
   let effectiveParent: string | null = parentId;
+  let parentAuthorId: string | undefined;
   if (parentId) {
     const { data: parent } = await supabase
       .from("match_comments")
-      .select("parent_id")
+      .select("parent_id, author_id")
       .eq("id", parentId)
       .single();
     if (parent?.parent_id) effectiveParent = parent.parent_id;
+    parentAuthorId = parent?.author_id as string | undefined;
   }
 
   const { data } = await supabase
@@ -1773,15 +1776,9 @@ export async function createMatchComment(
     .select("id, created_at, updated_at, parent_id")
     .single();
 
-  if (data && effectiveParent) {
-    // 답글 → 부모 댓글 작성자에게 알림 (본인 답글 제외)
-    const { data: parent } = await supabase
-      .from("match_comments")
-      .select("author_id")
-      .eq("id", effectiveParent)
-      .single();
-    const targetId = parent?.author_id as string | undefined;
-    if (targetId && targetId !== userId) {
+  if (data && parentId) {
+    // 답글 → "내가 직접 답글 단 그 댓글"(직속 부모)의 작성자에게 (본인 제외)
+    if (parentAuthorId && parentAuthorId !== userId) {
       after(async () => {
         try {
           await notifyMatchCommentReply(
@@ -1790,7 +1787,7 @@ export async function createMatchComment(
               body: "회원님의 경기 댓글에 답글이 달렸어요",
               url: `/matches/${matchId}`,
             },
-            targetId,
+            parentAuthorId,
           );
         } catch (e) {
           console.error("[push] 경기 댓글 답글 알림 실패", e);

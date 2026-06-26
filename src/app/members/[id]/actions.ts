@@ -2,8 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  notifyCoachComment,
+  notifyCoachCommentReply,
+  notifyCoachCommentLike,
+} from "@/lib/push/triggers";
 import {
   MEMBER_TITLES,
   POSITIONS,
@@ -545,15 +551,18 @@ export async function createCoachComment(
   const trimmed = content.trim();
   if (!trimmed) return null;
 
-  // 1단계만 허용: 답글의 답글이면 부모 코멘트로 평탄화
+  // 1단계만 허용: 답글의 답글이면 저장 위치(parent_id)는 최상위로 평탄화.
+  // 단, 알림 대상은 "내가 실제로 답글 단 그 댓글(직속 부모)"의 작성자다.
   let effectiveParent: string | null = parentId;
+  let parentAuthorId: string | undefined;
   if (parentId) {
     const { data: parent } = await supabase
       .from("coach_comments")
-      .select("parent_id")
+      .select("parent_id, author_id")
       .eq("id", parentId)
       .single();
     if (parent?.parent_id) effectiveParent = parent.parent_id as string;
+    parentAuthorId = parent?.author_id as string | undefined;
   }
 
   const { data } = await supabase
@@ -570,6 +579,45 @@ export async function createCoachComment(
     .single();
 
   revalidatePath(`/members/${memberId}`);
+
+  if (data && !effectiveParent && memberId !== user.id) {
+    // 최상위 코멘트(경기 또는 프로필) → 해당 선수 본인에게 알림.
+    const url = matchId ? `/matches/${matchId}` : `/members/${memberId}`;
+    after(async () => {
+      try {
+        await notifyCoachComment(
+          {
+            title: "감독·코치 코멘트",
+            body: "회원님에게 감독·코치 코멘트가 등록되었어요",
+            url,
+          },
+          memberId,
+        );
+      } catch (e) {
+        console.error("[push] 감독·코치 코멘트 알림 실패", e);
+      }
+    });
+  } else if (data && parentId) {
+    // 답글 → "내가 직접 답글 단 그 댓글"(직속 부모)의 작성자에게 알림(본인 제외).
+    // 예: 카드 주인이 단 답글에 코치가 다시 답글 → 카드 주인에게 알림.
+    if (parentAuthorId && parentAuthorId !== user.id) {
+      after(async () => {
+        try {
+          await notifyCoachCommentReply(
+            {
+              title: "새 답글",
+              body: "회원님의 댓글에 답글이 달렸어요",
+              url: `/members/${memberId}`,
+            },
+            parentAuthorId,
+          );
+        } catch (e) {
+          console.error("[push] 감독·코치 코멘트 답글 알림 실패", e);
+        }
+      });
+    }
+  }
+
   return (data as CreatedCoachComment | null) ?? null;
 }
 
@@ -598,6 +646,31 @@ export async function toggleCoachCommentLike(commentId: string) {
     await supabase
       .from("coach_comment_likes")
       .insert({ comment_id: commentId, user_id: user.id });
+
+    // 좋아요가 새로 눌렸을 때만 — 코멘트 작성자에게 알림(본인 제외)
+    const { data: comment } = await supabase
+      .from("coach_comments")
+      .select("author_id, member_id")
+      .eq("id", commentId)
+      .single();
+    const targetId = comment?.author_id as string | undefined;
+    const cMemberId = comment?.member_id as string | undefined;
+    if (targetId && targetId !== user.id) {
+      after(async () => {
+        try {
+          await notifyCoachCommentLike(
+            {
+              title: "새 좋아요",
+              body: "회원님의 감독·코치 코멘트에 좋아요가 달렸어요",
+              url: cMemberId ? `/members/${cMemberId}` : "/",
+            },
+            targetId,
+          );
+        } catch (e) {
+          console.error("[push] 감독·코치 코멘트 좋아요 알림 실패", e);
+        }
+      });
+    }
   }
 }
 

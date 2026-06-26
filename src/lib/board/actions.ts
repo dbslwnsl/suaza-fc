@@ -311,15 +311,18 @@ export async function createComment(
     redirect(`/board/${postId}?error=${encodeURIComponent("내용을 입력해 주세요")}`);
   }
 
-  // 1단계만 허용: parent_id 가 이미 답글이면 그 답글의 부모 댓글로 평탄화
+  // 1단계만 허용: 저장 위치(parent_id)는 최상위로 평탄화하되,
+  // 답글 알림 대상은 "내가 실제로 답글 단 그 댓글(직속 부모)"의 작성자다.
   let effectiveParent: string | null = parentId;
+  let parentAuthorId: string | undefined;
   if (parentId) {
     const { data: parent } = await supabase
       .from("post_comments")
-      .select("parent_id")
+      .select("parent_id, author_id")
       .eq("id", parentId)
       .single();
     if (parent?.parent_id) effectiveParent = parent.parent_id;
+    parentAuthorId = parent?.author_id as string | undefined;
   }
 
   const { error } = await supabase.from("post_comments").insert({
@@ -360,31 +363,23 @@ export async function createComment(
     });
   }
 
-  // 2) 답글이면 부모 댓글 작성자에게 "새 답글" 알림 (이미 알림 간 사람은 제외)
-  if (effectiveParent) {
-    const { data: parent } = await supabase
-      .from("post_comments")
-      .select("author_id")
-      .eq("id", effectiveParent)
-      .single();
-    const parentAuthorId = parent?.author_id as string | undefined;
-    if (parentAuthorId && !notified.has(parentAuthorId)) {
-      notified.add(parentAuthorId);
-      after(async () => {
-        try {
-          await notifyReply(
-            {
-              title: "새 답글",
-              body: "회원님의 게시판 댓글에 답글이 달렸어요",
-              url: `/board/${postId}`,
-            },
-            parentAuthorId,
-          );
-        } catch (e) {
-          console.error("[push] 게시판 답글 알림 실패", e);
-        }
-      });
-    }
+  // 2) 답글이면 "내가 직접 답글 단 그 댓글"(직속 부모) 작성자에게 (중복 제외)
+  if (parentId && parentAuthorId && !notified.has(parentAuthorId)) {
+    notified.add(parentAuthorId);
+    after(async () => {
+      try {
+        await notifyReply(
+          {
+            title: "새 답글",
+            body: "회원님의 게시판 댓글에 답글이 달렸어요",
+            url: `/board/${postId}`,
+          },
+          parentAuthorId,
+        );
+      } catch (e) {
+        console.error("[push] 게시판 답글 알림 실패", e);
+      }
+    });
   }
 
   // 리스트 인라인/상세 모두 "제자리" 갱신 — 상세 페이지로 강제 이동하지 않는다.

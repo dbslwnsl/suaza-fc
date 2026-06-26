@@ -11,7 +11,9 @@ export type NotificationType =
   | "team_change"
   | "coach_note"
   | "match_comment"
-  | "match_comment_like";
+  | "match_comment_like"
+  | "coach_comment"
+  | "coach_comment_like";
 
 type RecordPayload = {
   title: string;
