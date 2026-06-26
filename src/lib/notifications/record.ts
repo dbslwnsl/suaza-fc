@@ -6,8 +6,12 @@ export type NotificationType =
   | "new_post"
   | "notice"
   | "comment"
+  | "like"
   | "match_schedule"
-  | "team_change";
+  | "team_change"
+  | "coach_note"
+  | "match_comment"
+  | "match_comment_like";
 
 type RecordPayload = {
   title: string;

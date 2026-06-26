@@ -6,8 +6,11 @@ import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
   notifyNewMatch,
-  notifyReply,
   notifyTeamChange,
+  notifyCoachNote,
+  notifyNewMatchComment,
+  notifyMatchCommentReply,
+  notifyMatchCommentLike,
 } from "@/lib/push/triggers";
 import type { MatchStatus } from "./helpers";
 import {
@@ -359,18 +362,40 @@ async function migrateQuartersAfterEdit(
  * 권한: requireStaff (회장·감독·매니저). 종료/취소 경기는 수정 불가.
  */
 export async function updateMatchNotes(matchId: string, notes: string) {
-  const { supabase } = await requireStaff();
+  const { supabase, userId } = await requireStaff();
   const trimmed = notes.trim() || null;
 
   const { data: existing } = await supabase
     .from("matches")
-    .select("status")
+    .select("status, notes")
     .eq("id", matchId)
     .single();
   if (existing?.status === "done" || existing?.status === "canceled") return;
 
   await supabase.from("matches").update({ notes: trimmed }).eq("id", matchId);
   revalidatePath(`/matches/${matchId}`);
+
+  // 전달사항이 실제로 등록/변경됐고, 내용이 비어있지 않을 때만 전체 회원에게 알림.
+  const prev = existing?.notes ?? null;
+  if (trimmed && trimmed !== prev) {
+    const isNew = !prev;
+    after(async () => {
+      try {
+        await notifyCoachNote(
+          {
+            title: "감독 전달사항",
+            body: isNew
+              ? "새 감독 전달사항이 등록되었어요"
+              : "감독 전달사항이 수정되었어요",
+            url: `/matches/${matchId}`,
+          },
+          userId,
+        );
+      } catch (e) {
+        console.error("[push] 감독 전달사항 알림 실패", e);
+      }
+    });
+  }
 }
 
 export async function updateMatch(matchId: string, formData: FormData) {
@@ -1748,8 +1773,8 @@ export async function createMatchComment(
     .select("id, created_at, updated_at, parent_id")
     .single();
 
-  // 답글이면(부모 댓글 존재) 그 부모 댓글 작성자에게 알림 (본인 답글 제외).
   if (data && effectiveParent) {
+    // 답글 → 부모 댓글 작성자에게 알림 (본인 답글 제외)
     const { data: parent } = await supabase
       .from("match_comments")
       .select("author_id")
@@ -1759,7 +1784,7 @@ export async function createMatchComment(
     if (targetId && targetId !== userId) {
       after(async () => {
         try {
-          await notifyReply(
+          await notifyMatchCommentReply(
             {
               title: "새 답글",
               body: "회원님의 경기 댓글에 답글이 달렸어요",
@@ -1772,6 +1797,22 @@ export async function createMatchComment(
         }
       });
     }
+  } else if (data) {
+    // 최상위 새 댓글 → 전체 회원에게 알림 (작성자 제외)
+    after(async () => {
+      try {
+        await notifyNewMatchComment(
+          {
+            title: "새 경기 댓글",
+            body: "경기에 새 댓글이 달렸어요",
+            url: `/matches/${matchId}`,
+          },
+          userId,
+        );
+      } catch (e) {
+        console.error("[push] 경기 새 댓글 알림 실패", e);
+      }
+    });
   }
 
   return (data as CreatedMatchComment | null) ?? null;
@@ -1815,6 +1856,30 @@ export async function toggleMatchCommentLike(commentId: string) {
     await supabase
       .from("match_comment_likes")
       .insert({ comment_id: commentId, user_id: userId });
+
+    // 좋아요가 새로 눌렸을 때만 — 댓글 작성자에게 알림(본인 제외)
+    const { data: comment } = await supabase
+      .from("match_comments")
+      .select("author_id, match_id")
+      .eq("id", commentId)
+      .single();
+    const targetId = comment?.author_id as string | undefined;
+    if (targetId && targetId !== userId) {
+      after(async () => {
+        try {
+          await notifyMatchCommentLike(
+            {
+              title: "새 좋아요",
+              body: "회원님의 경기 댓글에 좋아요가 달렸어요",
+              url: `/matches/${comment?.match_id}`,
+            },
+            targetId,
+          );
+        } catch (e) {
+          console.error("[push] 경기 댓글 좋아요 알림 실패", e);
+        }
+      });
+    }
   }
 }
 

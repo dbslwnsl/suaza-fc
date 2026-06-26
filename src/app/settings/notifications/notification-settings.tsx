@@ -33,19 +33,23 @@ type CategoryItem = {
 
 const SECTIONS: { section: string; items: CategoryItem[] }[] = [
   {
-    section: "커뮤니티",
-    items: [
-      { key: "new_post", char: "글", color: "#3B82F6", title: "새 글 알람", desc: "게시판에 새 글이 등록될 때" },
-      { key: "comment", char: "댓", color: "#F97316", title: "새 댓글 알람", desc: "내 글·댓글에 댓글이 달릴 때" },
-      { key: "notice", char: "공", color: "#EF4444", title: "공지사항 알람", desc: "운영자 공지가 등록될 때" },
-    ],
-  },
-  {
     section: "경기",
     items: [
       { key: "match_schedule", char: "일", color: "#22C55E", title: "경기 일정 알람", desc: "새로운 경기가 등록될 때" },
       { key: "team_change", char: "팀", color: "#6366F1", title: "팀 편성 알람", desc: "내 팀 배정이 정해지거나 바뀔 때" },
+      { key: "coach_note", char: "감", color: "#1D2E3E", title: "감독 전달사항 알람", desc: "감독 전달사항이 등록·수정될 때" },
+      { key: "match_comment", char: "댓", color: "#0EA5E9", title: "경기 댓글 알람", desc: "경기에 새 댓글·답글이 달릴 때" },
+      { key: "match_comment_like", char: "좋", color: "#EC4899", title: "경기 댓글 좋아요 알람", desc: "내 경기 댓글에 좋아요가 눌릴 때" },
       { key: "match_result", char: "결", color: "#1E293B", title: "경기 결과 알람", desc: "경기 결과가 입력될 때", comingSoon: true },
+    ],
+  },
+  {
+    section: "게시판",
+    items: [
+      { key: "new_post", char: "글", color: "#3B82F6", title: "새 글 알람", desc: "게시판에 새 글이 등록될 때" },
+      { key: "comment", char: "댓", color: "#F97316", title: "새 댓글 알람", desc: "내 글·댓글에 댓글이 달릴 때" },
+      { key: "like", char: "좋", color: "#EC4899", title: "좋아요 알람", desc: "내 글·댓글에 좋아요가 눌릴 때" },
+      { key: "notice", char: "공", color: "#EF4444", title: "공지사항 알람", desc: "운영자 공지가 등록될 때" },
     ],
   },
   {
@@ -59,11 +63,15 @@ const SECTIONS: { section: string; items: CategoryItem[] }[] = [
 
 // 카테고리 토글 기본값 — 구현된(토글 가능한) 항목만.
 const DEFAULT_PREFS: Record<string, boolean> = {
-  new_post: false,
+  new_post: true,
   comment: true,
+  like: true,
   notice: true,
   match_schedule: true,
   team_change: true,
+  coach_note: true,
+  match_comment: true,
+  match_comment_like: true,
 };
 
 // 카테고리별 on/off 는 아직 서버 발송에 반영되지 않는 UI 상태 — 기기 로컬에 저장만 한다.
@@ -111,45 +119,35 @@ function Toggle({
 }
 
 function SettingRow({
-  char,
   color,
   title,
   desc,
   checked,
   onToggle,
   disabled,
-  last,
-  charDark,
   comingSoon,
   loading,
 }: {
-  char: string;
   color: string;
   title: string;
   desc: string;
   checked: boolean;
   onToggle: (v: boolean) => void;
   disabled?: boolean;
-  last?: boolean;
-  charDark?: boolean;
   comingSoon?: boolean;
   loading?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 pl-4 bg-white">
+    <div className="flex items-stretch gap-3 py-3 first:pt-0 last:pb-0">
+      {/* 좌측: 알림 종류 색 세로바 (새소식/게시판/설정 리스트와 동일) */}
       <span
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl font-bold text-[15px] ${
-          comingSoon ? "opacity-40 grayscale" : ""
+        aria-hidden
+        className={`w-1 shrink-0 self-stretch rounded-full ${
+          comingSoon ? "opacity-40" : ""
         }`}
-        style={{ backgroundColor: color, color: charDark ? "#B45309" : "#fff" }}
-      >
-        {char}
-      </span>
-      <div
-        className={`flex flex-1 min-w-0 items-center gap-3 py-3 pr-4 ${
-          last ? "" : "border-b border-gray-100"
-        }`}
-      >
+        style={{ backgroundColor: color }}
+      />
+      <div className="flex flex-1 min-w-0 items-center gap-3">
         <div className={`min-w-0 flex-1 ${comingSoon ? "opacity-40" : ""}`}>
           <p className="font-bold text-suaza-ink text-[15px] leading-tight flex items-center gap-1.5">
             {title}
@@ -379,50 +377,46 @@ export default function NotificationSettings() {
           : null;
 
   return (
-    <div>
-      {/* 마스터 토글 */}
-      <div className="bg-white rounded-2xl overflow-hidden border border-suaza-border/60">
+    <div className="flex flex-col gap-6">
+      {/* 마스터 토글 (카드 없이 단일 행) */}
+      <div className="flex flex-col">
         <SettingRow
-          char="알"
-          color="#FCE9A6"
-          charDark
+          color="#F59E0B"
           title="알람"
           desc="모든 알람을 켜거나 끕니다"
           checked={masterChecked}
           onToggle={onMasterToggle}
           disabled={!masterAvailable || busy}
           loading={loading}
-          last
         />
+        {banner && (
+          <p
+            className={`mt-2 rounded-lg border px-3 py-2 text-xs leading-relaxed ${banner.cls}`}
+          >
+            {banner.text}
+          </p>
+        )}
+        {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
       </div>
 
-      {banner && (
-        <p
-          className={`mt-2 rounded-lg border px-3 py-2 text-xs leading-relaxed ${banner.cls}`}
-        >
-          {banner.text}
-        </p>
-      )}
-      {error && (
-        <p className="mt-2 text-xs text-red-600">{error}</p>
-      )}
+      {/* 마스터 ↔ 카테고리 구분 — 화면 가로 전체를 가르는 두꺼운 회색 띠 */}
+      <div aria-hidden className="-mx-6 sm:-mx-12 h-2 bg-gray-100" />
 
-      {/* 카테고리별 알림 */}
+      {/* 카테고리별 알림 — 카드 없이 섹션 라벨 + 구분선 */}
       <div
-        className={`transition-opacity ${
+        className={`flex flex-col gap-5 transition-opacity ${
           categoriesDisabled ? "opacity-50" : ""
         }`}
       >
         {SECTIONS.map((sec) => (
-          <div key={sec.section}>
-            <h2 className="px-1 pt-5 pb-2 text-[13px] font-bold text-suaza-ink-muted">
+          <div key={sec.section} className="flex flex-col gap-1">
+            <h2 className="text-[13px] font-bold text-suaza-ink-muted">
               {sec.section}
             </h2>
-            <div className="bg-white rounded-2xl overflow-hidden border border-suaza-border/60">
-              {sec.items.map((it, i) => (
+            <div className="flex flex-col divide-y divide-suaza-border">
+              {sec.items.map((it) => (
                 <SettingRow
                   key={it.key}
-                  char={it.char}
                   color={it.color}
                   title={it.title}
                   desc={it.desc}
@@ -430,7 +424,6 @@ export default function NotificationSettings() {
                   checked={!!prefs[it.key]}
                   onToggle={(v) => setPref(it.key, v)}
                   disabled={categoriesDisabled}
-                  last={i === sec.items.length - 1}
                 />
               ))}
             </div>

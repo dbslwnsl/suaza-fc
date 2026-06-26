@@ -47,8 +47,47 @@ export async function notifyPostComment(
   return sendPushToUsers([postAuthorId], payload);
 }
 
+/** 내 게시글·댓글에 달린 좋아요 — 글/댓글 작성자 본인에게 */
+export async function notifyLike(payload: PushPayload, targetUserId: string) {
+  await recordForUsers([targetUserId], "like", payload);
+  return sendPushToUsers([targetUserId], payload);
+}
+
 /** 팀 편성/변경 — 배정된 선수 본인에게 */
 export async function notifyTeamChange(payload: PushPayload, playerId: string) {
   await recordForUsers([playerId], "team_change", payload);
   return sendPushToUsers([playerId], payload);
+}
+
+/** 감독 전달사항(경기 메모) 등록·수정 — 전체 회원(작성자 제외) */
+export async function notifyCoachNote(payload: PushPayload, actorId: string) {
+  await recordForAll(actorId, "coach_note", payload);
+  return sendPushToAll(payload, actorId);
+}
+
+/** 경기 상세 새 댓글(최상위) — 전체 회원(작성자 제외) */
+export async function notifyNewMatchComment(
+  payload: PushPayload,
+  actorId: string,
+) {
+  await recordForAll(actorId, "match_comment", payload);
+  return sendPushToAll(payload, actorId);
+}
+
+/** 내 경기 댓글에 달린 답글 — 부모 댓글 작성자에게 */
+export async function notifyMatchCommentReply(
+  payload: PushPayload,
+  targetUserId: string,
+) {
+  await recordForUsers([targetUserId], "match_comment", payload);
+  return sendPushToUsers([targetUserId], payload);
+}
+
+/** 내 경기 댓글에 달린 좋아요 — 댓글 작성자에게 */
+export async function notifyMatchCommentLike(
+  payload: PushPayload,
+  targetUserId: string,
+) {
+  await recordForUsers([targetUserId], "match_comment_like", payload);
+  return sendPushToUsers([targetUserId], payload);
 }

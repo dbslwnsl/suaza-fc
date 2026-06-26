@@ -9,6 +9,7 @@ import {
   notifyNotice,
   notifyReply,
   notifyPostComment,
+  notifyLike,
 } from "@/lib/push/triggers";
 import {
   DEFAULT_CATEGORY,
@@ -214,6 +215,30 @@ export async function togglePostLike(postId: string) {
     await supabase
       .from("post_likes")
       .insert({ post_id: postId, user_id: userId });
+
+    // 좋아요가 새로 눌렸을 때만 — 글 작성자에게 알림(본인 제외)
+    const { data: post } = await supabase
+      .from("posts")
+      .select("author_id")
+      .eq("id", postId)
+      .single();
+    const postAuthorId = post?.author_id as string | undefined;
+    if (postAuthorId && postAuthorId !== userId) {
+      after(async () => {
+        try {
+          await notifyLike(
+            {
+              title: "새 좋아요",
+              body: "회원님의 게시글에 좋아요가 달렸어요",
+              url: `/board/${postId}`,
+            },
+            postAuthorId,
+          );
+        } catch (e) {
+          console.error("[push] 게시글 좋아요 알림 실패", e);
+        }
+      });
+    }
   }
 
   revalidatePath(`/board/${postId}`);
@@ -241,6 +266,30 @@ export async function toggleCommentLike(commentId: string, postId: string) {
     await supabase
       .from("comment_likes")
       .insert({ comment_id: commentId, user_id: userId });
+
+    // 좋아요가 새로 눌렸을 때만 — 댓글 작성자에게 알림(본인 제외)
+    const { data: comment } = await supabase
+      .from("post_comments")
+      .select("author_id")
+      .eq("id", commentId)
+      .single();
+    const commentAuthorId = comment?.author_id as string | undefined;
+    if (commentAuthorId && commentAuthorId !== userId) {
+      after(async () => {
+        try {
+          await notifyLike(
+            {
+              title: "새 좋아요",
+              body: "회원님의 댓글에 좋아요가 달렸어요",
+              url: `/board/${postId}`,
+            },
+            commentAuthorId,
+          );
+        } catch (e) {
+          console.error("[push] 댓글 좋아요 알림 실패", e);
+        }
+      });
+    }
   }
 
   revalidatePath(`/board/${postId}`);
