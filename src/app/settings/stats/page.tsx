@@ -133,25 +133,15 @@ export default async function StatSettingsPage({
                 className="px-3 py-2 rounded-md border border-suaza-border text-sm focus:outline-none focus:border-suaza-button disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
             </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-suaza-ink-muted">정렬 순서</span>
-              <input
-                type="number"
-                name="sort_order"
-                defaultValue={items.length}
-                min={0}
-                disabled={!canAdd}
-                className="w-24 px-3 py-2 rounded-md border border-suaza-border text-sm focus:outline-none focus:border-suaza-button disabled:bg-gray-100 disabled:cursor-not-allowed"
-              />
-            </label>
+            {/* 정렬 순서 입력 제거 — 새 항목은 항상 맨 끝에 추가됨. 그 자리에 추가 버튼 배치. */}
+            <button
+              type="submit"
+              disabled={!canAdd}
+              className="self-end px-4 py-2 text-sm bg-suaza-button text-white rounded-md font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:opacity-40"
+            >
+              추가
+            </button>
           </div>
-          <button
-            type="submit"
-            disabled={!canAdd}
-            className="self-end text-sm bg-suaza-button text-white rounded-md px-3 py-1.5 font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:opacity-40"
-          >
-            추가
-          </button>
         </form>
         )}
       </div>

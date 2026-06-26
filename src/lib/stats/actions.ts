@@ -32,7 +32,6 @@ function generateStatKey(): string {
 export async function addStatDefinition(formData: FormData) {
   const { supabase } = await requireManager();
   const label = String(formData.get("label") ?? "").trim();
-  const sortRaw = String(formData.get("sort_order") ?? "").trim();
 
   if (!label) {
     redirect(
@@ -54,19 +53,29 @@ export async function addStatDefinition(formData: FormData) {
     );
   }
 
+  // 새 항목은 항상 맨 마지막에 배치 — 기존 최대 sort_order + 1.
+  const { data: lastRow } = await supabase
+    .from("stat_definitions")
+    .select("sort_order")
+    .is("hidden_at", null)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextOrder = (lastRow?.sort_order ?? -1) + 1;
+
   // 중복 확률은 매우 낮지만 안전하게 한 번 더 시도.
   let key = generateStatKey();
   let { error } = await supabase.from("stat_definitions").insert({
     key,
     label,
-    sort_order: sortRaw ? Number(sortRaw) : 0,
+    sort_order: nextOrder,
   });
   if (error?.code === "23505") {
     key = generateStatKey();
     ({ error } = await supabase.from("stat_definitions").insert({
       key,
       label,
-      sort_order: sortRaw ? Number(sortRaw) : 0,
+      sort_order: nextOrder,
     }));
   }
 
