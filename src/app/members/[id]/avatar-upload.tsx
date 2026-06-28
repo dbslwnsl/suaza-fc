@@ -2,12 +2,12 @@
 
 import Image from "next/image";
 import { useRef, useState, useTransition } from "react";
-import { uploadAvatar } from "./actions";
+import { uploadAvatar, deleteAvatar } from "./actions";
 import AvatarBadges from "@/components/avatar-badges";
 import type { MemberBadge } from "@/lib/members/badges";
 
-const MAX_DIMENSION = 512;
-const JPEG_QUALITY = 0.85;
+const MAX_DIMENSION = 1024;
+const JPEG_QUALITY = 0.9;
 
 export default function AvatarUpload({
   profileId,
@@ -86,6 +86,26 @@ export default function AvatarUpload({
     });
   };
 
+  // 기본 이미지(이름 첫 글자)로 되돌리기 — 저장된 아바타 삭제.
+  const handleReset = () => {
+    setErrorMsg(null);
+    setMenuOpen(false);
+    startTransition(async () => {
+      try {
+        await deleteAvatar(profileId);
+      } catch (e) {
+        // Next.js redirect 는 NEXT_REDIRECT 에러를 던지므로 정상 흐름
+        if (
+          e instanceof Error &&
+          /NEXT_REDIRECT/.test(String((e as Error).message))
+        ) {
+          return;
+        }
+        setErrorMsg("기본 이미지로 변경 실패");
+      }
+    });
+  };
+
   return (
     <div className="relative inline-block">
       <input
@@ -149,9 +169,19 @@ export default function AvatarUpload({
           >
             <span className="block">이미지 업로드</span>
             <span className="block text-[10px] text-suaza-ink-faint mt-0.5">
-              512×512 권장
+              1024×1024 권장
             </span>
           </button>
+          {/* 저장된 아바타가 있을 때만 "기본 이미지로" 노출 */}
+          {src && (
+            <button
+              type="button"
+              onClick={handleReset}
+              className="block w-full px-3 py-2 text-sm text-left hover:bg-gray-50 text-suaza-ink border-t border-suaza-border"
+            >
+              기본 이미지로
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setMenuOpen(false)}
