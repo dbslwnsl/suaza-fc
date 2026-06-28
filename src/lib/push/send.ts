@@ -39,6 +39,12 @@ function ensureVapid(): boolean {
 
 // 구독 묶음에 실제 발송. 만료(404/410)된 구독은 DB 에서 제거한다.
 async function sendToRows(rows: SubscriptionRow[], payload: PushPayload) {
+  // 개발 모드(NEXT_PUBLIC_DEV_TOOLS=1)에서는 실제 사용자에게 푸시를 보내지 않는다.
+  // (프로덕션엔 이 값이 없어 정상 발송된다.)
+  if (process.env.NEXT_PUBLIC_DEV_TOOLS === "1") {
+    console.log(`[push][dev] DEV_TOOLS=1 — 푸시 발송 생략: ${payload.title}`);
+    return;
+  }
   if (rows.length === 0) return;
   const admin = createAdminClient();
   const body = JSON.stringify({

@@ -27,6 +27,12 @@ export async function recordForUsers(
   type: NotificationType,
   payload: RecordPayload,
 ): Promise<void> {
+  // 개발 모드(NEXT_PUBLIC_DEV_TOOLS=1)에서는 인앱 알림(새소식)도 기록하지 않는다.
+  // (프로덕션엔 이 값이 없어 정상 기록된다.)
+  if (process.env.NEXT_PUBLIC_DEV_TOOLS === "1") {
+    console.log(`[notif][dev] DEV_TOOLS=1 — 인앱 알림 기록 생략: ${type}`);
+    return;
+  }
   const ids = [...new Set(userIds.filter(Boolean))];
   if (ids.length === 0) return;
   const admin = createAdminClient();

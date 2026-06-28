@@ -1796,13 +1796,6 @@ function Pitch({
                       <span className="max-w-[60px] truncate">
                         {player.name}
                       </span>
-                      <ConditionArrow
-                        level={
-                          player.id === myUserId
-                            ? myCondition
-                            : player.condition ?? 3
-                        }
-                      />
                     </>
                   ) : (
                     <span className="text-white/70 max-w-[70px] truncate">
@@ -1998,25 +1991,38 @@ function PlayerCircle({
   compact?: boolean;
 }) {
   const color = POSITION_COLOR[role];
-  const text = label ?? role;
   const stateRing = hovered ? "ring-4 ring-white/60 scale-105" : "";
   // 경기장 크기에 비례(cqi) + 상·하한(clamp). 자체전은 두 팀을 절반씩 욱여넣어
   // 세로 간격이 좁으므로 더 작은 비율 사용. (인라인 스타일로 확실히 적용)
   // 컨테이너는 inline-size 만 contain 하므로 cqi 사용 (Safari 호환).
+  // 모바일(좁은 피치)은 하한(min)에 걸리므로 min·cqi 를 키워 더 크게 보이게 한다.
+  // 데스크탑은 상한(max)에 걸려 있어 사실상 그대로 유지된다.
   const dim = compact
-    ? "clamp(24px, 5.5cqi, 32px)"
-    : "clamp(38px, 11cqi, 50px)";
+    ? "clamp(30px, 6cqi, 32px)"
+    : "clamp(46px, 13cqi, 50px)";
   const fontSize = compact
     ? "clamp(8px, 1.5cqi, 10px)"
     : "clamp(9px, 2.6cqi, 11px)";
   const sizeStyle = { width: dim, height: dim, fontSize };
   if (player) {
+    // 선수가 배치되면 동그라미에 포지션명 대신 아바타를 표시(없으면 이름 첫 글자).
+    // 포지션 색은 테두리로 유지되고, 이름은 동그라미 아래 라벨에 표시된다.
     return (
       <div
-        className={`relative rounded-full bg-white border-[3px] flex items-center justify-center font-bold shadow-md transition ${stateRing}`}
-        style={{ borderColor: color, ...sizeStyle }}
+        className={`relative overflow-hidden rounded-full bg-white flex items-center justify-center font-bold shadow-md transition ${stateRing}`}
+        style={sizeStyle}
       >
-        <span style={{ color }}>{text}</span>
+        {player.avatar_url ? (
+          <Image
+            src={player.avatar_url}
+            alt={player.name}
+            fill
+            sizes="50px"
+            className="object-cover"
+          />
+        ) : (
+          <span style={{ color }}>{player.name.slice(0, 1)}</span>
+        )}
       </div>
     );
   }

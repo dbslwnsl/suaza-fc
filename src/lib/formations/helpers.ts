@@ -111,30 +111,30 @@ const CUSTOM_SLOT_LAYOUT: Record<
 > = {
   // 4-2-3-1: CDM 2명 중앙, 공격형 3명 넓게. 세부 포지션 라벨 적용.
   "4-2-3-1": [
-    { x: 0.5, y: 0.95, label: "GK" },
-    { x: 0.12, y: 0.8, label: "RB" },
-    { x: 0.38, y: 0.8, label: "RCB" },
-    { x: 0.62, y: 0.8, label: "LCB" },
-    { x: 0.88, y: 0.8, label: "LB" },
-    { x: 0.37, y: 0.6, label: "CDM" },
-    { x: 0.63, y: 0.6, label: "CDM" },
-    { x: 0.12, y: 0.38, label: "RW" },
-    { x: 0.5, y: 0.38, label: "AM" },
-    { x: 0.88, y: 0.38, label: "LW" },
+    { x: 0.5, y: 1.0, label: "GK" },
+    { x: 0.12, y: 0.99, label: "RB" },
+    { x: 0.38, y: 0.99, label: "RCB" },
+    { x: 0.62, y: 0.99, label: "LCB" },
+    { x: 0.88, y: 0.99, label: "LB" },
+    { x: 0.37, y: 0.70, label: "CDM" },
+    { x: 0.63, y: 0.70, label: "CDM" },
+    { x: 0.12, y: 0.45, label: "RW" },
+    { x: 0.5, y: 0.45, label: "AM" },
+    { x: 0.88, y: 0.45, label: "LW" },
     { x: 0.5, y: 0.17, label: "ST" },
   ],
   // 4-1-4-1: DF4 / CDM1 / MF4 / ST1 (이미지 기준, 좌측 L → 우측 R)
   "4-1-4-1": [
     { x: 0.5, y: 0.95, label: "GK" },
-    { x: 0.1, y: 0.8, label: "LB" },
+    { x: 0.12, y: 0.8, label: "LB" },
     { x: 0.37, y: 0.8, label: "LCB" },
     { x: 0.63, y: 0.8, label: "RCB" },
-    { x: 0.9, y: 0.8, label: "RB" },
+    { x: 0.88, y: 0.8, label: "RB" },
     { x: 0.5, y: 0.6, label: "CDM" },
-    { x: 0.1, y: 0.38, label: "LM" },
+    { x: 0.12, y: 0.38, label: "LM" },
     { x: 0.37, y: 0.38, label: "LCM" },
     { x: 0.63, y: 0.38, label: "RCM" },
-    { x: 0.9, y: 0.38, label: "RM" },
+    { x: 0.88, y: 0.38, label: "RM" },
     { x: 0.5, y: 0.17, label: "ST" },
   ],
   // 4-4-2: DF4 / MF4(측면 LM·RM 앞, 중앙 LCM·RCM 뒤) / ST2 (좌측 R → 우측 L)
@@ -144,10 +144,10 @@ const CUSTOM_SLOT_LAYOUT: Record<
     { x: 0.38, y: 0.8, label: "RCB" },
     { x: 0.62, y: 0.8, label: "LCB" },
     { x: 0.88, y: 0.8, label: "LB" },
-    { x: 0.1, y: 0.5, label: "RM" },
+    { x: 0.12, y: 0.5, label: "RM" },
     { x: 0.38, y: 0.58, label: "RCM" },
     { x: 0.62, y: 0.58, label: "LCM" },
-    { x: 0.9, y: 0.5, label: "LM" },
+    { x: 0.88, y: 0.5, label: "LM" },
     { x: 0.37, y: 0.25, label: "ST" },
     { x: 0.63, y: 0.25, label: "ST" },
   ],
@@ -158,10 +158,10 @@ const CUSTOM_SLOT_LAYOUT: Record<
     { x: 0.38, y: 0.8, label: "RCB" },
     { x: 0.62, y: 0.8, label: "LCB" },
     { x: 0.88, y: 0.8, label: "LB" },
-    { x: 0.1, y: 0.55, label: "RM" },
+    { x: 0.12, y: 0.55, label: "RM" },
     { x: 0.38, y: 0.55, label: "RCM" },
     { x: 0.62, y: 0.55, label: "LCM" },
-    { x: 0.9, y: 0.55, label: "LM" },
+    { x: 0.88, y: 0.55, label: "LM" },
     { x: 0.5, y: 0.38, label: "AM" },
     { x: 0.5, y: 0.18, label: "ST" },
   ],
@@ -200,37 +200,37 @@ const CUSTOM_SLOT_LAYOUT: Record<
     { x: 0.38, y: 0.8, label: "RCB" },
     { x: 0.62, y: 0.8, label: "LCB" },
     { x: 0.88, y: 0.8, label: "LB" },
-    { x: 0.1, y: 0.5, label: "RM" },
-    { x: 0.31, y: 0.58, label: "CM" },
-    { x: 0.5, y: 0.58, label: "CM" },
-    { x: 0.69, y: 0.58, label: "CM" },
-    { x: 0.9, y: 0.5, label: "LM" },
+    { x: 0.12, y: 0.40, label: "RM" },
+    { x: 0.31, y: 0.50, label: "CM" },
+    { x: 0.5, y: 0.50, label: "CM" },
+    { x: 0.69, y: 0.50, label: "CM" },
+    { x: 0.88, y: 0.40, label: "LM" },
     { x: 0.5, y: 0.2, label: "ST" },
   ],
   // 3-5-2: DF3(LCB·CB·RCB) / MF5(윙백 LWB·RWB + CM·CM + AM) / ST2 (좌측 L)
   "3-5-2": [
     { x: 0.5, y: 0.95, label: "GK" },
-    { x: 0.22, y: 0.8, label: "LCB" },
+    { x: 0.28, y: 0.8, label: "LCB" },
     { x: 0.5, y: 0.8, label: "CB" },
-    { x: 0.78, y: 0.8, label: "RCB" },
-    { x: 0.1, y: 0.6, label: "LWB" },
-    { x: 0.32, y: 0.52, label: "CM" },
+    { x: 0.72, y: 0.8, label: "RCB" },
+    { x: 0.1, y: 0.65, label: "LWB" },
+    { x: 0.32, y: 0.55, label: "CM" },
     { x: 0.5, y: 0.36, label: "AM" },
-    { x: 0.68, y: 0.52, label: "CM" },
-    { x: 0.9, y: 0.6, label: "RWB" },
+    { x: 0.68, y: 0.55, label: "CM" },
+    { x: 0.9, y: 0.65, label: "RWB" },
     { x: 0.37, y: 0.2, label: "ST" },
     { x: 0.63, y: 0.2, label: "ST" },
   ],
   // 3-4-1-2: DF3 / MF4(측면 RM·LM 앞, 중앙 CM 뒤) / AM1 / ST2 (이미지 기준)
   "3-4-1-2": [
     { x: 0.5, y: 0.95, label: "GK" },
-    { x: 0.22, y: 0.8, label: "LCB" },
+    { x: 0.28, y: 0.8, label: "LCB" },
     { x: 0.5, y: 0.8, label: "CB" },
-    { x: 0.78, y: 0.8, label: "RCB" },
-    { x: 0.1, y: 0.55, label: "RM" },
+    { x: 0.72, y: 0.8, label: "RCB" },
+    { x: 0.12, y: 0.55, label: "RM" },
     { x: 0.37, y: 0.62, label: "CM" },
     { x: 0.63, y: 0.62, label: "CM" },
-    { x: 0.9, y: 0.55, label: "LM" },
+    { x: 0.88, y: 0.55, label: "LM" },
     { x: 0.5, y: 0.42, label: "AM" },
     { x: 0.37, y: 0.2, label: "ST" },
     { x: 0.63, y: 0.2, label: "ST" },
@@ -241,10 +241,10 @@ const CUSTOM_SLOT_LAYOUT: Record<
     { x: 0.22, y: 0.8, label: "LCB" },
     { x: 0.5, y: 0.8, label: "CB" },
     { x: 0.78, y: 0.8, label: "RCB" },
-    { x: 0.1, y: 0.52, label: "LM" },
+    { x: 0.12, y: 0.52, label: "LM" },
     { x: 0.37, y: 0.58, label: "LCM" },
     { x: 0.63, y: 0.58, label: "RCM" },
-    { x: 0.9, y: 0.52, label: "RM" },
+    { x: 0.88, y: 0.52, label: "RM" },
     { x: 0.12, y: 0.22, label: "LW" },
     { x: 0.5, y: 0.22, label: "ST" },
     { x: 0.88, y: 0.22, label: "RW" },
@@ -266,15 +266,15 @@ const CUSTOM_SLOT_LAYOUT: Record<
   // 5-4-1: DF5(윙백 앞, 센터백 3 뒤) / MF4(측면 LW·RW 앞, 중앙 LCM·RCM 뒤) / ST1 (좌측 L)
   "5-4-1": [
     { x: 0.5, y: 0.95, label: "GK" },
-    { x: 0.1, y: 0.72, label: "LWB" },
+    { x: 0.12, y: 0.72, label: "LWB" },
     { x: 0.28, y: 0.8, label: "LCB" },
     { x: 0.5, y: 0.8, label: "CB" },
     { x: 0.72, y: 0.8, label: "RCB" },
-    { x: 0.9, y: 0.72, label: "RWB" },
-    { x: 0.12, y: 0.5, label: "LW" },
-    { x: 0.37, y: 0.58, label: "LCM" },
-    { x: 0.63, y: 0.58, label: "RCM" },
-    { x: 0.88, y: 0.5, label: "RW" },
+    { x: 0.88, y: 0.72, label: "RWB" },
+    { x: 0.12, y: 0.40, label: "LW" },
+    { x: 0.37, y: 0.50, label: "LCM" },
+    { x: 0.63, y: 0.50, label: "RCM" },
+    { x: 0.88, y: 0.40, label: "RW" },
     { x: 0.5, y: 0.2, label: "ST" },
   ],
 };
@@ -333,12 +333,12 @@ export function emptyFormation(slotCount: number): FormationData {
  * - team="B": 하단 절반, GK가 하단
  */
 // 자체전 시 각 팀이 차지하는 y 범위
-const Y_GK_TOP_TEAM_A = 0.1; // A팀 GK (상단 골 박스 안, 절대 위치)
-const Y_DEF_TOP_TEAM_A = 0.2; // A팀 최후방 수비 (GK 바로 앞)
+const Y_GK_TOP_TEAM_A = 0.08; // A팀 GK (상단 골 박스 안, 절대 위치)
+const Y_DEF_TOP_TEAM_A = 0.17; // A팀 최후방 수비 (GK 바로 앞)
 const Y_FW_TOP_TEAM_A = 0.45; // A팀 FW (중앙선 약간 위)
 const Y_FW_BOTTOM_TEAM_B = 0.55; // B팀 FW (중앙선 약간 아래)
-const Y_DEF_BOTTOM_TEAM_B = 0.8; // B팀 최후방 수비 (GK 바로 앞)
-const Y_GK_BOTTOM_TEAM_B = 0.9; // B팀 GK (하단 골 박스 안, 절대 위치)
+const Y_DEF_BOTTOM_TEAM_B = 0.83; // B팀 최후방 수비 (GK 바로 앞)
+const Y_GK_BOTTOM_TEAM_B = 0.93; // B팀 GK (하단 골 박스 안, 절대 위치)
 
 // 자체전에서 슬롯의 x 좌표를 기준으로 L/R 접두 라벨을 팀별로 맞춤.
 //   A팀(위, 아래로 공격): 화면 왼쪽 = 선수의 오른쪽 → x < 0.5 = R, x ≥ 0.5 = L
