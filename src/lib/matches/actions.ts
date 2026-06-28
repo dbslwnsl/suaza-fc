@@ -847,6 +847,92 @@ export async function incrementStatForPlayer(
 }
 
 /**
+ * 쿼터별 기록 ± — quarter_stats[quarterId][key] 를 delta 만큼 증감하고,
+ * 합계 컬럼(goals / assists / custom_stats)을 "모든 쿼터의 합"으로 재계산해 저장한다.
+ * (시즌/명단 집계는 합계 기준이라 그대로 동작)
+ */
+export async function incrementQuarterStatForPlayer(
+  matchId: string,
+  playerId: string,
+  quarterId: string,
+  key: "goals" | "assists" | "clean_sheets" | "referee_count",
+  delta: number,
+) {
+  const { supabase } = await requireStaff();
+
+  const { data: existing } = await supabase
+    .from("match_participations")
+    .select("id, custom_stats, quarter_stats")
+    .eq("match_id", matchId)
+    .eq("player_id", playerId)
+    .maybeSingle();
+
+  const id = existing?.id as string | undefined;
+
+  const quarter_stats: Record<string, Record<string, number>> = {
+    ...((existing?.quarter_stats as Record<
+      string,
+      Record<string, number>
+    > | null) ?? {}),
+  };
+  const q: Record<string, number> = { ...(quarter_stats[quarterId] ?? {}) };
+  q[key] = Math.max(0, (q[key] ?? 0) + delta);
+  quarter_stats[quarterId] = q;
+
+  // 합계 = 모든 쿼터의 합
+  const sum = (k: string) =>
+    Object.values(quarter_stats).reduce((acc, qs) => acc + (qs[k] ?? 0), 0);
+  const goals = sum("goals");
+  const assists = sum("assists");
+  const custom_stats: Record<string, number> = {
+    ...((existing?.custom_stats as Record<string, number> | null) ?? {}),
+    attendance: 1,
+    clean_sheets: sum("clean_sheets"),
+    referee_count: sum("referee_count"),
+  };
+
+  if (!id) {
+    // 새 row — 자체전 승리팀 자동 부여 (incrementStatForPlayer 와 동일 규칙)
+    const [{ data: m }, { data: att }] = await Promise.all([
+      supabase
+        .from("matches")
+        .select("opponent, intra_winner")
+        .eq("id", matchId)
+        .single(),
+      supabase
+        .from("match_attendances")
+        .select("team")
+        .eq("match_id", matchId)
+        .eq("player_id", playerId)
+        .maybeSingle(),
+    ]);
+    const isIntra = m?.opponent === "자체전";
+    const winner =
+      (m as { intra_winner?: "A" | "B" | null } | null)?.intra_winner ?? null;
+    const playerTeam =
+      (att as { team?: "A" | "B" | null } | null)?.team ?? null;
+    if (isIntra && winner && playerTeam === winner) custom_stats.win_points = 1;
+
+    const { error } = await supabase.from("match_participations").insert({
+      match_id: matchId,
+      player_id: playerId,
+      goals,
+      assists,
+      custom_stats,
+      quarter_stats,
+    });
+    if (error) return;
+  } else {
+    await supabase
+      .from("match_participations")
+      .update({ archived_at: null, goals, assists, custom_stats, quarter_stats })
+      .eq("id", id);
+  }
+
+  revalidatePath(`/matches/${matchId}`);
+}
+
+/**
  * 단일 stat 키를 delta 만큼 증감. 실시간 자동 저장용.
  * - goals/assists 는 컬럼, 그 외(clean_sheets/referee_count 등)는 custom_stats jsonb 의 키.
  */
