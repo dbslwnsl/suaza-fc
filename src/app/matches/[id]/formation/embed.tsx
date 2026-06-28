@@ -157,7 +157,7 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
       .eq("status", "attending"),
     supabase
       .from("match_participations")
-      .select("player_id, goals, assists, custom_stats")
+      .select("player_id, goals, assists, custom_stats, quarter_stats")
       .eq("match_id", matchId)
       .is("archived_at", null),
     supabase
@@ -290,6 +290,60 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
       points: pointsForParticipation(row, match.match_date, pvMap),
     };
   }
+  // 쿼터별 기록 맵 + 입력 모드 판별.
+  //  - quarter_stats 가 하나라도 있으면 'quarter' 모드 (ALL=합계 읽기전용, 쿼터 탭 입력)
+  //  - 없고 합계만 있으면 'total'(레거시) 모드 (기존처럼 ALL 에서 합계 직접 입력)
+  //  - 아무 기록도 없으면 'quarter'(신규 기본)
+  const quarterStatByPlayer: Record<
+    string,
+    Record<
+      string,
+      { goals: number; assists: number; cleanSheets: number; refereeCount: number }
+    >
+  > = {};
+  let hasQuarterStats = false;
+  let hasLegacyTotals = false;
+  for (const row of (participations ?? []) as {
+    player_id: string;
+    goals: number | null;
+    assists: number | null;
+    custom_stats: Record<string, number> | null;
+    quarter_stats: Record<string, Record<string, number>> | null;
+  }[]) {
+    const qs = row.quarter_stats ?? null;
+    if (qs && Object.keys(qs).length > 0) {
+      hasQuarterStats = true;
+      const byQuarter: Record<
+        string,
+        { goals: number; assists: number; cleanSheets: number; refereeCount: number }
+      > = {};
+      for (const [qid, v] of Object.entries(qs)) {
+        byQuarter[qid] = {
+          goals: v.goals ?? 0,
+          assists: v.assists ?? 0,
+          cleanSheets: v.clean_sheets ?? 0,
+          refereeCount: v.referee_count ?? 0,
+        };
+      }
+      quarterStatByPlayer[row.player_id] = byQuarter;
+    } else {
+      const cs = row.custom_stats ?? {};
+      if (
+        (row.goals ?? 0) > 0 ||
+        (row.assists ?? 0) > 0 ||
+        (cs.clean_sheets ?? 0) > 0 ||
+        (cs.referee_count ?? 0) > 0
+      ) {
+        hasLegacyTotals = true;
+      }
+    }
+  }
+  const statsMode: "quarter" | "total" = hasQuarterStats
+    ? "quarter"
+    : hasLegacyTotals
+      ? "total"
+      : "quarter";
+
   // 회원별 코멘트 개수 (말풍선 아이콘에 "코멘트 있음" 표시용)
   const commentCountByPlayer: Record<string, number> = {};
   for (const row of (coachComments ?? []) as { member_id: string }[]) {
@@ -349,6 +403,8 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
       {...(showRecording
         ? {
             statByPlayer,
+            quarterStatByPlayer,
+            statsMode,
             canEditStats: isFullStaff,
             // 우승팀은 경기 종료 후에만 의미가 있음 — 진행중에는 null/false
             winningTeam: matchLocked ? intraWinner : null,

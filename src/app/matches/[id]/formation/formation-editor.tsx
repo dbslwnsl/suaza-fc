@@ -1,11 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import { saveFormation } from "@/lib/formations/actions";
 import {
   incrementStatForPlayer,
+  incrementQuarterStatForPlayer,
   setIntraWinner,
   setMomForPlayer,
   setMyCondition,
@@ -34,6 +43,27 @@ import {
   type PreferredFoot,
 } from "@/lib/members/positions";
 import type { EditorMember, GameQuarter, PlayerStat } from "./embed";
+
+// 쿼터별 기록 입력 컨텍스트 — 깊은 카드 트리의 PlayerStatRow 가 소비한다.
+//  - statsMode "quarter": 쿼터 탭에서 그 쿼터 값 입력, ALL 탭은 합계 읽기전용
+//  - statsMode "total"(레거시): ALL 에서 합계 직접 입력 (쿼터 분해 없음)
+type QStat = {
+  goals: number;
+  assists: number;
+  cleanSheets: number;
+  refereeCount: number;
+};
+type StatEntryCtxValue = {
+  statsMode: "quarter" | "total";
+  /** 현재 활성 쿼터 id (예: "1Q"). null = ALL 탭(쿼터모드 읽기전용) 또는 레거시 합계 */
+  activeQuarterId: string | null;
+  quarterStatByPlayer: Record<string, Record<string, QStat>>;
+};
+const StatEntryContext = createContext<StatEntryCtxValue>({
+  statsMode: "total",
+  activeQuarterId: null,
+  quarterStatByPlayer: {},
+});
 
 // 선수가 특정 전체-쿼터(globalIndex, 1-based)에 참여하는지.
 // attending_quarters 가 null 이면 전체 참여로 간주.
@@ -252,6 +282,8 @@ export default function FormationEditor({
   captainIds = [],
   matchLocked = false,
   statByPlayer = {},
+  quarterStatByPlayer = {},
+  statsMode = "total",
   canEditStats = false,
   winningTeam = null,
   canEditWinner = false,
@@ -277,8 +309,12 @@ export default function FormationEditor({
   captainIds?: string[];
   // 경기가 종료/취소된 상태 — 실수 방지 위해 초기화·자동 버튼 비활성화
   matchLocked?: boolean;
-  // 종료 경기 임베드 전용 — 선수별 통계(이번 경기 골/어시/CS/심판/MOM/포인트)
+  // 종료 경기 임베드 전용 — 선수별 통계(이번 경기 골/어시/CS/심판/MOM/포인트 합계)
   statByPlayer?: Record<string, PlayerStat>;
+  // 선수별 쿼터 기록 맵 (quarter id → 값). 쿼터 모드에서 각 쿼터 탭 입력/표시에 사용.
+  quarterStatByPlayer?: Record<string, Record<string, QStat>>;
+  // 기록 입력 모드: "quarter"(쿼터별 입력, ALL=합계) | "total"(레거시 합계 직접 입력)
+  statsMode?: "quarter" | "total";
   // 매니저·감독·회장만 기록 입력 UI 활성화
   canEditStats?: boolean;
   // 승리팀 (자체전 종료 시 "A" | "B", 상대전·미확정은 null)
@@ -869,7 +905,14 @@ export default function FormationEditor({
     );
   }
 
+  // 쿼터별 기록 컨텍스트 — ALL(showAll) 이면 활성 쿼터 없음(합계 읽기전용/레거시).
+  // 리본 탭 id(quarters[i].id)와 동일한 키를 써서 입력/표시가 일치하게 한다.
+  const activeQuarterId = showAll ? null : quarters[activeIdx]?.id ?? null;
+
   return (
+    <StatEntryContext.Provider
+      value={{ statsMode, activeQuarterId, quarterStatByPlayer }}
+    >
     <div className="flex flex-col gap-3 desktop:flex-1 desktop:min-h-0">
       {/* 자동 제거 경고 — 출석 쿼터 변경으로 일부 배치가 제거된 경우 */}
       {autoRemoved.length > 0 && (
@@ -958,7 +1001,7 @@ export default function FormationEditor({
               onAutoPlace={() => autoPlaceTeam("A")}
               matchLocked={matchLocked}
               statByPlayer={statByPlayer}
-              canEditStats={canEditStats && (!matchLocked || showAll)}
+              canEditStats={canEditStats}
               matchId={matchId}
               winningTeam={optWinningTeam}
               rosterTeam="A"
@@ -1178,7 +1221,7 @@ export default function FormationEditor({
                   }
                   matchLocked={matchLocked}
                   statByPlayer={statByPlayer}
-                  canEditStats={canEditStats && (!matchLocked || showAll)}
+                  canEditStats={canEditStats}
                   matchId={matchId}
                   winningTeam={optWinningTeam}
                   rosterTeam={isIntra ? rightTeam : null}
@@ -1237,7 +1280,7 @@ export default function FormationEditor({
         onAllClick={() => setShowAll(true)}
         matchLocked={matchLocked}
         statByPlayer={statByPlayer}
-        canEditStats={canEditStats && (!matchLocked || showAll)}
+        canEditStats={canEditStats}
         matchId={matchId}
         winningTeam={optWinningTeam}
         canWriteCoachComment={canWriteCoachComment}
@@ -1282,6 +1325,7 @@ export default function FormationEditor({
         />
       )}
     </div>
+    </StatEntryContext.Provider>
   );
 }
 
@@ -3695,13 +3739,42 @@ function PlayerStatRow({
   canEdit: boolean;
 }) {
   const [, startTransition] = useTransition();
-  // 낙관적 표시값
-  const [optimistic, setOptimistic] = useState({
-    goals: stat.goals,
-    assists: stat.assists,
-    cleanSheets: stat.cleanSheets,
-    refereeCount: stat.refereeCount,
-  });
+  const { statsMode, activeQuarterId, quarterStatByPlayer } =
+    useContext(StatEntryContext);
+
+  // 쿼터 모드 + 특정 쿼터 탭 → 그 쿼터 값 편집. ALL 탭(쿼터모드)은 합계 읽기전용.
+  const editingQuarter =
+    statsMode === "quarter" && activeQuarterId != null ? activeQuarterId : null;
+  const readOnlyTotal = statsMode === "quarter" && activeQuarterId == null;
+  const rowCanEdit = canEdit && !readOnlyTotal;
+
+  // 표시값: 쿼터 편집 중이면 그 쿼터 값, 아니면 합계(stat).
+  const base = editingQuarter
+    ? quarterStatByPlayer[playerId]?.[editingQuarter] ?? {
+        goals: 0,
+        assists: 0,
+        cleanSheets: 0,
+        refereeCount: 0,
+      }
+    : {
+        goals: stat.goals,
+        assists: stat.assists,
+        cleanSheets: stat.cleanSheets,
+        refereeCount: stat.refereeCount,
+      };
+
+  // 낙관적 표시값 (쿼터 전환·서버 갱신 시 동기화)
+  const [optimistic, setOptimistic] = useState(base);
+  useEffect(() => {
+    setOptimistic({
+      goals: base.goals,
+      assists: base.assists,
+      cleanSheets: base.cleanSheets,
+      refereeCount: base.refereeCount,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base.goals, base.assists, base.cleanSheets, base.refereeCount]);
+
   type ItemKey = "goals" | "assists" | "clean_sheets" | "referee_count";
   const items: {
     key: ItemKey;
@@ -3755,12 +3828,22 @@ function PlayerStatRow({
     cur: number,
     setVal: (n: number) => void,
   ) => {
-    if (!canEdit) return;
+    if (!rowCanEdit) return;
     const next = Math.max(0, cur + delta);
     if (next === cur) return;
     setVal(next);
     startTransition(() => {
-      incrementStatForPlayer(matchId, playerId, key, delta);
+      if (editingQuarter) {
+        incrementQuarterStatForPlayer(
+          matchId,
+          playerId,
+          editingQuarter,
+          key,
+          delta,
+        );
+      } else {
+        incrementStatForPlayer(matchId, playerId, key, delta);
+      }
     });
   };
 
@@ -3772,7 +3855,7 @@ function PlayerStatRow({
     cur: number,
     setVal: (n: number) => void,
   ) => {
-    if (!canEdit) return;
+    if (!rowCanEdit) return;
     lpFired.current = false;
     if (lpTimer.current) clearTimeout(lpTimer.current);
     lpTimer.current = setTimeout(() => {
@@ -3798,7 +3881,7 @@ function PlayerStatRow({
         <button
           key={it.key}
           type="button"
-          disabled={!canEdit}
+          disabled={!rowCanEdit}
           onClick={() => {
             if (lpFired.current) {
               lpFired.current = false;
@@ -3815,13 +3898,13 @@ function PlayerStatRow({
           onPointerLeave={cancelLp}
           onPointerCancel={cancelLp}
           className={`flex items-center justify-center gap-1 py-1.5 rounded-md transition select-none ${
-            canEdit ? "hover:bg-white active:bg-white" : "cursor-default opacity-60"
+            rowCanEdit
+              ? "hover:bg-white active:bg-white"
+              : "cursor-default opacity-60"
           }`}
           style={{ backgroundColor: it.bg }}
           title={
-            canEdit
-              ? `${it.label} — 탭: +1, 길게 누르기: -1`
-              : it.label
+            rowCanEdit ? `${it.label} — 탭: +1, 길게 누르기: -1` : it.label
           }
         >
           <span className="text-[10px] font-medium text-suaza-ink-muted leading-none">
