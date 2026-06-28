@@ -97,6 +97,14 @@ export default async function RosterView({ year }: { year: number }) {
     pointsByPlayer.set(p.player_id, (pointsByPlayer.get(p.player_id) ?? 0) + pts);
   }
 
+  // MOM 횟수 — custom_stats.mom 합 (순위 아님, 받은 사람 전부 표기)
+  const momByPlayer = new Map<string, number>();
+  for (const p of parts) {
+    const mom = Number(p.custom_stats?.mom ?? 0);
+    if (mom > 0)
+      momByPlayer.set(p.player_id, (momByPlayer.get(p.player_id) ?? 0) + mom);
+  }
+
   // ── 월별 MVP — 각 월(KST) 경기 포인트 합이 가장 높은 회원(공동 1위 포함) ──
   const kstMonth = (iso: string): number => {
     const p = new Intl.DateTimeFormat("en-US", {
@@ -228,6 +236,7 @@ export default async function RosterView({ year }: { year: number }) {
         cleanSheets: cleanSheetRanks.get(m.id) ?? null,
         referee: refereeRanks.get(m.id) ?? null,
       },
+      momCount: momByPlayer.get(m.id) ?? 0,
     };
   });
 

@@ -50,18 +50,20 @@ export type RosterMember = {
     cleanSheets?: number | null;
     referee?: number | null;
   };
+  /** MOM 받은 횟수 (순위 아님 — 1회 이상이면 표기) */
+  momCount?: number;
 };
 
-// 3번째 줄 순위 배지 — 표기 순서/라벨 (골 → 어시 → 클린 → 심판 → 출전)
+// 3번째 줄 순위 배지 — 표기 순서/라벨 (출전 → 골 → 어시 → 클린 → 심판, 그 뒤 월별 MVP)
 const RANK_CATS: {
   key: keyof NonNullable<RosterMember["ranks"]>;
   label: string;
 }[] = [
+  { key: "appearances", label: "출전" },
   { key: "goals", label: "골" },
   { key: "assists", label: "어시" },
   { key: "cleanSheets", label: "클린" },
   { key: "referee", label: "심판" },
-  { key: "appearances", label: "출전" },
 ];
 
 type Filter = "ALL" | Position;
@@ -440,6 +442,7 @@ function MemberCard({
           {/* 3번째 줄 — 카테고리 순위(1~3위) + 월별 MVP.
               표기할 게 없으면 줄을 그리지 않아, 2줄 카드는 가운데 정렬로 둔다. */}
           {(RANK_CATS.some(({ key }) => m.ranks?.[key]) ||
+            (m.momCount ?? 0) > 0 ||
             (m.mvpMonths?.length ?? 0) > 0) && (
             <div className="flex items-center gap-1 flex-wrap">
               {RANK_CATS.map(({ key, label }) => {
@@ -448,6 +451,7 @@ function MemberCard({
                   <RankChip key={key} label={label} rank={rank} />
                 ) : null;
               })}
+              {(m.momCount ?? 0) > 0 && <MomChip count={m.momCount!} />}
               {[...(m.mvpMonths ?? [])]
                 .sort((a, b) => a - b)
                 .map((mo) => (
@@ -488,6 +492,15 @@ function MemberCard({
   );
 }
 
+
+// MOM 횟수 배지 — 예: "MOM3회". 순위가 아니라 받은 사람 전부 표기.
+function MomChip({ count }: { count: number }) {
+  return (
+    <span className="inline-flex items-center h-[18px] px-1.5 rounded-[4px] text-[11px] font-bold leading-none bg-violet-100 text-violet-700">
+      MOM{count}회
+    </span>
+  );
+}
 
 // 시즌 카테고리 순위 배지 — 예: "골1위". 1위 금, 2위 은, 3위 동 색상.
 function RankChip({ label, rank }: { label: string; rank: number }) {
