@@ -42,7 +42,27 @@ export type RosterMember = {
   isRefereeKing?: boolean;
   /** 이 회원이 MVP인 월 목록 (예: [3, 5]). 오름차순. */
   mvpMonths?: number[];
+  /** 시즌 카테고리별 순위(1~3위). 없으면 null/undefined. */
+  ranks?: {
+    appearances?: number | null;
+    goals?: number | null;
+    assists?: number | null;
+    cleanSheets?: number | null;
+    referee?: number | null;
+  };
 };
+
+// 3번째 줄 순위 배지 — 표기 순서/라벨 (골 → 어시 → 클린 → 심판 → 출전)
+const RANK_CATS: {
+  key: keyof NonNullable<RosterMember["ranks"]>;
+  label: string;
+}[] = [
+  { key: "goals", label: "골" },
+  { key: "assists", label: "어시" },
+  { key: "cleanSheets", label: "클린" },
+  { key: "referee", label: "심판" },
+  { key: "appearances", label: "출전" },
+];
 
 type Filter = "ALL" | Position;
 type SortKey = "priority" | "name" | "age";
@@ -289,13 +309,10 @@ function MemberCard({
 }) {
   const primary = m.positions[0] ?? null;
   const ringColor = primary ? POSITION_COLOR[primary] : "var(--suaza-border)";
-  const { titleBadges, awardBadges } = getMemberBadges({
+  // 아바타 좌상단 수상 뱃지(득점왕·어시왕 등)는 3번째 줄 순위 배지로 대체 — 제거.
+  const { titleBadges } = getMemberBadges({
     title: m.title,
     role: m.role,
-    isGoalKing: m.isGoalKing,
-    isAssistKing: m.isAssistKing,
-    isCleanSheetKing: m.isCleanSheetKing,
-    isRefereeKing: m.isRefereeKing,
   });
   const age = calcAge(m.birthDate);
   const [lightbox, setLightbox] = useState(false);
@@ -346,7 +363,6 @@ function MemberCard({
             </div>
             <AvatarBadges
               titleBadges={titleBadges}
-              awardBadges={awardBadges}
               size="xs"
               titlePlacement="bottom-center"
             />
@@ -409,30 +425,34 @@ function MemberCard({
                 </span>
               )}
             </div>
-            {/* MVP 2개 이상: 최근 달은 아바타에, 이전 달들은 이름줄 맨 오른쪽에 */}
-            {m.mvpMonths && m.mvpMonths.length >= 2 && (
-              <span className="inline-flex items-center gap-0.5 shrink-0 ml-auto -mt-2">
-                {[...m.mvpMonths]
-                  .sort((a, b) => a - b)
-                  .slice(0, -1)
-                  .map((mo) => (
-                    <MvpMedal key={mo} month={mo} />
-                  ))}
-              </span>
-            )}
           </div>
 
-          {m.positions.length > 0 && (
+          {/* 포지션 + 주발 (주발을 부포지션 오른쪽에 배치) */}
+          {(m.positions.length > 0 || m.preferredFoot) && (
             <div className="flex items-center gap-1.5 flex-wrap">
               {m.positions.map((p) => (
                 <PositionChip key={p} position={p} />
               ))}
+              {m.preferredFoot && <FootChip foot={m.preferredFoot} />}
             </div>
           )}
 
-          {m.preferredFoot && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <FootChip foot={m.preferredFoot} />
+          {/* 3번째 줄 — 카테고리 순위(1~3위) + 월별 MVP.
+              표기할 게 없으면 줄을 그리지 않아, 2줄 카드는 가운데 정렬로 둔다. */}
+          {(RANK_CATS.some(({ key }) => m.ranks?.[key]) ||
+            (m.mvpMonths?.length ?? 0) > 0) && (
+            <div className="flex items-center gap-1 flex-wrap">
+              {RANK_CATS.map(({ key, label }) => {
+                const rank = m.ranks?.[key];
+                return rank ? (
+                  <RankChip key={key} label={label} rank={rank} />
+                ) : null;
+              })}
+              {[...(m.mvpMonths ?? [])]
+                .sort((a, b) => a - b)
+                .map((mo) => (
+                  <MvpMedal key={`mvp-${mo}`} month={mo} size="sm" />
+                ))}
             </div>
           )}
         </div>
@@ -468,6 +488,24 @@ function MemberCard({
   );
 }
 
+
+// 시즌 카테고리 순위 배지 — 예: "골1위". 1위 금, 2위 은, 3위 동 색상.
+function RankChip({ label, rank }: { label: string; rank: number }) {
+  const cls =
+    rank === 1
+      ? "bg-amber-100 text-amber-800"
+      : rank === 2
+        ? "bg-gray-200 text-gray-700"
+        : "bg-orange-100 text-orange-800";
+  return (
+    <span
+      className={`inline-flex items-center h-[18px] px-1.5 rounded-[4px] text-[11px] font-bold leading-none ${cls}`}
+    >
+      {label}
+      {rank}위
+    </span>
+  );
+}
 
 // 월별 MVP 금메달 — 선버스트 메달 안에 월(예: "5월") 표기, 상단에 별.
 function MvpMedal({ month, size = "md" }: { month: number; size?: "md" | "sm" }) {

@@ -170,6 +170,30 @@ export default async function RosterView({ year }: { year: number }) {
   const cleanSheetKings = pickKings((s) => s.custom.clean_sheets ?? 0);
   const refereeKings = pickKings((s) => s.custom.referee_count ?? 0);
 
+  // 시즌 카테고리별 1~3위. 동점은 같은 순위(상위 3개 '값'까지만). 값 0 은 순위 없음.
+  function pickRanks(
+    getter: (s: PlayerSeasonStat) => number,
+  ): Map<string, number> {
+    const distinct = [
+      ...new Set([...statsMap.values()].map(getter).filter((v) => v > 0)),
+    ]
+      .sort((a, b) => b - a)
+      .slice(0, 3);
+    const out = new Map<string, number>();
+    for (const s of statsMap.values()) {
+      const v = getter(s);
+      if (v <= 0) continue;
+      const idx = distinct.indexOf(v);
+      if (idx >= 0) out.set(s.player_id, idx + 1);
+    }
+    return out;
+  }
+  const goalRanks = pickRanks((s) => s.goals ?? 0);
+  const assistRanks = pickRanks((s) => s.assists ?? 0);
+  const cleanSheetRanks = pickRanks((s) => s.custom.clean_sheets ?? 0);
+  const refereeRanks = pickRanks((s) => s.custom.referee_count ?? 0);
+  const appearanceRanks = pickRanks((s) => s.appearances ?? 0);
+
   const list: RosterMember[] = sorted.map((m) => {
     const stat = statsMap.get(m.id);
     return {
@@ -197,6 +221,13 @@ export default async function RosterView({ year }: { year: number }) {
       isCleanSheetKing: cleanSheetKings.has(m.id),
       isRefereeKing: refereeKings.has(m.id),
       mvpMonths: (mvpMonthsByPlayer.get(m.id) ?? []).sort((a, b) => a - b),
+      ranks: {
+        appearances: appearanceRanks.get(m.id) ?? null,
+        goals: goalRanks.get(m.id) ?? null,
+        assists: assistRanks.get(m.id) ?? null,
+        cleanSheets: cleanSheetRanks.get(m.id) ?? null,
+        referee: refereeRanks.get(m.id) ?? null,
+      },
     };
   });
 
