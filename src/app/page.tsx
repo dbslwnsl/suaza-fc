@@ -179,11 +179,9 @@ export default async function Home() {
           attending_quarters: row.attending_quarters,
           voted_at: row.updated_at,
         });
-        // 부상/장기불참은 자동 불참 처리 (매치 상세와 동일)
-        const forcedAbsent =
-          !!row.player.is_injured || !!row.player.on_leave;
-        const effectiveStatus = forcedAbsent ? "absent" : row.status;
-        byStatus[effectiveStatus].push(enriched);
+        // 부상/장기불참이라도 본인/매니저가 명시적으로 투표한 상태는 그대로 존중.
+        // (부상 상태는 프로필에서만 변경 — 출석 표기와 분리. 매치 상세와 동일)
+        byStatus[row.status].push(enriched);
         votedIds.add(row.player.id);
       }
     }
@@ -201,16 +199,13 @@ export default async function Home() {
     const m = mine as
       | { status: string; attending_quarters: number[] | null }
       | null;
-    myStatus = m?.status ?? null;
-    myAttendingQuarters = m?.attending_quarters ?? null;
-    // 부상/장기불참이면 예정 경기 투표를 자동으로 불참 표시 (경기상세와 동일)
+    // 부상/장기불참은 '기본값'으로만 불참. 본인이 직접 투표하면 그 투표를 우선.
+    // (부상 해제는 프로필에서만 — 경기상세와 동일)
     const meBlocked =
       !!(profile as { is_injured?: boolean | null })?.is_injured ||
       !!(profile as { on_leave?: boolean | null })?.on_leave;
-    if (meBlocked) {
-      myStatus = "absent";
-      myAttendingQuarters = null;
-    }
+    myStatus = m?.status ?? (meBlocked ? "absent" : null);
+    myAttendingQuarters = m?.attending_quarters ?? null;
   }
 
   const positions = (profile?.positions ?? []) as Position[];
