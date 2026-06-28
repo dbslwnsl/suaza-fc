@@ -11,7 +11,6 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
-  clearMyAttendanceBlock,
   setAttendanceFor,
   setAttendingQuartersFor,
   setMyAttendingQuarters,
@@ -97,9 +96,9 @@ export type VotePlayer = {
   attending_quarters?: number[] | null;
   // 응답 시각 — 정렬 기준
   voted_at?: string | null;
-  // 부상 여부 — 이름 옆 + 배지 표기 (불참 그룹으로 자동 이동됨)
+  // 부상 여부 — 이름 옆 + 배지 표기 (미투표 시 기본 불참, 본인이 참석 표기하면 참석으로 표시)
   is_injured?: boolean | null;
-  // 장기불참 여부 — 이름 옆 ― 배지 표기 (불참 그룹으로 자동 이동됨)
+  // 장기불참 여부 — 이름 옆 ― 배지 표기 (미투표 시 기본 불참, 참석 표기 시 참석으로 표시)
   on_leave?: boolean | null;
   // 시즌 카테고리 1위 — 이름 옆에 골드 딱지 표기
   isGoalKing?: boolean;
@@ -233,28 +232,22 @@ function useOptimisticVote(
 
   const vote = (value: Status) => {
     if (!myId) return;
-    // 부상/장기불참 상태면 먼저 해제 여부를 확인한 뒤 투표한다.
-    if (statusBlockKind) {
+    // 부상/장기불참 상태에서 '참석'으로 바꿀 때만 안내 팝업.
+    // (불참/미정은 자동 불참과 어긋나지 않으므로 바로 반영)
+    if (statusBlockKind && value === "attending") {
       setPendingVote(value);
       return;
     }
     performVote(value);
   };
 
-  // 확인 팝업에서 "해제하고 투표" 선택 — 프로필 상태 해제 후 그대로 투표 반영.
+  // 확인 팝업에서 "참석으로 표기" 선택 — 부상 상태는 그대로 두고(프로필에서만 변경)
+  // 참석만 표기한다.
   const confirmStatusChange = () => {
     const value = pendingVote;
     setPendingVote(null);
     setStatusResolved(true);
-    startTransition(async () => {
-      await clearMyAttendanceBlock();
-      if (value && myId) {
-        const next: Status | null = optimisticStatus === value ? null : value;
-        addOverride({ playerId: myId, status: next });
-        setMyQuarters(null);
-        await voteAttendance(matchId, value);
-      }
-    });
+    if (value) performVote(value);
   };
   const cancelStatusChange = () => setPendingVote(null);
 
@@ -422,7 +415,7 @@ export function useAttendanceCtx(): AttendanceCtxValue {
   return ctx;
 }
 
-// 부상/장기불참 회원이 투표를 누르면 상태 해제 여부를 묻는 확인 팝업.
+// 부상/장기불참 회원이 '참석'을 누르면, 상태는 그대로 두고 참석만 표기한다는 안내 팝업.
 function StatusChangeModal({
   open,
   kind,
@@ -444,10 +437,12 @@ function StatusChangeModal({
     >
       <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
       <div className="relative w-full max-w-[320px] bg-white rounded-2xl shadow-xl p-5 flex flex-col gap-3">
-        <h3 className="font-bold text-suaza-ink">{label} 상태 해제</h3>
+        <h3 className="font-bold text-suaza-ink">참석으로 표기</h3>
         <p className="text-sm text-suaza-ink-muted leading-relaxed">
-          현재 <b className="text-suaza-ink">{label}</b> 상태로 자동 불참
-          처리되어 있어요. 상태를 해제하고 투표할까요?
+          현재 <b className="text-suaza-ink">{label}</b> 상태예요. 참석으로
+          표기해도 <b className="text-suaza-ink">{label}</b> 상태는 그대로
+          유지되며, 해제는 <b className="text-suaza-ink">프로필</b>에서만
+          가능합니다. 참석으로 표기할까요?
         </p>
         <div className="flex gap-2 mt-1">
           <button
@@ -460,9 +455,9 @@ function StatusChangeModal({
           <button
             type="button"
             onClick={onConfirm}
-            className="flex-1 h-10 rounded-lg bg-suaza-accent text-white font-bold hover:opacity-90 transition"
+            className="flex-1 h-10 rounded-lg bg-suaza-button text-white font-bold hover:opacity-90 transition"
           >
-            해제하고 투표
+            참석으로 표기
           </button>
         </div>
       </div>

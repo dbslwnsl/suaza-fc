@@ -221,14 +221,11 @@ export default async function MatchDetailPage({
         // 경기별 컨디션 — match_attendances.condition 을 우선 사용 (없으면 null = "?")
         condition: row.condition,
       });
-      // 부상자는 실제 투표와 무관하게 불참으로 강제 이동 (지난 경기는 기록 보존)
-      const injuredNow = !isPastMatch && !!row.player.is_injured;
-      const onLeaveNow = !isPastMatch && !!row.player.on_leave;
-      const effectiveStatus =
-        injuredNow || onLeaveNow ? "absent" : row.status;
-      byStatus[effectiveStatus].push(enriched);
+      // 부상자라도 본인/매니저가 명시적으로 투표한 상태는 그대로 존중한다.
+      // (부상 상태는 출석 표기와 분리되어 프로필에서만 변경된다)
+      byStatus[row.status].push(enriched);
       votedIds.add(row.player.id);
-      if (effectiveStatus === "attending") {
+      if (row.status === "attending") {
         teamMembers.push({
           id: row.player.id,
           name: row.player.name,
@@ -283,17 +280,16 @@ export default async function MatchDetailPage({
         condition: number | null;
       }
     | null;
-  // 부상자는 본인 응답도 불참으로 고정하고 투표 UI 를 잠근다 (지난 경기는 제외).
+  // 부상/장기불참은 '기본값'으로만 불참 처리한다. 본인이 직접 투표하면 그 투표를 우선.
+  // (부상 해제는 프로필에서만 가능 — 출석 표기와 분리)
   const myInjured = !!(me as { is_injured?: boolean | null } | null)?.is_injured;
   const myOnLeave = !!(me as { on_leave?: boolean | null } | null)?.on_leave;
   const matchIsPast = matchStatus === "done" || matchStatus === "canceled";
   const injuredLock = myInjured && !matchIsPast;
   const onLeaveLock = myOnLeave && !matchIsPast;
-  const forcedAbsent = injuredLock || onLeaveLock;
-  const myStatus = forcedAbsent ? "absent" : myAtt?.status ?? null;
-  const myAttendingQuarters = forcedAbsent
-    ? null
-    : myAtt?.attending_quarters ?? null;
+  const myBlocked = injuredLock || onLeaveLock;
+  const myStatus = myAtt?.status ?? (myBlocked ? "absent" : null);
+  const myAttendingQuarters = myAtt?.attending_quarters ?? null;
 
   const m = match as Match;
   const isStaff = me?.role === "manager" || me?.role === "coach";
