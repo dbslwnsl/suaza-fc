@@ -1380,6 +1380,9 @@ function Pitch({
   // 네이티브 드래그가 살아 있으면 손가락 이동 시 브라우저가 드래그를 시도하면서
   // pointercancel 을 먼저 발생시켜 pitchDrag 가 중단/해제되어 버린다.
   const [isTouchDevice, setIsTouchDevice] = useState(false);
+  // 데스크탑 여부 — 자체전(전체뷰) 아바타 크기를 단독뷰와 동일하게 키우기 위해 사용.
+  // 앱의 `desktop` 변형(48rem 이상 + 정밀 포인터)과 동일 기준.
+  const [isDesktop, setIsDesktop] = useState(false);
 
   useEffect(() => {
     if (
@@ -1388,6 +1391,15 @@ function Pitch({
     ) {
       setIsTouchDevice(true);
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(min-width: 48rem) and (pointer: fine)");
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
   }, []);
 
   useEffect(() => {
@@ -1533,7 +1545,9 @@ function Pitch({
     onSlotClick(team, i);
   }
 
-  const compact = isIntra;
+  // 자체전이라도 데스크탑에선 compact 를 해제해 아바타·라벨을 단독뷰와 동일 크기로.
+  // (피치 종횡비·2분할은 isIntra 로 따로 유지된다.)
+  const compact = isIntra && !isDesktop;
 
   return (
     <div
@@ -1998,8 +2012,8 @@ function PlayerCircle({
   // 모바일(좁은 피치)은 하한(min)에 걸리므로 min·cqi 를 키워 더 크게 보이게 한다.
   // 데스크탑은 상한(max)에 걸려 있어 사실상 그대로 유지된다.
   const dim = compact
-    ? "clamp(30px, 6cqi, 32px)"
-    : "clamp(46px, 13cqi, 50px)";
+    ? "clamp(30px, 8cqi, 38px)"
+    : "clamp(46px, 13cqi, 56px)";
   const fontSize = compact
     ? "clamp(8px, 1.5cqi, 10px)"
     : "clamp(9px, 2.6cqi, 11px)";
