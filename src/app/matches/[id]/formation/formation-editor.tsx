@@ -285,6 +285,7 @@ export default function FormationEditor({
   statByPlayer = {},
   quarterStatByPlayer = {},
   statsMode = "quarter",
+  showStats = false,
   canEditStats = false,
   winningTeam = null,
   canEditWinner = false,
@@ -317,6 +318,8 @@ export default function FormationEditor({
   // 기록 입력 모드: "quarter"(쿼터별 입력, ALL=합계 읽기전용)
   //              | "total"(레거시 합계 경기 — ALL 에서만 수정, 쿼터 탭 읽기전용)
   statsMode?: "quarter" | "total";
+  // 기록 UI 노출 여부 (진행중/종료 경기) — true 면 리본에 ALL(합계) 탭 추가
+  showStats?: boolean;
   // 매니저·감독·회장만 기록 입력 UI 활성화
   canEditStats?: boolean;
   // 승리팀 (자체전 종료 시 "A" | "B", 상대전·미확정은 null)
@@ -387,9 +390,11 @@ export default function FormationEditor({
     return next;
   });
   const [activeIdx, setActiveIdx] = useState(0);
-  // 종료 경기 임베드 — 리본 맨 앞 "ALL" 탭 활성 여부.
-  //   ALL 활성 시 운동장은 마지막 쿼터(또는 0번 쿼터)를 그대로 표시하지만,
-  //   기록은 이미 전체 합계라 추가 처리 불필요. 사용자가 1Q/2Q 누르면 자동 해제.
+  // 리본 맨 앞 "ALL" 탭 — 종료·취소 경기와 기록 입력 중(진행중) 경기에 노출.
+  //   ALL 활성 시 운동장은 1쿼터 포메이션 표시(onAllClick 이 activeIdx=0),
+  //   기록은 전체 합계(읽기전용). 사용자가 1Q/2Q 누르면 자동 해제.
+  //   종료 경기는 ALL 이 기본 활성, 진행중 경기는 쿼터 탭(입력)이 기본.
+  const includeAll = matchLocked || showStats;
   const [showAll, setShowAll] = useState(matchLocked);
   // 자체전 승리팀(낙관적). 부모에서 들어온 winningTeam 을 초기값으로,
   // 토글 클릭 시 즉시 반영해 두 버튼(A/B)이 동기화되도록 한다.
@@ -935,6 +940,30 @@ export default function FormationEditor({
         </div>
       )}
 
+      {/* 아바타 프리로드 레이어 — 출석 선수 전원의 아바타를 화면 밖에 상시 마운트.
+          운동장 슬롯과 동일한 sizes("50px")로 렌더해 같은 최적화 이미지 URL 을
+          캐시·디코드해두므로, 쿼터 전환으로 새로 등장하는 선수도 깜빡임 없이 그려진다. */}
+      <div
+        aria-hidden
+        className="absolute w-px h-px overflow-hidden opacity-0 pointer-events-none"
+      >
+        {[...validIds].map((id) => {
+          const m = byId.get(id);
+          if (!m?.avatar_url) return null;
+          return (
+            <span key={id} className="relative block w-[56px] h-[56px]">
+              <Image
+                src={m.avatar_url}
+                alt=""
+                fill
+                sizes="50px"
+                loading="eager"
+              />
+            </span>
+          );
+        })}
+      </div>
+
       {/* 쿼터 탭은 명단 카드 위 리본으로만 표시 (PlayerRoster* 내부). 운동장 위 탭 없음. */}
 
       {/* 포메이션 칩 — 진행 중/예정 경기에서 상단 노출(개편 전 UI).
@@ -972,9 +1001,12 @@ export default function FormationEditor({
               setActiveIdx(i);
               setShowAll(false);
             }}
-            includeAllTab={matchLocked}
-            isAllActive={matchLocked && showAll}
-            onAllClick={() => setShowAll(true)}
+            includeAllTab={includeAll}
+            isAllActive={includeAll && showAll}
+            onAllClick={() => {
+              setShowAll(true);
+              setActiveIdx(0); // ALL 탭은 1쿼터 포메이션 표시
+            }}
           >
             <PlayerRosterDesktop
               members={teamAMembers}
@@ -1119,18 +1151,8 @@ export default function FormationEditor({
                 readonly={readonly || matchLocked}
                 teamAName={teamAName}
                 teamBName={teamBName}
-                shapeA={
-                  // ALL 활성 시 항상 1쿼터(0번) shape 표시,
-                  // 그 외엔 현재 활성 쿼터(=current.shape)
-                  matchLocked && showAll
-                    ? quarters[0]?.shape ?? current.shape
-                    : current.shape
-                }
-                shapeB={
-                  matchLocked && showAll
-                    ? quarters[0]?.teamB?.shape ?? current.teamB?.shape
-                    : current.teamB?.shape
-                }
+                shapeA={current.shape}
+                shapeB={current.teamB?.shape}
                 compactWidth
                 teamByPlayer={teamByPlayer}
                 isIntraMatch={isIntra}
@@ -1190,9 +1212,12 @@ export default function FormationEditor({
                   setActiveIdx(i);
                   setShowAll(false);
                 }}
-                includeAllTab={matchLocked}
-                isAllActive={matchLocked && showAll}
-                onAllClick={() => setShowAll(true)}
+                includeAllTab={includeAll}
+                isAllActive={includeAll && showAll}
+                onAllClick={() => {
+                  setShowAll(true);
+                  setActiveIdx(0); // ALL 탭은 1쿼터 포메이션 표시
+                }}
               >
                 <PlayerRosterDesktop
                   members={rightMembers}
@@ -1277,9 +1302,12 @@ export default function FormationEditor({
           setActiveIdx(i);
           setShowAll(false);
         }}
-        includeAllTab={matchLocked}
-        isAllActive={matchLocked && showAll}
-        onAllClick={() => setShowAll(true)}
+        includeAllTab={includeAll}
+        isAllActive={includeAll && showAll}
+        onAllClick={() => {
+          setShowAll(true);
+          setActiveIdx(0); // ALL 탭은 1쿼터 포메이션 표시
+        }}
         matchLocked={matchLocked}
         statByPlayer={statByPlayer}
         canEditStats={canEditStats}
@@ -1717,7 +1745,10 @@ function Pitch({
           const nativeDraggable = canDrag && !isTouchDevice;
           return (
             <div
-              key={`${tf.team}-${s.index}`}
+              // 배치된 슬롯은 선수 id 를 key 로 사용 — 쿼터 전환으로 같은 선수가
+              // 다른 슬롯에 놓여도 React 가 DOM(로드된 아바타 img 포함)을 이동만
+              // 시키므로 이미지 재로드로 인한 깜빡임이 없다. 빈 슬롯은 위치 기준.
+              key={pid ? `${tf.team}-p-${pid}` : `${tf.team}-s-${s.index}`}
               className={`absolute -translate-x-1/2 -translate-y-1/2 select-none ${
                 isDragSource ? "opacity-30" : ""
               }`}

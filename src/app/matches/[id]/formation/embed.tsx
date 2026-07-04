@@ -407,6 +407,7 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
             statByPlayer,
             quarterStatByPlayer,
             statsMode,
+            showStats: true,
             canEditStats: isFullStaff,
             // 우승팀은 경기 종료 후에만 의미가 있음 — 진행중에는 null/false
             winningTeam: matchLocked ? intraWinner : null,
