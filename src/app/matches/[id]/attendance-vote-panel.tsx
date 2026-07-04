@@ -534,14 +534,34 @@ function QuarterPicker({
     return `${q - nonGameBefore}Q`;
   };
 
+  // 연속 구간(시작~끝) 선택 — 가운데 빈칸이 생기지 않는다.
+  // - 구간 밖을 누르면 그쪽 경계를 눌린 쿼터까지 확장
+  // - 구간 안쪽을 누르면 가까운 경계를 눌린 쿼터로 당김 (눌린 쿼터는 선택 유지)
+  //   예) 전체 선택에서 뒤에서 2번째를 누르면 1~뒤에서2번째, 앞에서 2번째를 누르면 2번째~끝
+  // - 경계(시작/끝)를 누르면 그 쿼터만 해제(구간 한 칸 축소),
+  //   마지막 하나를 누르면 전체 해제(→ 출석 취소)
   const toggle = (q: number) => {
     const cur =
       selected === null
         ? Array.from({ length: totalQuarters }, (_, i) => i + 1)
         : [...selected];
-    const next = cur.includes(q)
-      ? cur.filter((x) => x !== q)
-      : [...cur, q].sort((a, b) => a - b);
+    let next: number[];
+    if (cur.length === 0) {
+      next = [q];
+    } else {
+      // 과거 데이터에 빈칸이 있어도 min~max 를 현재 구간으로 간주
+      let s = Math.min(...cur);
+      let e = Math.max(...cur);
+      if (q < s) s = q;
+      else if (q > e) e = q;
+      else if (s === e) [s, e] = [1, 0]; // 마지막 하나 해제 → 빈 선택
+      else if (q === s) s = s + 1;
+      else if (q === e) e = e - 1;
+      else if (q - s <= e - q) s = q;
+      else e = q;
+      next = [];
+      for (let i = s; i <= e; i++) next.push(i);
+    }
     onChange(next.length === totalQuarters ? null : next);
   };
 
