@@ -35,12 +35,18 @@ export async function devSetMyRoleTitle(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "로그인 필요" };
 
-  const admin = createAdminClient();
-  const { error } = await admin
-    .from("profiles")
-    .update({ title, role })
-    .eq("id", user.id);
-  if (error) return { ok: false, error: error.message };
+  // createAdminClient 는 SUPABASE_SERVICE_ROLE_KEY 미설정 시 throw —
+  // 스위처 UI 에 에러가 표시되도록 잡아서 반환한다.
+  try {
+    const admin = createAdminClient();
+    const { error } = await admin
+      .from("profiles")
+      .update({ title, role })
+      .eq("id", user.id);
+    if (error) return { ok: false, error: error.message };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 
   revalidatePath("/", "layout");
   return { ok: true };

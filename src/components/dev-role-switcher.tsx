@@ -16,14 +16,17 @@ import { devSetMyRoleTitle } from "@/lib/dev/actions";
 export default function DevRoleSwitcher({ current }: { current: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const pick = (title: MemberTitle) => {
     if (pending || title === current) return;
     setOpen(false); // 선택하면 펼쳐진 패널을 닫는다
+    setError(null);
     startTransition(async () => {
       const r = await devSetMyRoleTitle(title);
       if (r.ok) router.refresh();
+      else setError(r.error ?? "알 수 없는 오류");
     });
   };
 
@@ -63,6 +66,11 @@ export default function DevRoleSwitcher({ current }: { current: string }) {
         🛠 {TITLE_LABEL[current as MemberTitle] ?? current}
         {pending && <span className="animate-pulse">…</span>}
       </button>
+      {error && (
+        <p className="max-w-[240px] rounded-lg border border-red-300 bg-red-50 px-2 py-1 text-[11px] leading-snug text-red-700 shadow">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
