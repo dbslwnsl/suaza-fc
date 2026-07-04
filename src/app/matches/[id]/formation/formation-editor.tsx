@@ -1753,6 +1753,47 @@ function Pitch({
                   tf.team,
                 );
                 e.dataTransfer.effectAllowed = "move";
+                // 아바타가 있는 경우: HTML5 native drag ghost 는 border-radius/
+                // clip-path 를 무시하고 raw snapshot 을 뜨는 브라우저(Chrome/Edge 등)가
+                // 있어서 아바타가 사각형으로 보인다. 원형으로 clip 한 canvas 를 만들어
+                // setDragImage 로 직접 지정한다.
+                if (player?.avatar_url) {
+                  const imgEl =
+                    e.currentTarget.querySelector<HTMLImageElement>(
+                      "img[data-nimg]",
+                    );
+                  if (imgEl && imgEl.complete && imgEl.naturalWidth > 0) {
+                    const size = 60;
+                    const canvas = document.createElement("canvas");
+                    canvas.width = size;
+                    canvas.height = size;
+                    const ctx = canvas.getContext("2d");
+                    if (ctx) {
+                      ctx.save();
+                      ctx.beginPath();
+                      ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+                      ctx.closePath();
+                      ctx.clip();
+                      ctx.drawImage(imgEl, 0, 0, size, size);
+                      ctx.restore();
+                      // 브라우저에 붙어있어야 setDragImage 가 스냅샷을 뜰 수 있는
+                      // 케이스가 있어서 화면 밖에 잠깐 붙였다 다음 tick 에 정리.
+                      // (Safari 는 canvas 를 setDragImage 로 잘 못 받아 원형이 안 보이는
+                      // 이슈가 있으나, 회귀 위험이 있어 여기선 대응하지 않는다.)
+                      canvas.style.position = "fixed";
+                      canvas.style.top = "-9999px";
+                      canvas.style.left = "-9999px";
+                      canvas.style.pointerEvents = "none";
+                      document.body.appendChild(canvas);
+                      e.dataTransfer.setDragImage(
+                        canvas,
+                        size / 2,
+                        size / 2,
+                      );
+                      setTimeout(() => canvas.remove(), 0);
+                    }
+                  }
+                }
                 onDragStart?.(pid);
               }}
               onDragEnd={() => {
@@ -2065,10 +2106,11 @@ function PlayerCircle({
   if (player) {
     // 선수가 배치되면 동그라미에 포지션명 대신 아바타를 표시(없으면 이름 첫 글자).
     // 포지션 색은 테두리로 유지되고, 이름은 동그라미 아래 라벨에 표시된다.
+    // clip-path 는 HTML5 드래그 고스트에서도 border-radius 보다 안정적으로 적용된다.
     return (
       <div
         className={`relative overflow-hidden rounded-full bg-white flex items-center justify-center font-bold shadow-md transition ${stateRing}`}
-        style={sizeStyle}
+        style={{ ...sizeStyle, clipPath: "circle(50%)" }}
       >
         {player.avatar_url ? (
           <Image
@@ -2077,6 +2119,7 @@ function PlayerCircle({
             fill
             sizes="50px"
             className="object-cover"
+            style={{ borderRadius: "50%", clipPath: "circle(50%)" }}
           />
         ) : (
           <span style={{ color }}>{player.name.slice(0, 1)}</span>
