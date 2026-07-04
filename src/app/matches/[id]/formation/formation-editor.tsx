@@ -46,7 +46,8 @@ import type { EditorMember, GameQuarter, PlayerStat } from "./embed";
 
 // 쿼터별 기록 입력 컨텍스트 — 깊은 카드 트리의 PlayerStatRow 가 소비한다.
 //  - statsMode "quarter": 쿼터 탭에서 그 쿼터 값 입력, ALL 탭은 합계 읽기전용
-//  - statsMode "total"(레거시): ALL 에서 합계 직접 입력 (쿼터 분해 없음)
+//  - statsMode "total"(레거시 합계 경기): 쿼터 탭 읽기전용("–" 표시),
+//    수정은 ALL 탭에서만 (합계 직접 증감)
 type QStat = {
   goals: number;
   assists: number;
@@ -55,12 +56,12 @@ type QStat = {
 };
 type StatEntryCtxValue = {
   statsMode: "quarter" | "total";
-  /** 현재 활성 쿼터 id (예: "1Q"). null = ALL 탭(쿼터모드 읽기전용) 또는 레거시 합계 */
+  /** 현재 활성 쿼터 id (예: "1Q"). null = ALL 탭 */
   activeQuarterId: string | null;
   quarterStatByPlayer: Record<string, Record<string, QStat>>;
 };
 const StatEntryContext = createContext<StatEntryCtxValue>({
-  statsMode: "total",
+  statsMode: "quarter",
   activeQuarterId: null,
   quarterStatByPlayer: {},
 });
@@ -283,7 +284,7 @@ export default function FormationEditor({
   matchLocked = false,
   statByPlayer = {},
   quarterStatByPlayer = {},
-  statsMode = "total",
+  statsMode = "quarter",
   canEditStats = false,
   winningTeam = null,
   canEditWinner = false,
@@ -311,9 +312,10 @@ export default function FormationEditor({
   matchLocked?: boolean;
   // 종료 경기 임베드 전용 — 선수별 통계(이번 경기 골/어시/CS/심판/MOM/포인트 합계)
   statByPlayer?: Record<string, PlayerStat>;
-  // 선수별 쿼터 기록 맵 (quarter id → 값). 쿼터 모드에서 각 쿼터 탭 입력/표시에 사용.
+  // 선수별 쿼터 기록 맵 (quarter id → 값). 각 쿼터 탭 입력/표시에 사용.
   quarterStatByPlayer?: Record<string, Record<string, QStat>>;
-  // 기록 입력 모드: "quarter"(쿼터별 입력, ALL=합계) | "total"(레거시 합계 직접 입력)
+  // 기록 입력 모드: "quarter"(쿼터별 입력, ALL=합계 읽기전용)
+  //              | "total"(레거시 합계 경기 — ALL 에서만 수정, 쿼터 탭 읽기전용)
   statsMode?: "quarter" | "total";
   // 매니저·감독·회장만 기록 입력 UI 활성화
   canEditStats?: boolean;
@@ -3799,11 +3801,17 @@ function PlayerStatRow({
   const { statsMode, activeQuarterId, quarterStatByPlayer } =
     useContext(StatEntryContext);
 
-  // 쿼터 모드 + 특정 쿼터 탭 → 그 쿼터 값 편집. ALL 탭(쿼터모드)은 합계 읽기전용.
+  // quarter 모드: 쿼터 탭에서 그 쿼터 값 편집, ALL 탭은 합계 읽기전용.
+  // total 모드(레거시 합계 경기): 쿼터 분해 데이터가 없어 쿼터 탭은 읽기전용("–"),
+  // ALL 탭에서만 합계를 직접 수정한다.
   const editingQuarter =
     statsMode === "quarter" && activeQuarterId != null ? activeQuarterId : null;
-  const readOnlyTotal = statsMode === "quarter" && activeQuarterId == null;
-  const rowCanEdit = canEdit && !readOnlyTotal;
+  const legacyQuarterView = statsMode === "total" && activeQuarterId != null;
+  const rowCanEdit =
+    canEdit &&
+    (statsMode === "quarter"
+      ? activeQuarterId != null
+      : activeQuarterId == null);
 
   // 표시값: 쿼터 편집 중이면 그 쿼터 값, 아니면 합계(stat).
   const base = editingQuarter
@@ -3899,6 +3907,7 @@ function PlayerStatRow({
           delta,
         );
       } else {
+        // 레거시 합계 경기 — ALL 탭에서 합계 컬럼 직접 증감
         incrementStatForPlayer(matchId, playerId, key, delta);
       }
     });
@@ -3961,7 +3970,11 @@ function PlayerStatRow({
           }`}
           style={{ backgroundColor: it.bg }}
           title={
-            rowCanEdit ? `${it.label} — 탭: +1, 길게 누르기: -1` : it.label
+            rowCanEdit
+              ? `${it.label} — 탭: +1, 길게 누르기: -1`
+              : legacyQuarterView
+                ? `${it.label} — 합계로만 기록된 경기예요. 수정은 ALL 탭에서 해주세요`
+                : it.label
           }
         >
           <span className="text-[10px] font-medium text-suaza-ink-muted leading-none">
@@ -3974,7 +3987,8 @@ function PlayerStatRow({
             className="text-sm font-bold tabular-nums leading-none"
             style={{ color: it.color }}
           >
-            {it.value}
+            {/* 레거시 합계 경기의 쿼터 탭 — 분해 데이터가 없으므로 0 대신 "–" */}
+            {legacyQuarterView ? "–" : it.value}
           </span>
         </button>
       ))}

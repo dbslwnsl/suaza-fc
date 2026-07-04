@@ -290,10 +290,12 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
       points: pointsForParticipation(row, match.match_date, pvMap),
     };
   }
-  // 쿼터별 기록 맵 + 입력 모드 판별.
-  //  - quarter_stats 가 하나라도 있으면 'quarter' 모드 (ALL=합계 읽기전용, 쿼터 탭 입력)
-  //  - 없고 합계만 있으면 'total'(레거시) 모드 (기존처럼 ALL 에서 합계 직접 입력)
-  //  - 아무 기록도 없으면 'quarter'(신규 기본)
+  // 쿼터별 기록 맵 + 입력 모드 판별 (경기 단위).
+  //  - "quarter": 쿼터 탭에서 그 쿼터 값 입력, ALL 탭은 합계 읽기전용.
+  //    (쿼터 기록이 하나라도 있거나, 아무 기록도 없는 신규 경기)
+  //  - "total"(레거시): 쿼터 분해 없이 합계로만 기록된 과거 경기.
+  //    쿼터 탭은 읽기전용(분해 데이터 없음 표시), 수정은 ALL 탭에서만 —
+  //    과거 합계가 쿼터 합으로 덮어써지는 사고를 방지한다.
   const quarterStatByPlayer: Record<
     string,
     Record<
