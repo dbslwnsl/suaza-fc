@@ -1740,6 +1740,9 @@ function Pitch({
               onPointerMove={onSlotPointerMove}
               onPointerUp={onSlotPointerUp}
               onPointerCancel={onSlotPointerCancel}
+              // 모바일 롱프레스 시 브라우저 컨텍스트 메뉴(이미지 공유/다운로드)가
+              // 롱프레스 드래그를 가로채지 않도록 차단 (Android Chrome 등)
+              onContextMenu={(e) => e.preventDefault()}
               onDragStart={(e) => {
                 cancelLongPress();
                 if (!nativeDraggable || !pid) return;
@@ -2113,13 +2116,24 @@ function PlayerCircle({
         style={{ ...sizeStyle, clipPath: "circle(50%)" }}
       >
         {player.avatar_url ? (
+          // 모바일 롱프레스 시 브라우저의 이미지 메뉴(공유/다운로드)가 뜨지 않도록
+          // img 자체에서 터치 콜아웃·선택·포인터 이벤트를 모두 차단한다.
+          // (래퍼의 touch-callout:none 만으로는 iOS/Android 모두 못 막는 케이스가 있음)
           <Image
             src={player.avatar_url}
             alt={player.name}
             fill
             sizes="50px"
-            className="object-cover"
-            style={{ borderRadius: "50%", clipPath: "circle(50%)" }}
+            draggable={false}
+            className="object-cover select-none"
+            style={{
+              borderRadius: "50%",
+              clipPath: "circle(50%)",
+              WebkitTouchCallout: "none",
+              WebkitUserSelect: "none",
+              userSelect: "none",
+              pointerEvents: "none",
+            }}
           />
         ) : (
           <span style={{ color }}>{player.name.slice(0, 1)}</span>
