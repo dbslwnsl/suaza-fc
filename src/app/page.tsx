@@ -83,10 +83,13 @@ export default async function Home() {
       .eq("is_notice", true)
       .order("created_at", { ascending: false })
       .limit(3),
+    // 예정 + 진행중(라이브) 경기 — 진행중 경기도 홈에 계속 노출한다.
+    // auto_progress_due_matches 가 시각 지난 경기를 in_progress 로 넘기므로
+    // 진행중 경기의 match_date 는 항상 예정 경기보다 앞서 asc 정렬로 우선된다.
     supabase
       .from("matches")
       .select("*")
-      .eq("status", "scheduled")
+      .in("status", ["scheduled", "in_progress"])
       .order("match_date", { ascending: true })
       .limit(1)
       .maybeSingle(),
