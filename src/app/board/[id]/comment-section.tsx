@@ -17,6 +17,7 @@ import {
   type MemberTitle,
 } from "@/lib/members/positions";
 import { type Liker } from "./post-actions";
+import { useScrollToHash } from "@/lib/use-scroll-to-hash";
 
 export type Comment = {
   id: string;
@@ -71,6 +72,8 @@ export default function CommentSection({
 }) {
   const tree = useMemo(() => buildTree(comments), [comments]);
   const totalCount = comments.length;
+  // 알림 딥링크(#comment-...) → 해당 댓글로 스크롤 + 강조
+  useScrollToHash("comment-");
 
   return (
     <section className="flex flex-col gap-4 pt-4 border-t border-suaza-border">
@@ -126,6 +129,7 @@ function CommentThread({
 
   return (
     <div
+      id={`comment-${comment.id}`}
       className="rounded-2xl border border-suaza-border bg-white p-4"
       style={{
         borderLeftWidth: 4,
@@ -297,7 +301,10 @@ function ReplyCard({
   }
 
   return (
-    <div className="flex flex-col gap-1.5 rounded-xl bg-suaza-bg/60 p-3">
+    <div
+      id={`comment-${reply.id}`}
+      className="flex flex-col gap-1.5 rounded-xl bg-suaza-bg/60 p-3"
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <Avatar

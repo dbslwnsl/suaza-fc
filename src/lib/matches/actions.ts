@@ -1871,7 +1871,7 @@ export async function createMatchComment(
             {
               title: "새 답글",
               body: "회원님의 경기 댓글에 답글이 달렸어요",
-              url: `/matches/${matchId}`,
+              url: `/matches/${matchId}#comment-${data.id}`,
             },
             parentAuthorId,
           );
@@ -1888,7 +1888,7 @@ export async function createMatchComment(
           {
             title: "새 경기 댓글",
             body: "경기에 새 댓글이 달렸어요",
-            url: `/matches/${matchId}`,
+            url: `/matches/${matchId}#comment-${data.id}`,
           },
           userId,
         );
@@ -1954,7 +1954,7 @@ export async function toggleMatchCommentLike(commentId: string) {
             {
               title: "새 좋아요",
               body: "회원님의 경기 댓글에 좋아요가 달렸어요",
-              url: `/matches/${comment?.match_id}`,
+              url: `/matches/${comment?.match_id}#comment-${commentId}`,
             },
             targetId,
           );

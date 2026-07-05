@@ -10,6 +10,7 @@ import {
   updateMatchComment,
 } from "@/lib/matches/actions";
 import { formatPostDate } from "@/lib/board/helpers";
+import { useScrollToHash } from "@/lib/use-scroll-to-hash";
 import {
   TITLE_LABEL,
   TITLE_BADGE,
@@ -77,6 +78,8 @@ export default function MatchCommentSection({
   const [, startTransition] = useTransition();
 
   const tree = useMemo(() => buildTree(items), [items]);
+  // 알림 딥링크(#comment-...) → 해당 댓글로 스크롤 + 강조
+  useScrollToHash("comment-");
 
   const submitCreate = (parentId: string | null, content: string) => {
     const trimmed = content.trim();
@@ -249,6 +252,7 @@ function CommentThread({
 
   return (
     <div
+      id={`comment-${comment.id}`}
       className={`rounded-2xl border border-suaza-border bg-white p-4 ${
         isTemp ? "opacity-60" : ""
       }`}
@@ -452,6 +456,7 @@ function ReplyCard({
 
   return (
     <div
+      id={`comment-${reply.id}`}
       className={`flex flex-col gap-1.5 rounded-xl bg-suaza-bg/60 p-3 ${
         isTemp ? "opacity-60" : ""
       }`}

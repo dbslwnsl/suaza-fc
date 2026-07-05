@@ -582,7 +582,10 @@ export async function createCoachComment(
 
   if (data && !effectiveParent && memberId !== user.id) {
     // 최상위 코멘트(경기 또는 프로필) → 해당 선수 본인에게 알림.
-    const url = matchId ? `/matches/${matchId}` : `/members/${memberId}`;
+    // 프로필 링크는 해당 코멘트로 바로 스크롤되도록 앵커 포함 (경기는 모달 UI라 앵커 없음).
+    const url = matchId
+      ? `/matches/${matchId}`
+      : `/members/${memberId}#coach-comment-${data.id}`;
     after(async () => {
       try {
         await notifyCoachComment(
@@ -607,7 +610,7 @@ export async function createCoachComment(
             {
               title: "새 답글",
               body: "회원님의 댓글에 답글이 달렸어요",
-              url: `/members/${memberId}`,
+              url: `/members/${memberId}#coach-comment-${data.id}`,
             },
             parentAuthorId,
           );
@@ -662,7 +665,9 @@ export async function toggleCoachCommentLike(commentId: string) {
             {
               title: "새 좋아요",
               body: "회원님의 감독·코치 코멘트에 좋아요가 달렸어요",
-              url: cMemberId ? `/members/${cMemberId}` : "/",
+              url: cMemberId
+                ? `/members/${cMemberId}#coach-comment-${commentId}`
+                : "/",
             },
             targetId,
           );

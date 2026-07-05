@@ -80,6 +80,23 @@ body {
   transition: background-color 9999s ease-in-out 0s;
 }
 
+/* 알림 딥링크 — 해시(#comment-...)로 진입한 댓글을 잠시 강조 */
+.hash-highlight {
+  animation: hash-flash 2.2s ease;
+  border-radius: 10px;
+}
+@keyframes hash-flash {
+  0%,
+  55% {
+    background-color: rgba(239, 62, 62, 0.1);
+    box-shadow: 0 0 0 2px rgba(239, 62, 62, 0.25);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
 /* ============================================================
    다크 테마 — 시스템/브라우저가 다크로 보고할 때(prefers-color-scheme: dark).
    1) 시맨틱 토큰을 다크 팔레트로 재정의 → text-suaza-ink / bg-suaza-bg / border 등 자동 전환

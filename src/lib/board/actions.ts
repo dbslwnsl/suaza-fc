@@ -282,7 +282,7 @@ export async function toggleCommentLike(commentId: string, postId: string) {
             {
               title: "새 좋아요",
               body: "회원님의 댓글에 좋아요가 달렸어요",
-              url: `/board/${postId}`,
+              url: `/board/${postId}#comment-${commentId}`,
             },
             commentAuthorId,
           );
@@ -326,15 +326,23 @@ export async function createComment(
     parentAuthorId = parent?.author_id as string | undefined;
   }
 
-  const { error } = await supabase.from("post_comments").insert({
-    post_id: postId,
-    author_id: userId,
-    content,
-    parent_id: effectiveParent,
-  });
+  const { data: created, error } = await supabase
+    .from("post_comments")
+    .insert({
+      post_id: postId,
+      author_id: userId,
+      content,
+      parent_id: effectiveParent,
+    })
+    .select("id")
+    .single();
   if (error) {
     redirect(`/board/${postId}?error=${encodeURIComponent(error.message)}`);
   }
+  // 알림 클릭 시 해당 댓글로 바로 스크롤되도록 앵커를 붙인다.
+  const commentUrl = created?.id
+    ? `/board/${postId}#comment-${created.id}`
+    : `/board/${postId}`;
 
   // 알림 대상: 원 글 작성자 + (답글이면) 부모 댓글 작성자. 본인 동작·중복은 제외.
   const notified = new Set<string>([userId]);
@@ -354,7 +362,7 @@ export async function createComment(
           {
             title: "새 댓글",
             body: "회원님의 게시글에 새 댓글이 달렸어요",
-            url: `/board/${postId}`,
+            url: commentUrl,
           },
           postAuthorId,
         );
@@ -373,7 +381,7 @@ export async function createComment(
           {
             title: "새 답글",
             body: "회원님의 게시판 댓글에 답글이 달렸어요",
-            url: `/board/${postId}`,
+            url: commentUrl,
           },
           parentAuthorId,
         );

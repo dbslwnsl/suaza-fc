@@ -15,6 +15,7 @@ import {
   TITLE_BAR_COLOR,
   type MemberTitle,
 } from "@/lib/members/positions";
+import { useScrollToHash } from "@/lib/use-scroll-to-hash";
 
 export type MatchOption = {
   id: string;
@@ -110,6 +111,8 @@ export default function CoachCommentSection({
   const [, startTransition] = useTransition();
 
   const tree = useMemo(() => buildTree(items), [items]);
+  // 알림 딥링크(#coach-comment-...) → 해당 코멘트로 스크롤 + 강조
+  useScrollToHash("coach-comment-");
 
   const submitCreate = (
     parentId: string | null,
@@ -298,6 +301,7 @@ function CommentThread({
 
   return (
     <div
+      id={`coach-comment-${comment.id}`}
       className={`rounded-2xl border border-suaza-border bg-white p-4 ${
         isTemp ? "opacity-60" : ""
       }`}
@@ -527,6 +531,7 @@ function ReplyCard({
 
   return (
     <div
+      id={`coach-comment-${reply.id}`}
       className={`rounded-xl bg-suaza-bg/60 p-3 flex flex-col gap-1.5 ${
         isTemp ? "opacity-60" : ""
       }`}
