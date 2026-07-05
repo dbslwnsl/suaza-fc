@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import {
   createCoachComment,
@@ -961,19 +961,7 @@ function NewCommentForm({
       className="flex flex-col gap-2 p-3 rounded-xl border border-suaza-border bg-suaza-bg/30"
     >
       {showMatchSelect && (
-        <select
-          value={matchId}
-          onChange={(e) => setMatchId(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg border border-suaza-border text-sm text-suaza-ink bg-white focus:outline-none focus:border-suaza-button"
-        >
-          <option value="">일반 코멘트 (경기 선택 안 함)</option>
-          {matches.map((m) => (
-            <option key={m.id} value={m.id}>
-              {matchDateLabel(m.match_date)} ·{" "}
-              {m.opponent === "자체전" ? "자체전" : `상대전 vs ${m.opponent}`}
-            </option>
-          ))}
-        </select>
+        <MatchSelect matches={matches} value={matchId} onChange={setMatchId} />
       )}
       <textarea
         value={content}
@@ -991,5 +979,153 @@ function NewCommentForm({
         등록
       </button>
     </form>
+  );
+}
+
+// 경기 선택 — 네이티브 <select> 대신 앱 스타일 시트(모바일: 하단, 데스크탑: 중앙).
+// 네이티브 select 는 모바일에서 OS 전체화면 피커가 떠 앱 톤과 어긋난다.
+function matchOptionLabel(m: MatchOption): string {
+  return `${matchDateLabel(m.match_date)} · ${
+    m.opponent === "자체전" ? "자체전" : `상대전 vs ${m.opponent}`
+  }`;
+}
+
+function MatchSelect({
+  matches,
+  value,
+  onChange,
+}: {
+  matches: MatchOption[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const NONE_LABEL = "일반 코멘트 (경기 선택 안 함)";
+  const selected = matches.find((m) => m.id === value) ?? null;
+
+  // 열려 있는 동안 배경 스크롤 잠금 + ESC 닫기 (다른 모달과 동일 동작)
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  const pick = (id: string) => {
+    onChange(id);
+    setOpen(false);
+  };
+
+  const OptionRow = ({
+    label,
+    active,
+    onClick,
+  }: {
+    label: string;
+    active: boolean;
+    onClick: () => void;
+  }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full items-center justify-between gap-3 px-5 py-3 text-left text-sm transition hover:bg-suaza-bg ${
+        active ? "font-bold text-suaza-ink" : "text-suaza-ink"
+      }`}
+    >
+      <span className="min-w-0 truncate">{label}</span>
+      {active && (
+        <svg
+          viewBox="0 0 24 24"
+          className="h-4 w-4 shrink-0 text-suaza-button"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+      )}
+    </button>
+  );
+
+  return (
+    <>
+      {/* 트리거 — 기존 select 와 동일한 박스 룩 + 펼침 화살표 */}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg border border-suaza-border text-sm bg-white text-left focus:outline-none focus:border-suaza-button transition hover:bg-suaza-bg/50"
+      >
+        <span
+          className={`min-w-0 truncate ${
+            selected ? "text-suaza-ink" : "text-suaza-ink-muted"
+          }`}
+        >
+          {selected ? matchOptionLabel(selected) : NONE_LABEL}
+        </span>
+        <svg
+          viewBox="0 0 24 24"
+          className="h-4 w-4 shrink-0 text-suaza-ink-faint"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] bg-black/40 flex items-end sm:items-center justify-center"
+            role="dialog"
+            aria-modal="true"
+            onClick={() => setOpen(false)}
+          >
+            <div
+              className="bg-white w-full sm:max-w-md mb-2 sm:mb-0 rounded-2xl shadow-xl max-h-[70vh] flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-5 pt-4 pb-3 border-b border-suaza-border shrink-0">
+                <h3 className="text-base font-bold text-suaza-ink">
+                  경기 선택
+                </h3>
+                <p className="text-xs text-suaza-ink-muted mt-0.5">
+                  코멘트를 연결할 경기를 선택하세요.
+                </p>
+              </div>
+              <div className="flex-1 overflow-y-auto divide-y divide-suaza-border/60">
+                <OptionRow
+                  label={NONE_LABEL}
+                  active={!value}
+                  onClick={() => pick("")}
+                />
+                {matches.map((m) => (
+                  <OptionRow
+                    key={m.id}
+                    label={matchOptionLabel(m)}
+                    active={m.id === value}
+                    onClick={() => pick(m.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
