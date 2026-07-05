@@ -261,9 +261,16 @@ export default async function Home() {
           </div>
         </header>
 
-        {/* Profile Card */}
+        {/* Profile Card — 카드 전체가 내 프로필로 이동하는 탭 영역 */}
         <section className="flex flex-col gap-4">
-          <div className="flex items-start gap-3 sm:gap-4">
+          <div className="relative flex items-start gap-3 sm:gap-4">
+            {profile && (
+              <Link
+                href={`/members/${user!.id}`}
+                aria-label="내 프로필 보기"
+                className="absolute inset-0 z-10 rounded-xl transition hover:bg-suaza-bg/40"
+              />
+            )}
             <div className="relative shrink-0">
               <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-gray-100 flex items-center justify-center">
                 {profile?.avatar_url ? (
@@ -311,11 +318,10 @@ export default async function Home() {
                         </span>
                       )}
                     </div>
-                    <Link
-                      href={`/members/${user!.id}`}
-                      aria-label="프로필 더보기"
-                      title="프로필 더보기"
-                      className="inline-flex shrink-0 items-center text-suaza-ink-muted hover:text-suaza-ink transition"
+                    {/* 카드 전체가 링크(오버레이) — 화살표는 탭 가능 힌트 장식 */}
+                    <span
+                      aria-hidden
+                      className="inline-flex shrink-0 items-center text-suaza-ink-muted"
                     >
                       <svg
                         className="w-4 h-4 text-suaza-ink-faint"
@@ -329,7 +335,7 @@ export default async function Home() {
                       >
                         <polyline points="9 18 15 12 9 6" />
                       </svg>
-                    </Link>
+                    </span>
                   </div>
 
                   <span className="text-suaza-ink-muted text-xs">
@@ -464,27 +470,26 @@ export default async function Home() {
           <section className="flex flex-col gap-3">
             {/* "지난 경기" 위 가로 구분선 */}
             <div className="h-px bg-suaza-border" />
-            <div className="flex items-center justify-between gap-2">
+            {/* 제목 줄 전체가 일정&결과로 이동하는 링크 */}
+            <Link
+              href="/matches"
+              aria-label="지난 경기 더보기"
+              className="flex items-center justify-between gap-2 transition hover:opacity-70"
+            >
               <h2 className="text-lg font-bold text-suaza-ink">지난 경기</h2>
-              <Link
-                href="/matches"
-                aria-label="지난 경기 더보기"
-                className="inline-flex shrink-0 items-center text-suaza-ink-muted hover:text-suaza-ink transition"
+              <svg
+                className="w-4 h-4 shrink-0 text-suaza-ink-faint"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
               >
-                <svg
-                  className="w-4 h-4 text-suaza-ink-faint"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                >
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </Link>
-            </div>
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </Link>
             <div className="grid grid-cols-1 gap-0 divide-y divide-suaza-border">
               {recentMatches.map((m) => (
                 <div key={m.id} className="py-4 first:pt-0">
