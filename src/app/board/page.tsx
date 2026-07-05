@@ -1,29 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import PostList, { type ListPost } from "./post-list";
-import { type Comment } from "./[id]/comment-section";
-import { type PostCategory } from "@/lib/board/helpers";
-
-type PostRow = {
-  id: string;
-  title: string;
-  content: string;
-  is_notice: boolean;
-  category: PostCategory;
-  created_at: string;
-  author_id: string;
-  author: { name: string; avatar_url: string | null } | null;
-};
-
-type CommentRow = {
-  id: string;
-  post_id: string;
-  content: string;
-  created_at: string;
-  updated_at: string;
-  author_id: string;
-  parent_id: string | null;
-  author: { name: string; avatar_url: string | null; title: string | null } | null;
-};
+import { fetchBoardPage } from "@/lib/board/queries";
+import PostList from "./post-list";
 
 export default async function BoardPage({
   searchParams,
@@ -38,120 +15,8 @@ export default async function BoardPage({
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [{ data: postsRaw }, { data: commentsRaw }] = await Promise.all([
-      supabase
-        .from("posts")
-        .select(
-          "id, title, content, is_notice, category, created_at, author_id, author:profiles!posts_author_id_fkey(name, avatar_url)",
-        )
-        .order("is_notice", { ascending: false })
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("post_comments")
-        .select(
-          "id, post_id, content, created_at, updated_at, author_id, parent_id, author:profiles!post_comments_author_id_fkey(name, avatar_url, title)",
-        )
-        .order("created_at", { ascending: true }),
-    ]);
-
-  const postRows = (postsRaw ?? []) as unknown as PostRow[];
-  const commentRows = (commentsRaw ?? []) as unknown as CommentRow[];
-
-  // 인라인 확장 시에도 좋아요가 보이도록 댓글 좋아요 수·본인 여부를 집계한다.
-  const commentIds = commentRows.map((c) => c.id);
-  const likeCountByComment = new Map<string, number>();
-  const likedCommentIds = new Set<string>();
-  const commentLikersById = new Map<
-    string,
-    { id: string; name: string; avatar_url: string | null }[]
-  >();
-  if (commentIds.length > 0) {
-    const { data: commentLikeRows } = await supabase
-      .from("comment_likes")
-      .select("comment_id, user_id, user:profiles(name, avatar_url)")
-      .in("comment_id", commentIds);
-    for (const r of (commentLikeRows ?? []) as unknown as {
-      comment_id: string;
-      user_id: string;
-      user: { name: string; avatar_url: string | null } | null;
-    }[]) {
-      likeCountByComment.set(
-        r.comment_id,
-        (likeCountByComment.get(r.comment_id) ?? 0) + 1,
-      );
-      if (r.user_id === user.id) likedCommentIds.add(r.comment_id);
-      const arr = commentLikersById.get(r.comment_id) ?? [];
-      arr.push({
-        id: r.user_id,
-        name: r.user?.name ?? "(알 수 없음)",
-        avatar_url: r.user?.avatar_url ?? null,
-      });
-      commentLikersById.set(r.comment_id, arr);
-    }
-  }
-
-  // 게시글 좋아요 — 인라인 확장에서도 하트 수·본인 여부·누른 사람을 표시.
-  const postIds = postRows.map((p) => p.id);
-  const likeCountByPost = new Map<string, number>();
-  const likedByMePosts = new Set<string>();
-  const likersByPost = new Map<
-    string,
-    { id: string; name: string; avatar_url: string | null }[]
-  >();
-  if (postIds.length > 0) {
-    const { data: postLikeRows } = await supabase
-      .from("post_likes")
-      .select("post_id, user_id, user:profiles(name, avatar_url)")
-      .in("post_id", postIds);
-    for (const r of (postLikeRows ?? []) as unknown as {
-      post_id: string;
-      user_id: string;
-      user: { name: string; avatar_url: string | null } | null;
-    }[]) {
-      likeCountByPost.set(r.post_id, (likeCountByPost.get(r.post_id) ?? 0) + 1);
-      if (r.user_id === user.id) likedByMePosts.add(r.post_id);
-      const arr = likersByPost.get(r.post_id) ?? [];
-      arr.push({
-        id: r.user_id,
-        name: r.user?.name ?? "(알 수 없음)",
-        avatar_url: r.user?.avatar_url ?? null,
-      });
-      likersByPost.set(r.post_id, arr);
-    }
-  }
-
-  const commentsByPost = new Map<string, Comment[]>();
-  for (const c of commentRows) {
-    const list = commentsByPost.get(c.post_id) ?? [];
-    list.push({
-      id: c.id,
-      content: c.content,
-      created_at: c.created_at,
-      updated_at: c.updated_at,
-      author_id: c.author_id,
-      parent_id: c.parent_id,
-      author: c.author,
-      like_count: likeCountByComment.get(c.id) ?? 0,
-      liked_by_me: likedCommentIds.has(c.id),
-      likers: commentLikersById.get(c.id) ?? [],
-    });
-    commentsByPost.set(c.post_id, list);
-  }
-
-  const posts: ListPost[] = postRows.map((p) => ({
-    id: p.id,
-    title: p.title,
-    content: p.content,
-    is_notice: p.is_notice,
-    category: p.category,
-    created_at: p.created_at,
-    author_id: p.author_id,
-    author: p.author,
-    comments: commentsByPost.get(p.id) ?? [],
-    likeCount: likeCountByPost.get(p.id) ?? 0,
-    likedByMe: likedByMePosts.has(p.id),
-    likers: likersByPost.get(p.id) ?? [],
-  }));
+  // 최신 글 한 페이지(10개)만 서버 렌더 — 이후는 PostList 가 스크롤 시 자동 로드.
+  const { posts, hasMore } = await fetchBoardPage(0, null);
 
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
@@ -193,7 +58,7 @@ export default async function BoardPage({
             아직 작성된 글이 없습니다.
           </p>
         ) : (
-          <PostList posts={posts} />
+          <PostList initialPosts={posts} initialHasMore={hasMore} />
         )}
       </div>
     </main>

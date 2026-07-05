@@ -18,6 +18,7 @@ import {
   isPostCategory,
   type PostCategory,
 } from "@/lib/board/helpers";
+import { fetchBoardPage } from "@/lib/board/queries";
 
 // 폼에서 받은 카테고리를 검증. 직책자 전용 카테고리(공지)는 권한 없으면 기본값으로.
 function resolveCategory(raw: string, title: string | null): PostCategory {
@@ -419,4 +420,17 @@ export async function deleteComment(commentId: string, postId: string) {
   }
   revalidatePath(`/board/${postId}`);
   revalidatePath("/board");
+}
+
+/**
+ * 게시판 무한 스크롤 — 다음 페이지 로드 (PostList 클라이언트에서 호출).
+ * category: null = 전체, 그 외 = 해당 카테고리만.
+ */
+export async function fetchBoardPosts(
+  offset: number,
+  category: PostCategory | null,
+) {
+  const safeCategory =
+    category != null && isPostCategory(category) ? category : null;
+  return fetchBoardPage(offset, safeCategory);
 }
