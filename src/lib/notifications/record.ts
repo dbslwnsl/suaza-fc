@@ -1,6 +1,7 @@
 // 주의: 서버 전용 (admin/service_role 사용). 클라이언트에서 import 금지.
 // 인앱 알림(새소식) 수신함에 표시할 알림을 수신자별로 기록한다.
 import { createAdminClient } from "@/lib/supabase/admin";
+import { DEFAULT_TEAM_ID } from "@/lib/teams/context";
 
 export type NotificationType =
   | "new_post"
@@ -13,7 +14,9 @@ export type NotificationType =
   | "match_comment"
   | "match_comment_like"
   | "coach_comment"
-  | "coach_comment_like";
+  | "coach_comment_like"
+  | "signup_pending"
+  | "new_member";
 
 type RecordPayload = {
   title: string;
@@ -21,11 +24,12 @@ type RecordPayload = {
   url?: string;
 };
 
-/** 지정한 회원들에게 인앱 알림을 한 건씩 기록. */
+/** 지정한 회원들에게 인앱 알림을 한 건씩 기록. teamId 는 새소식 팀 필터용 라벨. */
 export async function recordForUsers(
   userIds: string[],
   type: NotificationType,
   payload: RecordPayload,
+  teamId?: string,
 ): Promise<void> {
   // 개발 모드(NEXT_PUBLIC_DEV_TOOLS=1)에서는 인앱 알림(새소식)도 기록하지 않는다.
   // (프로덕션엔 이 값이 없어 정상 기록된다.)
@@ -38,6 +42,7 @@ export async function recordForUsers(
   const admin = createAdminClient();
   const rows = ids.map((uid) => ({
     user_id: uid,
+    team_id: teamId ?? DEFAULT_TEAM_ID,
     type,
     title: payload.title,
     body: payload.body ?? null,
@@ -49,20 +54,25 @@ export async function recordForUsers(
   }
 }
 
-/** 전체 회원(작성자/본인 제외)에게 인앱 알림 기록 — 브로드캐스트 알림용. */
+/** 해당 팀 전체 멤버(작성자/본인 제외)에게 인앱 알림 기록 — 브로드캐스트 알림용. */
 export async function recordForAll(
   excludeUserId: string | null,
   type: NotificationType,
   payload: RecordPayload,
+  teamId?: string,
 ): Promise<void> {
   const admin = createAdminClient();
-  let query = admin.from("profiles").select("id").is("deleted_at", null);
-  if (excludeUserId) query = query.neq("id", excludeUserId);
-  const { data, error } = await query;
+  const tid = teamId ?? DEFAULT_TEAM_ID;
+  const { data, error } = await admin
+    .from("team_members")
+    .select("user_id")
+    .eq("team_id", tid)
+    .eq("status", "active");
   if (error) {
-    console.error("[notif] 전체 회원 조회 실패", error.message);
+    console.error("[notif] 팀 멤버 조회 실패", error.message);
     return;
   }
-  const ids = (data ?? []).map((r) => r.id as string);
-  await recordForUsers(ids, type, payload);
+  let ids = (data ?? []).map((r) => r.user_id as string);
+  if (excludeUserId) ids = ids.filter((id) => id !== excludeUserId);
+  await recordForUsers(ids, type, payload, tid);
 }

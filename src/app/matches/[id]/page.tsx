@@ -36,6 +36,7 @@ import {
   type Match,
 } from "@/lib/matches/helpers";
 import { fetchWeatherDebug, failureMessage } from "@/lib/weather";
+import { getMyTeamRole } from "@/lib/teams/context";
 
 export default async function MatchDetailPage({
   params,
@@ -292,7 +293,10 @@ export default async function MatchDetailPage({
   const myAttendingQuarters = myAtt?.attending_quarters ?? null;
 
   const m = match as Match;
-  const isStaff = me?.role === "manager" || me?.role === "coach";
+  // 멀티팀 — 현재 팀에서의 권한으로 판정
+  const teamRole = await getMyTeamRole();
+  const isStaff =
+    teamRole.role === "manager" || teamRole.title === "coach";
   const editing = edit === "1" && isStaff;
   const totalMembers = (allMembers ?? []).length;
 
