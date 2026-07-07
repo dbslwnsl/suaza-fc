@@ -223,17 +223,17 @@ create policy mc_delete_manager on public.match_comments
     where m.id = match_id and public.is_team_staff(m.team_id)
   ));
 
--- photos: 본인 또는 그 팀 스태프
+-- photos: 본인(uploader) 또는 그 팀 스태프
 drop policy if exists photos_update_self_or_manager on public.photos;
 create policy photos_update_self_or_manager on public.photos
   for update to authenticated
-  using (user_id = auth.uid() or public.is_team_staff(team_id))
-  with check (user_id = auth.uid() or public.is_team_staff(team_id));
+  using (uploader_id = auth.uid() or public.is_team_staff(team_id))
+  with check (uploader_id = auth.uid() or public.is_team_staff(team_id));
 
 drop policy if exists photos_delete_self_or_manager on public.photos;
 create policy photos_delete_self_or_manager on public.photos
   for delete to authenticated
-  using (user_id = auth.uid() or public.is_team_staff(team_id));
+  using (uploader_id = auth.uid() or public.is_team_staff(team_id));
 
 -- profiles: 매니저의 타인 수정 → "같은 팀"의 매니저만
 drop policy if exists profiles_update_by_manager on public.profiles;
