@@ -24,6 +24,11 @@ export default async function SettingsPage() {
     ...(isTeamManager
       ? [
           {
+            href: "/settings/team",
+            label: "팀 설정",
+            color: "#6366F1",
+          },
+          {
             href: "/admin/join-requests",
             label: "가입 신청 관리",
             color: "#EF3E3E",

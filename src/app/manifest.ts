@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "SUAZA FC",
-    short_name: "SUAZA FC",
-    description: "SUAZA FC 축구 동호회 회원 전용 사이트",
+    name: "OurMatch",
+    short_name: "OurMatch",
+    description: "축구 동호회 팀 운영 플랫폼 — 일정·출석·기록·포메이션",
     start_url: "/",
     display: "standalone",
     // PWA 스플래시(첫 실행 로딩) 배경색 — 앱 화면(흰색)과 이어지도록 흰색.

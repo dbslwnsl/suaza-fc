@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import LoginForm from "./login-form";
 
@@ -12,21 +11,14 @@ export default async function LoginPage({
   return (
     <main className="flex-1 flex flex-col bg-white px-7 py-8">
       <div className="w-full max-w-[400px] mx-auto flex flex-1 flex-col">
-        {/* Brand */}
-        <div className="flex flex-col items-center gap-3 mt-16 mb-12">
-          <span className="font-display font-bold text-2xl text-suaza-ink tracking-tight">
-            수아자FC
+        {/* Brand — 팀 플랫폼(OurMatch). 팀 브랜딩은 로그인 후 홈에서 팀별로 표시 */}
+        <div className="flex flex-col items-center gap-2 mt-16 mb-12">
+          <span className="text-4xl" aria-hidden>
+            ⚽
           </span>
-          <div className="relative w-11 h-11 rounded-full overflow-hidden">
-            <Image
-              src="/suaza-emblem.png"
-              alt="수아자FC"
-              fill
-              sizes="44px"
-              priority
-              className="object-cover"
-            />
-          </div>
+          <span className="font-display font-bold text-2xl text-suaza-ink tracking-tight">
+            OurMatch
+          </span>
         </div>
 
         {/* Alerts */}

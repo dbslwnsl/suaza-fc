@@ -21,29 +21,30 @@ const inter = Inter({
 export const metadata: Metadata = {
   // 공유 미리보기(OG)·아이콘의 상대경로를 이 도메인 기준 절대주소로 변환.
   metadataBase: new URL("https://ourmatch.kr"),
-  title: "SUAZA FC",
-  description: "SUAZA FC 축구 동호회 회원 전용 사이트",
+  // 멀티팀 4단계 — 앱은 팀 플랫폼(OurMatch). 팀 브랜딩은 앱 안(홈 팀이름)에서.
+  title: "OurMatch",
+  description: "축구 동호회 팀 운영 플랫폼 — 일정·출석·기록·포메이션",
   openGraph: {
     type: "website",
-    siteName: "SUAZA FC",
-    title: "SUAZA FC",
-    description: "SUAZA FC 축구 동호회 회원 전용 사이트",
+    siteName: "OurMatch",
+    title: "OurMatch",
+    description: "축구 동호회 팀 운영 플랫폼 — 일정·출석·기록·포메이션",
     url: "/",
     locale: "ko_KR",
     images: [
       {
-        url: "/suaza-emblem-original.png",
-        width: 1024,
-        height: 1024,
-        alt: "SUAZA FC 엠블럼",
+        url: "/icon-512.png",
+        width: 512,
+        height: 512,
+        alt: "OurMatch",
       },
     ],
   },
   twitter: {
     card: "summary",
-    title: "SUAZA FC",
-    description: "SUAZA FC 축구 동호회 회원 전용 사이트",
-    images: ["/suaza-emblem-original.png"],
+    title: "OurMatch",
+    description: "축구 동호회 팀 운영 플랫폼 — 일정·출석·기록·포메이션",
+    images: ["/icon-512.png"],
   },
 };
 
