@@ -13,6 +13,7 @@ import {
   type PushPayload,
 } from "./send";
 import { recordForAll, recordForUsers } from "@/lib/notifications/record";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /** 새 경기 일정 — 전체 회원(작성자 제외) */
 export async function notifyNewMatch(payload: PushPayload, actorId: string) {
@@ -117,4 +118,35 @@ export async function notifyCoachCommentLike(
 ) {
   await recordForUsers([targetUserId], "coach_comment_like", payload);
   return sendPushToUsers([targetUserId], payload);
+}
+
+/** 팀 가입 신청 — 그 팀 매니저(회장·감독)들에게 */
+export async function notifyTeamJoinRequest(
+  payload: PushPayload,
+  teamId: string,
+) {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("team_members")
+    .select("user_id")
+    .eq("team_id", teamId)
+    .eq("status", "active")
+    .eq("role", "manager");
+  if (error) {
+    console.error("[notif] 팀 매니저 조회 실패", error.message);
+    return;
+  }
+  const ids = (data ?? []).map((r) => r.user_id as string);
+  await recordForUsers(ids, "signup_pending", payload, teamId);
+  return sendPushToUsers(ids, payload);
+}
+
+/** 팀 가입 승인 완료 — 신청자 본인에게 */
+export async function notifyJoinApproved(
+  payload: PushPayload,
+  userId: string,
+  teamId: string,
+) {
+  await recordForUsers([userId], "new_member", payload, teamId);
+  return sendPushToUsers([userId], payload);
 }

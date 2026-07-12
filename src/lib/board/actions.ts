@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 import {
   notifyNewPost,
   notifyNotice,
@@ -65,12 +66,16 @@ export async function createPost(formData: FormData) {
     redirect(`/board/new?error=${encodeURIComponent("내용을 입력해 주세요")}`);
   }
 
+  // 멀티팀 2단계 — 새 글은 현재 팀 소속으로 저장.
+  const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
+
   // 공지는 홈에 최대 3개까지 노출. 새 글을 공지로 등록하면 기존 공지 중
   // 최신 2개만 남기고(새 글 포함 3개), 더 오래된 공지는 일반 글로 전환한다.
   if (isNotice) {
     const { data: existing } = await supabase
       .from("posts")
       .select("id")
+      .eq("team_id", teamId)
       .eq("is_notice", true)
       .order("created_at", { ascending: false });
     const toClear = (existing ?? []).slice(2).map((p) => p.id);
@@ -85,6 +90,7 @@ export async function createPost(formData: FormData) {
   const { data, error } = await supabase
     .from("posts")
     .insert({
+      team_id: teamId,
       author_id: userId,
       title,
       content,
@@ -152,9 +158,11 @@ export async function updatePost(postId: string, formData: FormData) {
   // 공지는 홈에 최대 3개까지. 이 글을 공지로 두고, 다른 공지 중 최신 2개만 남기고
   // 더 오래된 공지는 일반 글로 전환한다 (이 글 포함 3개 유지).
   if (exposeAllowed && isNotice) {
+    const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
     const { data: others } = await supabase
       .from("posts")
       .select("id")
+      .eq("team_id", teamId)
       .eq("is_notice", true)
       .neq("id", postId)
       .order("created_at", { ascending: false });

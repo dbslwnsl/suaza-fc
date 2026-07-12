@@ -19,10 +19,15 @@ import {
 } from "@/lib/matches/helpers";
 import PastMatchCard from "./matches/past-match-card";
 import NoticeCard from "./notice-card";
+import TeamSwitcher from "@/components/team-switcher";
+import {
+  getMyTeams,
+  getCurrentTeam,
+  DEFAULT_TEAM_ID,
+} from "@/lib/teams/context";
 import { type PostCategory } from "@/lib/board/helpers";
 import { AttendanceVote } from "./matches/[id]/page";
 import { computeSeasonKings } from "@/lib/stats/kings";
-import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 
 type NoticeRow = {
   id: string;
@@ -58,8 +63,17 @@ export default async function Home() {
   // 시각이 지난 경기 자동 진행/완료 처리 (조회 전)
   await supabase.rpc("auto_progress_due_matches");
 
-  // 멀티팀 1단계 — 현재 팀 컨텍스트. 리스트 쿼리를 이 팀으로 필터한다.
-  const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
+  // 멀티팀 — 현재 팀 컨텍스트. 모든 리스트 쿼리를 이 팀으로 필터한다.
+  const myTeams = await getMyTeams();
+  const currentTeam = (await getCurrentTeam()) ?? {
+    id: DEFAULT_TEAM_ID,
+    name: "수아자FC",
+    slug: "suaza-fc",
+    emblem_url: "/suaza-emblem.png",
+    role: "player",
+    title: "player",
+  };
+  const teamId = currentTeam.id;
 
   // 출석 마감 판정용 현재 시각 — 서버 컴포넌트라 요청당 1회 실행이라 안전.
   // (react-hooks/purity 는 클라이언트 재렌더를 가정한 규칙이라 여기선 예외 처리)
@@ -230,21 +244,19 @@ export default async function Home() {
       <div className="max-w-[800px] mx-auto bg-white sm:rounded-2xl sm:p-12 sm:shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] flex flex-col gap-4">
         {/* Top bar */}
         <header className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="relative w-7 h-7 rounded-lg overflow-hidden">
-              <Image
-                src="/suaza-emblem.png"
-                alt="수아자FC"
-                fill
-                sizes="28px"
-                priority
-                className="object-cover"
-              />
-            </div>
-            <span className="font-bold text-suaza-ink text-2xl sm:text-[28px]">
-              수아자FC
-            </span>
-          </div>
+          {/* 팀 브랜딩 — 소속 팀이 2개 이상이면 탭해서 전환 */}
+          <TeamSwitcher
+            current={{
+              id: currentTeam.id,
+              name: currentTeam.name,
+              emblem_url: currentTeam.emblem_url,
+            }}
+            teams={myTeams.map((t) => ({
+              id: t.id,
+              name: t.name,
+              emblem_url: t.emblem_url,
+            }))}
+          />
           <div className="flex items-center gap-2">
             {profile && (
               <Link

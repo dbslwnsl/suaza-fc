@@ -1,6 +1,7 @@
 // 주의: 서버 전용 (admin/service_role 사용). 클라이언트에서 import 금지.
 // 인앱 알림(새소식) 수신함에 표시할 알림을 수신자별로 기록한다.
 import { createAdminClient } from "@/lib/supabase/admin";
+import { DEFAULT_TEAM_ID } from "@/lib/teams/context";
 
 export type NotificationType =
   | "new_post"
@@ -13,7 +14,9 @@ export type NotificationType =
   | "match_comment"
   | "match_comment_like"
   | "coach_comment"
-  | "coach_comment_like";
+  | "coach_comment_like"
+  | "signup_pending"
+  | "new_member";
 
 type RecordPayload = {
   title: string;
@@ -21,11 +24,12 @@ type RecordPayload = {
   url?: string;
 };
 
-/** 지정한 회원들에게 인앱 알림을 한 건씩 기록. */
+/** 지정한 회원들에게 인앱 알림을 한 건씩 기록. teamId 는 새소식 팀 필터용 라벨. */
 export async function recordForUsers(
   userIds: string[],
   type: NotificationType,
   payload: RecordPayload,
+  teamId?: string,
 ): Promise<void> {
   // 개발 모드(NEXT_PUBLIC_DEV_TOOLS=1)에서는 인앱 알림(새소식)도 기록하지 않는다.
   // (프로덕션엔 이 값이 없어 정상 기록된다.)
@@ -38,6 +42,7 @@ export async function recordForUsers(
   const admin = createAdminClient();
   const rows = ids.map((uid) => ({
     user_id: uid,
+    team_id: teamId ?? DEFAULT_TEAM_ID,
     type,
     title: payload.title,
     body: payload.body ?? null,

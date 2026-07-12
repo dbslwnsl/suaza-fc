@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 import {
   notifyCoachComment,
   notifyCoachCommentReply,
@@ -565,9 +566,22 @@ export async function createCoachComment(
     parentAuthorId = parent?.author_id as string | undefined;
   }
 
+  // 멀티팀 2단계 — 경기 연결 코멘트는 그 경기의 팀, 아니면 현재 팀 소속으로 저장.
+  let teamId: string | null = null;
+  if (matchId) {
+    const { data: m } = await supabase
+      .from("matches")
+      .select("team_id")
+      .eq("id", matchId)
+      .maybeSingle();
+    teamId = (m?.team_id as string | undefined) ?? null;
+  }
+  if (!teamId) teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
+
   const { data } = await supabase
     .from("coach_comments")
     .insert({
+      team_id: teamId,
       member_id: memberId,
       author_id: user.id,
       content: trimmed,

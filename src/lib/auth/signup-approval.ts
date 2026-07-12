@@ -29,6 +29,14 @@ export async function approveSignup(formData: FormData) {
     redirect(`/admin/signups?error=${encodeURIComponent(error.message)}`);
   }
 
+  // 멀티팀 — 가입자의 팀 가입 신청(pending)도 함께 승인.
+  // RLS(team_members_update)가 "내가 매니저인 팀"으로 자동 제한한다.
+  await supabase
+    .from("team_members")
+    .update({ status: "active" })
+    .eq("user_id", newId)
+    .eq("status", "pending");
+
   // 처리한 알림은 읽음 처리 (회장 본인의 signup_pending 중 해당 가입자 관련)
   // url 매칭으로 거칠게 처리: 추후 메타데이터 컬럼 추가 시 정확히 매칭 가능.
   const {

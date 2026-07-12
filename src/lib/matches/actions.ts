@@ -27,6 +27,7 @@ import {
   type QuarterAction,
 } from "./helpers";
 import type { SavedQuarter } from "@/lib/formations/helpers";
+import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 
 type MatchInput = {
   opponent: string;
@@ -178,7 +179,13 @@ export async function createMatch(formData: FormData) {
   // 새 경기는 항상 "예정" 상태로 생성한다 (등록 폼에 상태 선택 없음).
   const { data, error } = await supabase
     .from("matches")
-    .insert({ ...input, status: "scheduled", created_by: userId })
+    .insert({
+      ...input,
+      // 멀티팀 2단계 — 새 경기는 현재 팀 소속으로 저장
+      team_id: (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID,
+      status: "scheduled",
+      created_by: userId,
+    })
     .select("id")
     .single();
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentTeam } from "@/lib/teams/context";
 import { logout } from "@/lib/auth/actions";
 
 // 설정 메뉴 — 새소식 리스트와 동일 스타일(좌측 색 세로바 + 구분선, 카드 없음).
@@ -13,10 +14,22 @@ export default async function SettingsPage() {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
+  // 현재 팀의 매니저(회장·감독)에게만 가입 신청 관리 노출
+  const isTeamManager = (await getCurrentTeam())?.role === "manager";
+
   const menu: MenuItem[] = [
     { href: "/settings/notifications", label: "알림 설정", color: "#3B82F6" },
     // 기록 항목 관리: 모두 열람, 수정은 회장·감독만 (페이지 내부에서 분기)
     { href: "/settings/stats", label: "기록 항목 관리", color: "#33BD73" },
+    ...(isTeamManager
+      ? [
+          {
+            href: "/admin/join-requests",
+            label: "가입 신청 관리",
+            color: "#EF3E3E",
+          },
+        ]
+      : []),
   ];
 
   return (
