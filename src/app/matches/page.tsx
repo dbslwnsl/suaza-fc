@@ -5,6 +5,7 @@ import { getTeamName, type Match } from "@/lib/matches/helpers";
 import { fetchWeather } from "@/lib/weather";
 import PastMatchesSection from "./past-matches-section";
 import UpcomingMatchesSection from "./upcoming-matches-section";
+import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 
 export default async function MatchesPage({
   searchParams,
@@ -22,10 +23,14 @@ export default async function MatchesPage({
   // 시각이 지난 경기 자동 진행/완료 처리 (조회 전)
   await supabase.rpc("auto_progress_due_matches");
 
+  // 멀티팀 1단계 — 경기 목록을 현재 팀으로 필터
+  const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
+
   const [{ data: matches }, { data: me }] = await Promise.all([
     supabase
       .from("matches")
       .select("*")
+      .eq("team_id", teamId)
       .order("match_date", { ascending: true }),
     supabase.from("profiles").select("role, title").eq("id", user.id).single(),
   ]);

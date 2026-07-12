@@ -5,6 +5,7 @@ import {
   type StatDef,
 } from "@/lib/stats/helpers";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 
 export type SeasonKings = {
   goal: Set<string>;
@@ -28,10 +29,12 @@ export async function computeSeasonKings(
     referee: new Set(),
   };
   const { from, to } = yearRange(year);
+  const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
 
   const { data: matchesRaw } = await supabase
     .from("matches")
     .select("id")
+    .eq("team_id", teamId)
     .eq("status", "done")
     .gte("match_date", from)
     .lt("match_date", to);
@@ -49,6 +52,7 @@ export async function computeSeasonKings(
     supabase
       .from("stat_definitions")
       .select("key, label, sort_order, point_value")
+      .eq("team_id", teamId)
       .is("hidden_at", null),
   ]);
 

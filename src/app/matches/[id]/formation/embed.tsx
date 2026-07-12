@@ -162,7 +162,7 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
       .is("archived_at", null),
     supabase
       .from("stat_definitions")
-      .select("key, label, sort_order, point_value")
+      .select("team_id, key, label, sort_order, point_value")
       .is("hidden_at", null),
     // 코멘트 존재 여부 표시용 — RLS 가 본인(member_id=me) 또는 코칭스태프에게만 row 노출.
     // 일반 회원은 자기 자신에 대한 코멘트 카운트만 보임 → 아이콘 표시 분기에도 그대로 활용.
@@ -254,7 +254,11 @@ export default async function FormationEmbed({ matchId }: { matchId: string }) {
       : myCaptainTeam;
 
   // 선수별 기록(participations) → playerId 맵. 종료 경기 명단 카드 우측에 표기.
-  const defs = (statDefs ?? []) as StatDef[];
+  // 멀티팀 1단계 — RLS 는 내 소속 팀 전체의 정의를 반환하므로 "이 경기의 팀" 것만 사용.
+  const matchTeamId = (match as { team_id?: string | null }).team_id ?? null;
+  const defs = ((statDefs ?? []) as (StatDef & { team_id?: string })[]).filter(
+    (d) => !matchTeamId || d.team_id === matchTeamId,
+  );
   const pvMap = pointValueMap(defs);
   const matchLocked =
     match.status === "done" || match.status === "canceled";

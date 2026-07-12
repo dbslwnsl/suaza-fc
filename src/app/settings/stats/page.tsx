@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { addStatDefinition } from "@/lib/stats/actions";
+import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 import StatList from "./stat-list";
 
 type StatDef = {
@@ -30,9 +31,12 @@ export default async function StatSettingsPage({
   // 회장·감독(manager)만 수정 가능. 그 외 회원은 읽기 전용으로 열람.
   const canEdit = me?.role === "manager";
 
+  // 멀티팀 1단계 — 현재 팀의 기록 항목만
+  const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
   const { data: defs, error: defsError } = await supabase
     .from("stat_definitions")
     .select("key, label, sort_order, point_value")
+    .eq("team_id", teamId)
     .is("hidden_at", null)
     .order("sort_order", { ascending: true })
     .order("key", { ascending: true });
