@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 import {
   type MemberTitle,
   type Position,
@@ -69,7 +68,6 @@ export default async function MemberDetailPage({
   // 현재 시즌(달력 연도) — "득점왕/어시왕/CS왕/심판왕" 순위 산정용
   const seasonYear = new Date().getFullYear();
   const { from: seasonFrom, to: seasonTo } = yearRange(seasonYear);
-  const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
 
   const [
     { data: profile },
@@ -102,7 +100,6 @@ export default async function MemberDetailPage({
     supabase
       .from("stat_definitions")
       .select("key, label, sort_order, point_value")
-      .eq("team_id", teamId)
       .is("hidden_at", null)
       .order("sort_order", { ascending: true })
       .order("key", { ascending: true }),
@@ -116,7 +113,6 @@ export default async function MemberDetailPage({
     supabase
       .from("matches")
       .select("id, match_date")
-      .eq("team_id", teamId)
       .eq("status", "done")
       .gte("match_date", seasonFrom)
       .lt("match_date", seasonTo),

@@ -3,13 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const HIDE_ON = [
-  "/login",
-  "/signup",
-  "/auth",
-  "/onboarding",
-  "/pending-approval",
-];
+const HIDE_ON = ["/login", "/signup", "/auth"];
 
 type TabDef = {
   href: string;

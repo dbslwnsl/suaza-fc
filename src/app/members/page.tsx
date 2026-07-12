@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 import RosterView from "./roster-view";
 import SeasonView from "./season-view";
 import MatchesView from "./matches-view";
@@ -27,13 +26,11 @@ export default async function MembersPage({
     ? (sp.tab as Tab)
     : "roster";
 
-  // 사용 가능한 연도 (종료된 경기 기준) — 현재 팀
+  // 사용 가능한 연도 (종료된 경기 기준)
   const supabase = await createClient();
-  const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
   const { data: yearRows } = await supabase
     .from("matches")
     .select("match_date")
-    .eq("team_id", teamId)
     .eq("status", "done")
     .order("match_date", { ascending: false });
 

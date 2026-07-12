@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getMyTeamRole, getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 import NewMatchForm from "./new-match-form";
 
 export default async function NewMatchPage({
@@ -16,18 +15,19 @@ export default async function NewMatchPage({
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  // 멀티팀 — 현재 팀에서의 권한으로 판정
-  const { role, title } = await getMyTeamRole();
-  if (role !== "manager" && title !== "coach") {
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (me?.role !== "manager" && me?.role !== "coach") {
     redirect(`/matches?error=${encodeURIComponent("경기 관리 권한이 없습니다")}`);
   }
 
-  // 자주 만난 팀 / 최근 장소 추출 (현재 팀의 최근 30경기 기준 unique)
-  const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
+  // 자주 만난 팀 / 최근 장소 추출 (최근 30경기 기준 unique)
   const { data: pastMatches } = await supabase
     .from("matches")
     .select("opponent, location, match_date")
-    .eq("team_id", teamId)
     .order("match_date", { ascending: false })
     .limit(30);
 

@@ -27,11 +27,6 @@ import {
   type QuarterAction,
 } from "./helpers";
 import type { SavedQuarter } from "@/lib/formations/helpers";
-import {
-  getCurrentTeam,
-  getMyTeamRole,
-  DEFAULT_TEAM_ID,
-} from "@/lib/teams/context";
 
 type MatchInput = {
   opponent: string;
@@ -149,14 +144,18 @@ async function requireStaff() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // 멀티팀 — 현재 팀에서의 권한으로 판정 (전역 profiles.role 대신).
-  // 권한: 매니저(회장·감독) / 코치(title=coach)
-  const { role, title } = await getMyTeamRole();
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role, title")
+    .eq("id", user.id)
+    .single();
+
+  // 권한: 매니저(role=manager) / 코치(role=coach) / 회장(title=president) / 감독(title=head_coach)
   const isStaff =
-    role === "manager" ||
-    title === "president" ||
-    title === "head_coach" ||
-    title === "coach";
+    me?.role === "manager" ||
+    me?.role === "coach" ||
+    me?.title === "president" ||
+    me?.title === "head_coach";
   if (!isStaff) {
     redirect(
       `/matches?error=${encodeURIComponent("경기 관리 권한이 없습니다")}`,
@@ -176,13 +175,10 @@ export async function createMatch(formData: FormData) {
     redirect(`/matches/new?error=${encodeURIComponent("경기 날짜를 선택해 주세요")}`);
   }
 
-  // 멀티팀 — 새 경기는 현재 팀 소속으로 저장.
-  const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
-
   // 새 경기는 항상 "예정" 상태로 생성한다 (등록 폼에 상태 선택 없음).
   const { data, error } = await supabase
     .from("matches")
-    .insert({ ...input, team_id: teamId, status: "scheduled", created_by: userId })
+    .insert({ ...input, status: "scheduled", created_by: userId })
     .select("id")
     .single();
 
@@ -214,7 +210,6 @@ export async function createMatch(formData: FormData) {
           url: `/matches/${matchId}`,
         },
         userId,
-        teamId,
       );
     } catch (e) {
       console.error("[push] 새 경기 알림 발송 실패", e);
@@ -372,12 +367,10 @@ export async function updateMatchNotes(matchId: string, notes: string) {
 
   const { data: existing } = await supabase
     .from("matches")
-    .select("status, notes, team_id")
+    .select("status, notes")
     .eq("id", matchId)
     .single();
   if (existing?.status === "done" || existing?.status === "canceled") return;
-  const noteTeamId =
-    (existing?.team_id as string | undefined) ?? DEFAULT_TEAM_ID;
 
   await supabase.from("matches").update({ notes: trimmed }).eq("id", matchId);
   revalidatePath(`/matches/${matchId}`);
@@ -397,7 +390,6 @@ export async function updateMatchNotes(matchId: string, notes: string) {
             url: `/matches/${matchId}`,
           },
           userId,
-          noteTeamId,
         );
       } catch (e) {
         console.error("[push] 감독 전달사항 알림 실패", e);
@@ -1521,7 +1513,7 @@ function scheduleTeamAssignmentPush(
     try {
       const { data: m } = await supabase
         .from("matches")
-        .select("opponent, team_a_name, team_b_name, team_id")
+        .select("opponent, team_a_name, team_b_name")
         .eq("id", matchId)
         .single();
       const teamLabel =
@@ -1538,7 +1530,6 @@ function scheduleTeamAssignmentPush(
           url: `/matches/${matchId}/formation`,
         },
         playerId,
-        (m?.team_id as string | undefined) ?? undefined,
       );
     } catch (e) {
       console.error("[push] 팀 편성 알림 실패", e);
@@ -1871,14 +1862,6 @@ export async function createMatchComment(
     .select("id, created_at, updated_at, parent_id")
     .single();
 
-  // 알림 팀 스코프 — 이 경기의 팀 멤버에게만 발송.
-  const { data: mrow } = await supabase
-    .from("matches")
-    .select("team_id")
-    .eq("id", matchId)
-    .maybeSingle();
-  const mTeamId = (mrow?.team_id as string | undefined) ?? DEFAULT_TEAM_ID;
-
   if (data && parentId) {
     // 답글 → "내가 직접 답글 단 그 댓글"(직속 부모)의 작성자에게 (본인 제외)
     if (parentAuthorId && parentAuthorId !== userId) {
@@ -1891,7 +1874,6 @@ export async function createMatchComment(
               url: `/matches/${matchId}#comment-${data.id}`,
             },
             parentAuthorId,
-            mTeamId,
           );
         } catch (e) {
           console.error("[push] 경기 댓글 답글 알림 실패", e);
@@ -1899,7 +1881,7 @@ export async function createMatchComment(
       });
     }
   } else if (data) {
-    // 최상위 새 댓글 → 그 팀 전체 멤버에게 알림 (작성자 제외)
+    // 최상위 새 댓글 → 전체 회원에게 알림 (작성자 제외)
     after(async () => {
       try {
         await notifyNewMatchComment(
@@ -1909,7 +1891,6 @@ export async function createMatchComment(
             url: `/matches/${matchId}#comment-${data.id}`,
           },
           userId,
-          mTeamId,
         );
       } catch (e) {
         console.error("[push] 경기 새 댓글 알림 실패", e);
@@ -1962,14 +1943,10 @@ export async function toggleMatchCommentLike(commentId: string) {
     // 좋아요가 새로 눌렸을 때만 — 댓글 작성자에게 알림(본인 제외)
     const { data: comment } = await supabase
       .from("match_comments")
-      .select("author_id, match_id, match:matches(team_id)")
+      .select("author_id, match_id")
       .eq("id", commentId)
       .single();
     const targetId = comment?.author_id as string | undefined;
-    const likeTeamId =
-      ((comment?.match as { team_id?: string } | null)?.team_id as
-        | string
-        | undefined) ?? undefined;
     if (targetId && targetId !== userId) {
       after(async () => {
         try {
@@ -1980,7 +1957,6 @@ export async function toggleMatchCommentLike(commentId: string) {
               url: `/matches/${comment?.match_id}#comment-${commentId}`,
             },
             targetId,
-            likeTeamId,
           );
         } catch (e) {
           console.error("[push] 경기 댓글 좋아요 알림 실패", e);

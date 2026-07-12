@@ -1,7 +1,5 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentTeam } from "@/lib/teams/context";
-import { logout } from "@/lib/auth/actions";
 
 // 설정 메뉴 — 새소식 리스트와 동일 스타일(좌측 색 세로바 + 구분선, 카드 없음).
 // 알림 설정은 모두에게, 기록 항목 관리는 감독(manager)에게만 노출한다.
@@ -14,22 +12,10 @@ export default async function SettingsPage() {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  // 현재 팀의 매니저(회장·감독)에게만 가입 신청 관리 노출
-  const isTeamManager = (await getCurrentTeam())?.role === "manager";
-
   const menu: MenuItem[] = [
     { href: "/settings/notifications", label: "알림 설정", color: "#3B82F6" },
     // 기록 항목 관리: 모두 열람, 수정은 회장·감독만 (페이지 내부에서 분기)
     { href: "/settings/stats", label: "기록 항목 관리", color: "#33BD73" },
-    ...(isTeamManager
-      ? [
-          {
-            href: "/admin/join-requests",
-            label: "가입 신청 관리",
-            color: "#EF3E3E",
-          },
-        ]
-      : []),
   ];
 
   return (
@@ -86,37 +72,6 @@ export default async function SettingsPage() {
             </Link>
           ))}
         </nav>
-
-        {/* 로그아웃 — 메뉴 아래 구분선 뒤 */}
-        <div aria-hidden className="h-px bg-suaza-border" />
-        <form action={logout}>
-          <button
-            type="submit"
-            className="flex w-full items-stretch gap-3 text-left transition hover:opacity-70"
-          >
-            <span
-              aria-hidden
-              className="w-1 shrink-0 self-stretch rounded-full bg-gray-300"
-            />
-            <span className="min-w-0 flex-1 self-center text-sm font-bold text-suaza-ink-muted py-0.5">
-              로그아웃
-            </span>
-            <svg
-              viewBox="0 0 24 24"
-              className="ml-auto h-4 w-4 shrink-0 self-center text-suaza-ink-faint"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-          </button>
-        </form>
       </div>
     </main>
   );

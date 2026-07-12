@@ -10,7 +10,6 @@ import {
   notifyCoachCommentReply,
   notifyCoachCommentLike,
 } from "@/lib/push/triggers";
-import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 import {
   MEMBER_TITLES,
   POSITIONS,
@@ -566,22 +565,9 @@ export async function createCoachComment(
     parentAuthorId = parent?.author_id as string | undefined;
   }
 
-  // 멀티팀 — 경기 연결 코멘트는 그 경기의 팀, 아니면 현재 팀 소속으로 저장.
-  let teamId: string | null = null;
-  if (matchId) {
-    const { data: m } = await supabase
-      .from("matches")
-      .select("team_id")
-      .eq("id", matchId)
-      .maybeSingle();
-    teamId = (m?.team_id as string | undefined) ?? null;
-  }
-  if (!teamId) teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
-
   const { data } = await supabase
     .from("coach_comments")
     .insert({
-      team_id: teamId,
       member_id: memberId,
       author_id: user.id,
       content: trimmed,
@@ -609,7 +595,6 @@ export async function createCoachComment(
             url,
           },
           memberId,
-          teamId ?? undefined,
         );
       } catch (e) {
         console.error("[push] 감독·코치 코멘트 알림 실패", e);
@@ -628,7 +613,6 @@ export async function createCoachComment(
               url: `/members/${memberId}#coach-comment-${data.id}`,
             },
             parentAuthorId,
-            teamId ?? undefined,
           );
         } catch (e) {
           console.error("[push] 감독·코치 코멘트 답글 알림 실패", e);
@@ -669,12 +653,11 @@ export async function toggleCoachCommentLike(commentId: string) {
     // 좋아요가 새로 눌렸을 때만 — 코멘트 작성자에게 알림(본인 제외)
     const { data: comment } = await supabase
       .from("coach_comments")
-      .select("author_id, member_id, team_id")
+      .select("author_id, member_id")
       .eq("id", commentId)
       .single();
     const targetId = comment?.author_id as string | undefined;
     const cMemberId = comment?.member_id as string | undefined;
-    const cTeamId = (comment?.team_id as string | undefined) ?? undefined;
     if (targetId && targetId !== user.id) {
       after(async () => {
         try {
@@ -687,7 +670,6 @@ export async function toggleCoachCommentLike(commentId: string) {
                 : "/",
             },
             targetId,
-            cTeamId,
           );
         } catch (e) {
           console.error("[push] 감독·코치 코멘트 좋아요 알림 실패", e);

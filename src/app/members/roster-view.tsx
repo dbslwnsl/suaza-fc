@@ -15,7 +15,6 @@ import {
 } from "@/lib/stats/helpers";
 import { displayMemberName } from "@/lib/members/name";
 import RosterList, { type RosterMember } from "./roster-list";
-import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 
 type MemberRow = {
   id: string;
@@ -40,22 +39,18 @@ export default async function RosterView({ year }: { year: number }) {
   const myId = user?.id ?? null;
 
   const { from, to } = yearRange(year);
-  const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
 
   const { data: members } = await supabase
     .from("profiles")
     .select(
-      "id, name, nickname, title, role, positions, jersey_number, avatar_url, birth_date, preferred_foot, is_injured, on_leave, team_members!inner(team_id)",
+      "id, name, nickname, title, role, positions, jersey_number, avatar_url, birth_date, preferred_foot, is_injured, on_leave",
     )
-    .eq("team_members.team_id", teamId)
-    .eq("team_members.status", "active")
     .is("deleted_at", null)
     .order("name", { ascending: true });
 
   const { data: matchesRaw } = await supabase
     .from("matches")
     .select("id, match_date")
-    .eq("team_id", teamId)
     .eq("status", "done")
     .gte("match_date", from)
     .lt("match_date", to);
@@ -81,7 +76,6 @@ export default async function RosterView({ year }: { year: number }) {
     supabase
       .from("stat_definitions")
       .select("key, label, sort_order, point_value")
-      .eq("team_id", teamId)
       .is("hidden_at", null),
   ]);
 

@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 import NewsInbox, { type NewsItem } from "./news-inbox";
 
 // 받은 알림은 자주 바뀌므로 항상 fresh 로드
@@ -12,12 +11,10 @@ export default async function NewsPage() {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
   const { data } = await supabase
     .from("notifications")
     .select("id, type, title, body, url, created_at, read_at")
     .eq("user_id", user.id)
-    .eq("team_id", teamId)
     .order("created_at", { ascending: false })
     .limit(100);
 

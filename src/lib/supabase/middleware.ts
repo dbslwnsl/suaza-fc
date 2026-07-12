@@ -75,24 +75,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // 승인 대기 상태 (멀티팀 온보딩):
-  //  - 팀 소속(신청 포함)이 하나도 없으면 → 팀 선택 온보딩(/onboarding/team)
-  //  - 가입 신청(pending)이 있으면 → 승인 대기(/pending-approval)
-  if (
-    activeUser &&
-    isPending &&
-    !pathname.startsWith("/pending-approval") &&
-    !pathname.startsWith("/onboarding")
-  ) {
-    // team_members 테이블 미적용(마이그레이션 전) 환경에선 에러 → 기존 흐름 유지.
-    const { data: memberships, error: mErr } = await supabase
-      .from("team_members")
-      .select("team_id")
-      .eq("user_id", activeUser.id)
-      .limit(1);
-    const hasMembership = mErr ? true : (memberships?.length ?? 0) > 0;
+  // 승인 대기 상태: 본인 승인 페이지·로그아웃 외의 모든 경로 차단.
+  if (activeUser && isPending && !pathname.startsWith("/pending-approval")) {
     const url = request.nextUrl.clone();
-    url.pathname = hasMembership ? "/pending-approval" : "/onboarding/team";
+    url.pathname = "/pending-approval";
     return NextResponse.redirect(url);
   }
 

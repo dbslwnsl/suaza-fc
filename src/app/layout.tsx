@@ -4,7 +4,6 @@ import "./globals.css";
 import BottomTabs from "@/components/bottom-tabs";
 import DevRoleSwitcher from "@/components/dev-role-switcher";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 
 const notoSansKR = Noto_Sans_KR({
   variable: "--font-noto-sans-kr",
@@ -66,12 +65,10 @@ export default async function RootLayout({
   // 새소식 탭 안읽음 알림 개수 (뱃지용)
   let newsBadge = 0;
   if (user) {
-    const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
     const { count } = await supabase
       .from("notifications")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
-      .eq("team_id", teamId)
       .is("read_at", null);
     newsBadge = count ?? 0;
   }

@@ -7,7 +7,6 @@ import {
 } from "@/lib/stats/helpers";
 import { type Position } from "@/lib/members/positions";
 import SeasonList, { type RosterBase } from "./season-list";
-import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 
 export default async function SeasonView({
   year,
@@ -27,13 +26,10 @@ export default async function SeasonView({
   const myId = user?.id ?? null;
   const { from, to } = periodRange(year, 0);
 
-  const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
-
   // 1. 해당 연도 종료 경기 (W/D/L 판정용 점수 포함)
   const { data: matchesRaw } = await supabase
     .from("matches")
     .select("id, match_date, our_score, opponent_score, opponent")
-    .eq("team_id", teamId)
     .eq("status", "done")
     .gte("match_date", from)
     .lt("match_date", to)
@@ -56,7 +52,6 @@ export default async function SeasonView({
     supabase
       .from("stat_definitions")
       .select("key, label, sort_order, point_value")
-      .eq("team_id", teamId)
       .is("hidden_at", null)
       .order("sort_order", { ascending: true })
       .order("key", { ascending: true }),
@@ -65,12 +60,10 @@ export default async function SeasonView({
   const defs = (defsRaw ?? []) as StatDef[];
   const parts = (partsRaw ?? []) as unknown as ParticipationRow[];
 
-  // 모든 활성 회원 명단 (출전 없는 사람도 명단에 포함) — 현재 팀 멤버만
+  // 모든 활성 회원 명단 (출전 없는 사람도 명단에 포함)
   const { data: allMembersRaw } = await supabase
     .from("profiles")
-    .select("id, name, jersey_number, positions, team_members!inner(team_id)")
-    .eq("team_members.team_id", teamId)
-    .eq("team_members.status", "active")
+    .select("id, name, jersey_number, positions")
     .is("deleted_at", null)
     .order("name", { ascending: true });
 

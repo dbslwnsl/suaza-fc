@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import { type PostCategory } from "@/lib/board/helpers";
-import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 import type { ListPost } from "@/app/board/post-list";
 import type { Comment } from "@/app/board/[id]/comment-section";
 
@@ -49,15 +48,12 @@ export async function fetchBoardPage(
   } = await supabase.auth.getUser();
   if (!user) return { posts: [], hasMore: false };
 
-  const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
-
   // PAGE_SIZE+1 개를 가져와 다음 페이지 존재 여부(hasMore)를 판정한다.
   let query = supabase
     .from("posts")
     .select(
       "id, title, content, is_notice, category, created_at, author_id, author:profiles!posts_author_id_fkey(name, avatar_url)",
     )
-    .eq("team_id", teamId)
     .order("is_notice", { ascending: false })
     .order("created_at", { ascending: false })
     .order("id", { ascending: false }) // created_at 동률 시에도 페이지 경계가 안정되도록
