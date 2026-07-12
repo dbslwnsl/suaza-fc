@@ -19,7 +19,28 @@ export type MyTeam = {
   title: string;
 };
 
-/** 내가 속한(active) 팀 목록. 로그인 안 됐거나 소속 없으면 빈 배열. */
+/** 플랫폼 관리자 여부 — 앱 전체 관장 계정 (부여는 SQL로만). */
+export async function isPlatformAdmin(): Promise<boolean> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data } = await supabase
+    .from("profiles")
+    .select("is_platform_admin")
+    .eq("id", user.id)
+    .maybeSingle();
+  // 컬럼 미적용(0054 전) 환경에선 undefined → false
+  return (data as { is_platform_admin?: boolean } | null)
+    ?.is_platform_admin === true;
+}
+
+/**
+ * 내가 속한(active) 팀 목록 — 승인된(active) 팀만.
+ * 플랫폼 관리자는 모든 active 팀을 열람용으로 본다
+ * (소속이 있으면 그 팀의 실제 role/title, 아니면 열람 전용 player).
+ */
 export async function getMyTeams(): Promise<MyTeam[]> {
   const supabase = await createClient();
   const {
@@ -29,12 +50,12 @@ export async function getMyTeams(): Promise<MyTeam[]> {
 
   const { data } = await supabase
     .from("team_members")
-    .select("role, title, team:teams(id, name, slug, emblem_url)")
+    .select("role, title, team:teams(id, name, slug, emblem_url, status)")
     .eq("user_id", user.id)
     .eq("status", "active")
     .order("joined_at", { ascending: true });
 
-  return ((data ?? []) as unknown as {
+  const mine = ((data ?? []) as unknown as {
     role: string;
     title: string;
     team: {
@@ -42,9 +63,11 @@ export async function getMyTeams(): Promise<MyTeam[]> {
       name: string;
       slug: string;
       emblem_url: string | null;
+      status?: string | null;
     } | null;
   }[])
-    .filter((r) => r.team != null)
+    // 승인 대기(pending) 팀은 목록/전환에 노출하지 않는다
+    .filter((r) => r.team != null && (r.team.status ?? "active") === "active")
     .map((r) => ({
       id: r.team!.id,
       name: r.team!.name,
@@ -53,6 +76,31 @@ export async function getMyTeams(): Promise<MyTeam[]> {
       role: r.role,
       title: r.title,
     }));
+
+  // 플랫폼 관리자 — 모든 active 팀을 열람용으로 추가 (기존 소속 role 은 유지)
+  if (await isPlatformAdmin()) {
+    const { data: all } = await supabase
+      .from("teams")
+      .select("id, name, slug, emblem_url")
+      .eq("status", "active")
+      .order("name", { ascending: true });
+    const byId = new Map(mine.map((t) => [t.id, t]));
+    return ((all ?? []) as {
+      id: string;
+      name: string;
+      slug: string;
+      emblem_url: string | null;
+    }[]).map(
+      (t) =>
+        byId.get(t.id) ?? {
+          ...t,
+          role: "player",
+          title: "player",
+        },
+    );
+  }
+
+  return mine;
 }
 
 /**

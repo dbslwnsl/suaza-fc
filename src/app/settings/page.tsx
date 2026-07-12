@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentTeam } from "@/lib/teams/context";
+import { getCurrentTeam, isPlatformAdmin } from "@/lib/teams/context";
 import { logout } from "@/lib/auth/actions";
 
 // 설정 메뉴 — 새소식 리스트와 동일 스타일(좌측 색 세로바 + 구분선, 카드 없음).
@@ -16,6 +16,8 @@ export default async function SettingsPage() {
 
   // 현재 팀의 매니저(회장·감독)에게만 가입 신청 관리 노출
   const isTeamManager = (await getCurrentTeam())?.role === "manager";
+  // 플랫폼 관리자 — 전체 팀 관리 메뉴
+  const isAdmin = await isPlatformAdmin();
 
   const menu: MenuItem[] = [
     { href: "/settings/notifications", label: "알림 설정", color: "#3B82F6" },
@@ -32,6 +34,15 @@ export default async function SettingsPage() {
             href: "/admin/join-requests",
             label: "가입 신청 관리",
             color: "#EF3E3E",
+          },
+        ]
+      : []),
+    ...(isAdmin
+      ? [
+          {
+            href: "/admin/teams",
+            label: "팀 관리 (플랫폼)",
+            color: "#0EA5E9",
           },
         ]
       : []),

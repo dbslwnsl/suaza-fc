@@ -1,11 +1,13 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { notifyTeamJoinRequest } from "@/lib/push/triggers";
-import { CURRENT_TEAM_COOKIE } from "./context";
+import {
+  notifyTeamJoinRequest,
+  notifyTeamCreateRequest,
+} from "@/lib/push/triggers";
+import { getMyTeams } from "./context";
 
 type Result = { ok: false; error: string };
 
@@ -70,6 +72,7 @@ export async function requestJoinByCode(code: string): Promise<Result | never> {
     .from("teams")
     .select("id")
     .eq("invite_code", trimmed)
+    .eq("status", "active") // 승인 대기 팀은 코드 가입 불가
     .maybeSingle();
   if (!team) return { ok: false, error: "초대코드에 해당하는 팀이 없습니다" };
 
@@ -87,12 +90,24 @@ function slugify(name: string): string {
   return base ? `${base}-${rand}` : `team-${rand}`;
 }
 
-/** 새 팀 생성 — 생성자가 회장으로 즉시 시작 (RPC: 멤버 등록 + 기본 기록항목 시딩) */
-export async function createTeam(name: string): Promise<Result | never> {
+/**
+ * 새 팀 생성 신청 — 팀은 pending 으로 만들어지고, 플랫폼 관리자 승인 후 시작.
+ * 반환 { ok: true } = 신청 접수(기존 회원 — 화면에서 안내 표시).
+ * 신규 가입자(다른 소속 없음)는 승인 대기 화면으로 리다이렉트.
+ */
+export async function createTeam(
+  name: string,
+  region: string,
+  description: string,
+): Promise<{ ok: boolean; error?: string } | never> {
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "팀 이름을 입력해 주세요" };
   if (trimmed.length > 20)
     return { ok: false, error: "팀 이름은 20자 이내로 입력해 주세요" };
+  if (region.trim().length > 30)
+    return { ok: false, error: "활동 지역은 30자 이내로 입력해 주세요" };
+  if (description.trim().length > 100)
+    return { ok: false, error: "팀 소개는 100자 이내로 입력해 주세요" };
 
   const supabase = await createClient();
   const {
@@ -103,19 +118,37 @@ export async function createTeam(name: string): Promise<Result | never> {
   const { data: teamId, error } = await supabase.rpc("create_team_with_owner", {
     p_name: trimmed,
     p_slug: slugify(trimmed),
+    p_region: region.trim() || null,
+    p_description: description.trim() || null,
   });
   if (error || !teamId) {
-    return { ok: false, error: error?.message ?? "팀 생성에 실패했습니다" };
+    return { ok: false, error: error?.message ?? "팀 생성 신청에 실패했습니다" };
   }
 
-  // 새 팀을 현재 팀으로 설정
-  const store = await cookies();
-  store.set(CURRENT_TEAM_COOKIE, teamId as string, {
-    path: "/",
-    httpOnly: true,
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 365,
+  // 플랫폼 관리자에게 승인 요청 알림
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("name")
+    .eq("id", user.id)
+    .maybeSingle();
+  const applicantName = me?.name ?? "회원";
+  after(async () => {
+    try {
+      await notifyTeamCreateRequest({
+        title: "새 팀 생성 신청",
+        body: `${applicantName} 님이 "${trimmed}" 팀 생성을 신청했어요`,
+        url: "/admin/teams",
+      });
+    } catch (e) {
+      console.error("[push] 팀 생성 신청 알림 실패", e);
+    }
   });
 
-  redirect("/");
+  // 다른 활성 소속이 없는 신규 가입자 → 승인 대기 화면으로.
+  // (미들웨어: approved_at null + 멤버십 있음 → /pending-approval)
+  const myTeams = await getMyTeams();
+  if (myTeams.length === 0) redirect("/pending-approval");
+
+  // 기존 회원 — 화면에서 "신청 접수" 안내 (승인 후 팀 전환에 나타남)
+  return { ok: true };
 }

@@ -14,6 +14,7 @@ export default async function TeamOnboardingPage() {
   const { data: teams } = await supabase
     .from("teams")
     .select("id, name, emblem_url")
+    .eq("status", "active") // 승인 대기 팀은 목록에서 숨김
     .order("name", { ascending: true });
 
   return (

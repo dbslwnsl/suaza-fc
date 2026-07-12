@@ -42,16 +42,24 @@ export default function OnboardingForm({ teams }: { teams: TeamOption[] }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [newName, setNewName] = useState("");
+  const [newRegion, setNewRegion] = useState("");
+  const [newDescription, setNewDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  // redirect() 는 정상 흐름에서 throw 되므로, 반환값(Result)이 있을 때만 에러 표시.
-  const run = (fn: () => Promise<{ ok: false; error: string } | never>) => {
+  // redirect() 는 정상 흐름에서 throw 되므로, 반환값(Result)이 있을 때만 처리.
+  const run = (
+    fn: () => Promise<{ ok: boolean; error?: string } | never>,
+    onSuccess?: () => void,
+  ) => {
     setError(null);
+    setMessage(null);
     startTransition(async () => {
       try {
         const res = await fn();
-        if (res && !res.ok) setError(res.error);
+        if (res && !res.ok) setError(res.error ?? "처리에 실패했습니다");
+        else if (res && res.ok) onSuccess?.();
       } catch (e) {
         if (
           e instanceof Error &&
@@ -68,6 +76,11 @@ export default function OnboardingForm({ teams }: { teams: TeamOption[] }) {
     <div className="flex flex-col gap-6">
       {error && (
         <p className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</p>
+      )}
+      {message && (
+        <p className="p-3 bg-green-50 text-green-700 rounded-lg text-sm">
+          {message}
+        </p>
       )}
 
       {/* ── 팀 목록에서 선택 ── */}
@@ -145,30 +158,55 @@ export default function OnboardingForm({ teams }: { teams: TeamOption[] }) {
 
       <div aria-hidden className="h-px bg-suaza-border" />
 
-      {/* ── 새 팀 만들기 ── */}
+      {/* ── 새 팀 만들기 (신청 → 플랫폼 관리자 승인 후 시작) ── */}
       <section className="flex flex-col gap-3">
         <h2 className="font-bold text-suaza-ink">새 팀 만들기</h2>
         <p className="text-xs text-suaza-ink-muted -mt-1">
-          팀을 만들면 회장으로 바로 시작합니다. 팀 이름은 나중에 바꿀 수
-          있어요.
+          신청하면 관리자 승인 후 회장으로 시작합니다. 팀 이름·엠블럼은
+          나중에 바꿀 수 있어요.
         </p>
-        <div className="flex gap-2">
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="팀 이름 (예: 수아자FC)"
-            maxLength={20}
-            className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-suaza-border text-sm focus:outline-none focus:border-suaza-button"
-          />
-          <button
-            type="button"
-            disabled={!newName.trim() || isPending}
-            onClick={() => run(() => createTeam(newName))}
-            className="shrink-0 px-4 py-2 rounded-lg bg-suaza-accent text-white text-sm font-medium hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            팀 만들기
-          </button>
-        </div>
+        <input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          placeholder="팀 이름 (필수, 20자 이내)"
+          maxLength={20}
+          className="w-full px-3 py-2 rounded-lg border border-suaza-border text-sm focus:outline-none focus:border-suaza-button"
+        />
+        <input
+          value={newRegion}
+          onChange={(e) => setNewRegion(e.target.value)}
+          placeholder="활동 지역 (선택 — 예: 서울 강서구)"
+          maxLength={30}
+          className="w-full px-3 py-2 rounded-lg border border-suaza-border text-sm focus:outline-none focus:border-suaza-button"
+        />
+        <textarea
+          value={newDescription}
+          onChange={(e) => setNewDescription(e.target.value)}
+          placeholder="팀 소개 (선택 — 어떤 팀인지 간단히, 100자 이내)"
+          maxLength={100}
+          rows={2}
+          className="w-full px-3 py-2 rounded-lg border border-suaza-border text-sm focus:outline-none focus:border-suaza-button resize-none"
+        />
+        <button
+          type="button"
+          disabled={!newName.trim() || isPending}
+          onClick={() =>
+            run(
+              () => createTeam(newName, newRegion, newDescription),
+              () => {
+                setMessage(
+                  "팀 생성 신청이 접수되었습니다. 승인되면 알림으로 알려드리고, 홈 상단 팀 전환에 나타납니다.",
+                );
+                setNewName("");
+                setNewRegion("");
+                setNewDescription("");
+              },
+            )
+          }
+          className="self-end px-4 py-2 rounded-lg bg-suaza-accent text-white text-sm font-medium hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          팀 생성 신청
+        </button>
       </section>
     </div>
   );

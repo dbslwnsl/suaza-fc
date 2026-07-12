@@ -188,3 +188,30 @@ export async function notifyJoinApproved(
   await recordForUsers([userId], "new_member", payload, teamId);
   return sendPushToUsers([userId], payload);
 }
+
+/** 팀 생성 신청 — 플랫폼 관리자들에게 (인앱 라벨은 기본 팀 폴백) */
+export async function notifyTeamCreateRequest(payload: PushPayload) {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("is_platform_admin", true)
+    .is("deleted_at", null);
+  if (error) {
+    console.error("[notif] 플랫폼 관리자 조회 실패", error.message);
+    return;
+  }
+  const ids = (data ?? []).map((r) => r.id as string);
+  await recordForUsers(ids, "signup_pending", payload);
+  return sendPushToUsers(ids, payload);
+}
+
+/** 팀 생성 승인/거절 결과 — 신청자(창설자)에게 */
+export async function notifyTeamDecision(
+  payload: PushPayload,
+  userId: string,
+  teamId?: string,
+) {
+  await recordForUsers([userId], "new_member", payload, teamId);
+  return sendPushToUsers([userId], payload);
+}
