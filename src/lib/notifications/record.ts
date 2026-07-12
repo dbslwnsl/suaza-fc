@@ -54,20 +54,25 @@ export async function recordForUsers(
   }
 }
 
-/** 전체 회원(작성자/본인 제외)에게 인앱 알림 기록 — 브로드캐스트 알림용. */
+/** 해당 팀 전체 멤버(작성자/본인 제외)에게 인앱 알림 기록 — 브로드캐스트 알림용. */
 export async function recordForAll(
   excludeUserId: string | null,
   type: NotificationType,
   payload: RecordPayload,
+  teamId?: string,
 ): Promise<void> {
   const admin = createAdminClient();
-  let query = admin.from("profiles").select("id").is("deleted_at", null);
-  if (excludeUserId) query = query.neq("id", excludeUserId);
-  const { data, error } = await query;
+  const tid = teamId ?? DEFAULT_TEAM_ID;
+  const { data, error } = await admin
+    .from("team_members")
+    .select("user_id")
+    .eq("team_id", tid)
+    .eq("status", "active");
   if (error) {
-    console.error("[notif] 전체 회원 조회 실패", error.message);
+    console.error("[notif] 팀 멤버 조회 실패", error.message);
     return;
   }
-  const ids = (data ?? []).map((r) => r.id as string);
-  await recordForUsers(ids, type, payload);
+  let ids = (data ?? []).map((r) => r.user_id as string);
+  if (excludeUserId) ids = ids.filter((id) => id !== excludeUserId);
+  await recordForUsers(ids, type, payload, tid);
 }

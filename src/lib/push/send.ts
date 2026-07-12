@@ -1,6 +1,7 @@
 // 주의: 이 모듈은 서버 전용(web-push + service_role 사용). 클라이언트에서 import 금지.
 import webpush from "web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { DEFAULT_TEAM_ID } from "@/lib/teams/context";
 
 export type PushPayload = {
   title: string;
@@ -86,26 +87,29 @@ async function sendToRows(rows: SubscriptionRow[], payload: PushPayload) {
 }
 
 /**
- * 전체 회원에게 푸시 발송.
+ * 해당 팀 전체 멤버에게 푸시 발송.
  * @param excludeUserId 발송에서 제외할 회원(예: 알림을 유발한 본인)
+ * @param teamId 대상 팀 (생략 시 수아자FC — 멀티팀 전환기 폴백)
  */
 export async function sendPushToAll(
   payload: PushPayload,
   excludeUserId?: string,
+  teamId?: string,
 ): Promise<void> {
   if (!ensureVapid()) return;
   const admin = createAdminClient();
-  let query = admin
-    .from("push_subscriptions")
-    .select("id, endpoint, p256dh, auth");
-  if (excludeUserId) query = query.neq("user_id", excludeUserId);
-
-  const { data, error } = await query;
-  if (error) {
-    console.error("[push] 구독 조회 실패", error.message);
+  const { data: members, error: mErr } = await admin
+    .from("team_members")
+    .select("user_id")
+    .eq("team_id", teamId ?? DEFAULT_TEAM_ID)
+    .eq("status", "active");
+  if (mErr) {
+    console.error("[push] 팀 멤버 조회 실패", mErr.message);
     return;
   }
-  await sendToRows((data ?? []) as SubscriptionRow[], payload);
+  let ids = (members ?? []).map((r) => r.user_id as string);
+  if (excludeUserId) ids = ids.filter((id) => id !== excludeUserId);
+  await sendPushToUsers(ids, payload);
 }
 
 /**

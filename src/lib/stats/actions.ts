@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
+import {
+  getCurrentTeam,
+  getMyTeamRole,
+  DEFAULT_TEAM_ID,
+} from "@/lib/teams/context";
 
 async function requireManager() {
   const supabase = await createClient();
@@ -12,16 +16,11 @@ async function requireManager() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: me } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (me?.role !== "manager") {
+  // 멀티팀 — 현재 팀에서의 권한으로 판정 + 조작 범위도 현재 팀으로 제한.
+  const { role } = await getMyTeamRole();
+  if (role !== "manager") {
     redirect(`/settings/stats?error=${encodeURIComponent("감독만 변경할 수 있습니다")}`);
   }
-  // 멀티팀 2단계 — 기록 항목 조작은 현재 팀 범위로 제한 (복합 PK 대응).
   const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
   return { supabase, teamId };
 }

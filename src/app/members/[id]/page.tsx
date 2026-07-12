@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
+import {
+  getCurrentTeam,
+  getMyTeamRole,
+  DEFAULT_TEAM_ID,
+} from "@/lib/teams/context";
 import {
   type MemberTitle,
   type Position,
@@ -163,14 +167,16 @@ export default async function MemberDetailPage({
       profileEmail = null;
     }
   }
-  const isManager = me?.role === "manager";
+  // 멀티팀 3단계 — 권한은 현재 팀에서의 role/title 기준.
+  const myTeamRole = await getMyTeamRole();
+  const isManager = myTeamRole.role === "manager";
   // 프로필 편집은 본인만. 다른 회원은 동일 레이아웃의 읽기 전용.
   const canEdit = isSelf;
   // 단, 회장(president)·감독(head_coach)·매니저는 타인의 부상/장기불참만 변경 가능.
   const canEditOthersStatus =
     isManager ||
-    (me?.title ?? "player") === "president" ||
-    (me?.title ?? "player") === "head_coach";
+    myTeamRole.title === "president" ||
+    myTeamRole.title === "head_coach";
   // 가입 직후 첫 프로필 입력 단계 — 본인 + 아직 프로필 미완성.
   // 이때는 기록/코멘트 없이 입력 전용 화면("프로필 입력")으로 보여준다.
   const isProfileSetup =
@@ -179,10 +185,10 @@ export default async function MemberDetailPage({
   const title = (profile.title ?? "player") as MemberTitle;
 
   // 감독&코치 코멘트: 작성은 감독/코치(title)만, 조회는 본인 또는 감독/코치만(RLS 강제)
-  const myTitle = (me?.title ?? "player") as MemberTitle;
+  const myTitle = myTeamRole.title as MemberTitle;
   // 회원 삭제 권한 — 매니저(회장 포함)만. 감독(head_coach)은 매니저 권한이 있어도 삭제는 제외.
   const canDeleteMembers = isManager && myTitle !== "head_coach";
-  // 직책 부여 권한 — 회장(president)만.
+  // 직책 부여 권한 — 현재 팀의 회장(president)만.
   const canAssignTitles = myTitle === "president";
   const isCoachingStaff = myTitle === "head_coach" || myTitle === "coach";
   const showCoachComments = isCoachingStaff || isSelf;

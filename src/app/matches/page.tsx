@@ -5,7 +5,11 @@ import { getTeamName, type Match } from "@/lib/matches/helpers";
 import { fetchWeather } from "@/lib/weather";
 import PastMatchesSection from "./past-matches-section";
 import UpcomingMatchesSection from "./upcoming-matches-section";
-import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
+import {
+  getCurrentTeam,
+  getMyTeamRole,
+  DEFAULT_TEAM_ID,
+} from "@/lib/teams/context";
 
 export default async function MatchesPage({
   searchParams,
@@ -23,23 +27,23 @@ export default async function MatchesPage({
   // 시각이 지난 경기 자동 진행/완료 처리 (조회 전)
   await supabase.rpc("auto_progress_due_matches");
 
-  // 멀티팀 1단계 — 경기 목록을 현재 팀으로 필터
   const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
 
-  const [{ data: matches }, { data: me }] = await Promise.all([
+  const [{ data: matches }, teamRole] = await Promise.all([
     supabase
       .from("matches")
       .select("*")
       .eq("team_id", teamId)
       .order("match_date", { ascending: true }),
-    supabase.from("profiles").select("role, title").eq("id", user.id).single(),
+    getMyTeamRole(),
   ]);
 
+  // 멀티팀 — 현재 팀에서의 권한으로 판정
   const isStaff =
-    me?.role === "manager" ||
-    me?.role === "coach" ||
-    me?.title === "president" ||
-    me?.title === "head_coach";
+    teamRole.role === "manager" ||
+    teamRole.title === "president" ||
+    teamRole.title === "head_coach" ||
+    teamRole.title === "coach";
   const all = (matches ?? []) as Match[];
 
   const live = all

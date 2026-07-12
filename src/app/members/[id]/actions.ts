@@ -5,12 +5,16 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 import {
   notifyCoachComment,
   notifyCoachCommentReply,
   notifyCoachCommentLike,
 } from "@/lib/push/triggers";
+import {
+  getCurrentTeam,
+  getMyTeamRole,
+  DEFAULT_TEAM_ID,
+} from "@/lib/teams/context";
 import {
   MEMBER_TITLES,
   POSITIONS,
@@ -232,15 +236,10 @@ export async function setMemberStatus(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "로그인이 필요합니다" };
 
-  const { data: me } = await supabase
-    .from("profiles")
-    .select("role, title")
-    .eq("id", user.id)
-    .single();
+  // 멀티팀 3단계 — 현재 팀에서의 권한으로 판정
+  const { role, title } = await getMyTeamRole();
   const canManage =
-    me?.role === "manager" ||
-    me?.title === "president" ||
-    me?.title === "head_coach";
+    role === "manager" || title === "president" || title === "head_coach";
   if (!canManage && user.id !== profileId) {
     return { ok: false, error: "권한이 없습니다" };
   }
@@ -388,14 +387,11 @@ export async function softDeleteMember(profileId: string) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: me } = await supabase
-    .from("profiles")
-    .select("role, title")
-    .eq("id", user.id)
-    .single();
-
+  // 멀티팀 3단계 — 현재 팀에서의 권한으로 판정.
   // 매니저(회장 포함)만 삭제 가능. 감독(head_coach)은 매니저 권한이 있어도 삭제는 제외.
-  const canDelete = me?.role === "manager" && me?.title !== "head_coach";
+  const deleterRole = await getMyTeamRole();
+  const canDelete =
+    deleterRole.role === "manager" && deleterRole.title !== "head_coach";
   if (!canDelete) {
     redirect(
       `/members/${profileId}?error=${encodeURIComponent("회장/매니저만 회원을 삭제할 수 있습니다")}`,
@@ -466,14 +462,9 @@ export async function setMemberTitle(profileId: string, title: string) {
   }
   const newTitle = title as MemberTitle;
 
-  const { data: me } = await supabase
-    .from("profiles")
-    .select("title")
-    .eq("id", user.id)
-    .single();
-
-  // 회장만 직책 부여 가능
-  if (me?.title !== "president") {
+  // 멀티팀 3단계 — 현재 팀에서 회장인 사람만 직책 부여 가능
+  const myTeamRole = await getMyTeamRole();
+  if (myTeamRole.title !== "president") {
     redirect(
       `/members/${profileId}?error=${encodeURIComponent("회장만 직책을 부여할 수 있습니다")}`,
     );
@@ -485,13 +476,40 @@ export async function setMemberTitle(profileId: string, title: string) {
     );
   }
 
+  const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
+
+  // 대상이 현재 팀의 정식 멤버인지 확인
+  const { data: targetMembership } = await supabase
+    .from("team_members")
+    .select("user_id")
+    .eq("team_id", teamId)
+    .eq("user_id", profileId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (!targetMembership) {
+    redirect(
+      `/members/${profileId}?error=${encodeURIComponent("현재 팀의 멤버가 아닙니다")}`,
+    );
+  }
+
   // 직책 → 권한 매핑: 회장/감독만 매니저
   const nextRole =
     newTitle === "president" || newTitle === "head_coach"
       ? "manager"
       : "player";
 
-  // 1) 대상 회원에게 새 직책/권한 부여
+  // 1) 대상 회원에게 새 직책/권한 부여 — 팀 소속(team_members)이 원본.
+  //    profiles 는 전환기 표시 호환용으로 병행 갱신 (뱃지 등 일부 화면이 아직 참조).
+  const { error: memberError } = await supabase
+    .from("team_members")
+    .update({ title: newTitle, role: nextRole })
+    .eq("team_id", teamId)
+    .eq("user_id", profileId);
+  if (memberError) {
+    redirect(
+      `/members/${profileId}?error=${encodeURIComponent(memberError.message)}`,
+    );
+  }
   const { error: targetError } = await supabase
     .from("profiles")
     .update({ title: newTitle, role: nextRole })
@@ -505,6 +523,11 @@ export async function setMemberTitle(profileId: string, title: string) {
   // 2) 회장 이양인 경우 — 본인(기존 회장)을 회원으로 강등 (직책·권한 모두)
   //    대상 업데이트를 먼저 끝낸 뒤 강등해야, 강등 후 권한 부족으로 막히지 않는다.
   if (newTitle === "president") {
+    await supabase
+      .from("team_members")
+      .update({ title: "player", role: "player" })
+      .eq("team_id", teamId)
+      .eq("user_id", user.id);
     const { error: selfError } = await supabase
       .from("profiles")
       .update({ title: "player", role: "player" })
@@ -566,7 +589,7 @@ export async function createCoachComment(
     parentAuthorId = parent?.author_id as string | undefined;
   }
 
-  // 멀티팀 2단계 — 경기 연결 코멘트는 그 경기의 팀, 아니면 현재 팀 소속으로 저장.
+  // 멀티팀 — 경기 연결 코멘트는 그 경기의 팀, 아니면 현재 팀 소속으로 저장.
   let teamId: string | null = null;
   if (matchId) {
     const { data: m } = await supabase
@@ -609,6 +632,7 @@ export async function createCoachComment(
             url,
           },
           memberId,
+          teamId ?? undefined,
         );
       } catch (e) {
         console.error("[push] 감독·코치 코멘트 알림 실패", e);
@@ -627,6 +651,7 @@ export async function createCoachComment(
               url: `/members/${memberId}#coach-comment-${data.id}`,
             },
             parentAuthorId,
+            teamId ?? undefined,
           );
         } catch (e) {
           console.error("[push] 감독·코치 코멘트 답글 알림 실패", e);
@@ -667,11 +692,12 @@ export async function toggleCoachCommentLike(commentId: string) {
     // 좋아요가 새로 눌렸을 때만 — 코멘트 작성자에게 알림(본인 제외)
     const { data: comment } = await supabase
       .from("coach_comments")
-      .select("author_id, member_id")
+      .select("author_id, member_id, team_id")
       .eq("id", commentId)
       .single();
     const targetId = comment?.author_id as string | undefined;
     const cMemberId = comment?.member_id as string | undefined;
+    const cTeamId = (comment?.team_id as string | undefined) ?? undefined;
     if (targetId && targetId !== user.id) {
       after(async () => {
         try {
@@ -684,6 +710,7 @@ export async function toggleCoachCommentLike(commentId: string) {
                 : "/",
             },
             targetId,
+            cTeamId,
           );
         } catch (e) {
           console.error("[push] 감독·코치 코멘트 좋아요 알림 실패", e);

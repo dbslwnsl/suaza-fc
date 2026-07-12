@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getMyTeamRole } from "@/lib/teams/context";
 import { buildSlots, type SaveFormationPayload, type SavedQuarter } from "./helpers";
 
 async function requireStaff() {
@@ -11,12 +12,9 @@ async function requireStaff() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  const { data: me } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-  if (me?.role !== "manager" && me?.role !== "coach") {
+  // 멀티팀 — 현재 팀에서의 권한으로 판정
+  const { role, title } = await getMyTeamRole();
+  if (role !== "manager" && title !== "coach") {
     redirect(`/matches?error=${encodeURIComponent("포메이션 수정 권한이 없습니다")}`);
   }
   return { supabase, userId: user.id };
@@ -34,16 +32,13 @@ async function requireFormationEditor(matchId: string) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  const { data: me } = await supabase
-    .from("profiles")
-    .select("role, title")
-    .eq("id", user.id)
-    .single();
-  // 회장·감독(또는 role=manager) → 양 팀 편집
+  // 멀티팀 — 현재 팀에서의 권한/직책으로 판정
+  const me = await getMyTeamRole();
+  // 회장·감독(manager) → 양 팀 편집
   if (
-    me?.role === "manager" ||
-    me?.title === "president" ||
-    me?.title === "head_coach"
+    me.role === "manager" ||
+    me.title === "president" ||
+    me.title === "head_coach"
   ) {
     return { supabase, userId: user.id, access: "both" as const };
   }
@@ -54,7 +49,7 @@ async function requireFormationEditor(matchId: string) {
     .maybeSingle();
   const isIntra = mm?.opponent === "자체전";
   // 코치 → 본인이 배정된 팀만 (상대전은 팀이 하나라 그 팀 전체)
-  if (me?.role === "coach" || me?.title === "coach") {
+  if (me.title === "coach") {
     if (!isIntra) {
       return { supabase, userId: user.id, access: "both" as const };
     }
