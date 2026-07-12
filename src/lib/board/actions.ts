@@ -19,6 +19,11 @@ import {
   type PostCategory,
 } from "@/lib/board/helpers";
 import { fetchBoardPage } from "@/lib/board/queries";
+import {
+  getCurrentTeam,
+  getMyTeamRole,
+  DEFAULT_TEAM_ID,
+} from "@/lib/teams/context";
 
 // 폼에서 받은 카테고리를 검증. 직책자 전용 카테고리(공지)는 권한 없으면 기본값으로.
 function resolveCategory(raw: string, title: string | null): PostCategory {
@@ -33,17 +38,9 @@ async function getUserAndRole() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  const { data: me } = await supabase
-    .from("profiles")
-    .select("role, title")
-    .eq("id", user.id)
-    .single();
-  return {
-    supabase,
-    userId: user.id,
-    role: me?.role ?? "player",
-    title: (me?.title ?? "player") as string,
-  };
+  // 멀티팀 — 공지 노출/카테고리 권한은 현재 팀에서의 역할·직책 기준.
+  const { role, title } = await getMyTeamRole();
+  return { supabase, userId: user.id, role, title };
 }
 
 export async function createPost(formData: FormData) {
@@ -65,12 +62,16 @@ export async function createPost(formData: FormData) {
     redirect(`/board/new?error=${encodeURIComponent("내용을 입력해 주세요")}`);
   }
 
+  // 멀티팀 — 새 글은 현재 팀 소속으로 저장.
+  const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
+
   // 공지는 홈에 최대 3개까지 노출. 새 글을 공지로 등록하면 기존 공지 중
   // 최신 2개만 남기고(새 글 포함 3개), 더 오래된 공지는 일반 글로 전환한다.
   if (isNotice) {
     const { data: existing } = await supabase
       .from("posts")
       .select("id")
+      .eq("team_id", teamId)
       .eq("is_notice", true)
       .order("created_at", { ascending: false });
     const toClear = (existing ?? []).slice(2).map((p) => p.id);
@@ -85,6 +86,7 @@ export async function createPost(formData: FormData) {
   const { data, error } = await supabase
     .from("posts")
     .insert({
+      team_id: teamId,
       author_id: userId,
       title,
       content,
@@ -105,9 +107,9 @@ export async function createPost(formData: FormData) {
       const payload = { body: title, url: `/board/${postId}` };
       // 공지는 전용 트리거(notifyNotice), 일반 글은 notifyNewPost 로 분리 발송.
       if (isNotice) {
-        await notifyNotice({ title: "새 공지", ...payload }, userId);
+        await notifyNotice({ title: "새 공지", ...payload }, userId, teamId);
       } else {
-        await notifyNewPost({ title: "새 게시글", ...payload }, userId);
+        await notifyNewPost({ title: "새 게시글", ...payload }, userId, teamId);
       }
     } catch (e) {
       console.error("[push] 새 게시글 알림 실패", e);
@@ -152,9 +154,11 @@ export async function updatePost(postId: string, formData: FormData) {
   // 공지는 홈에 최대 3개까지. 이 글을 공지로 두고, 다른 공지 중 최신 2개만 남기고
   // 더 오래된 공지는 일반 글로 전환한다 (이 글 포함 3개 유지).
   if (exposeAllowed && isNotice) {
+    const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
     const { data: others } = await supabase
       .from("posts")
       .select("id")
+      .eq("team_id", teamId)
       .eq("is_notice", true)
       .neq("id", postId)
       .order("created_at", { ascending: false });
@@ -220,10 +224,11 @@ export async function togglePostLike(postId: string) {
     // 좋아요가 새로 눌렸을 때만 — 글 작성자에게 알림(본인 제외)
     const { data: post } = await supabase
       .from("posts")
-      .select("author_id")
+      .select("author_id, team_id")
       .eq("id", postId)
       .single();
     const postAuthorId = post?.author_id as string | undefined;
+    const likeTeamId = (post?.team_id as string | undefined) ?? undefined;
     if (postAuthorId && postAuthorId !== userId) {
       after(async () => {
         try {
@@ -234,6 +239,7 @@ export async function togglePostLike(postId: string) {
               url: `/board/${postId}`,
             },
             postAuthorId,
+            likeTeamId,
           );
         } catch (e) {
           console.error("[push] 게시글 좋아요 알림 실패", e);
@@ -271,10 +277,14 @@ export async function toggleCommentLike(commentId: string, postId: string) {
     // 좋아요가 새로 눌렸을 때만 — 댓글 작성자에게 알림(본인 제외)
     const { data: comment } = await supabase
       .from("post_comments")
-      .select("author_id")
+      .select("author_id, post:posts(team_id)")
       .eq("id", commentId)
       .single();
     const commentAuthorId = comment?.author_id as string | undefined;
+    const cTeamId =
+      ((comment?.post as { team_id?: string } | null)?.team_id as
+        | string
+        | undefined) ?? undefined;
     if (commentAuthorId && commentAuthorId !== userId) {
       after(async () => {
         try {
@@ -285,6 +295,7 @@ export async function toggleCommentLike(commentId: string, postId: string) {
               url: `/board/${postId}#comment-${commentId}`,
             },
             commentAuthorId,
+            cTeamId,
           );
         } catch (e) {
           console.error("[push] 댓글 좋아요 알림 실패", e);
@@ -350,10 +361,11 @@ export async function createComment(
   // 1) 원 글 작성자에게 "새 댓글" 알림 (댓글/답글 모두)
   const { data: post } = await supabase
     .from("posts")
-    .select("author_id")
+    .select("author_id, team_id")
     .eq("id", postId)
     .single();
   const postAuthorId = post?.author_id as string | undefined;
+  const postTeamId = (post?.team_id as string | undefined) ?? undefined;
   if (postAuthorId && !notified.has(postAuthorId)) {
     notified.add(postAuthorId);
     after(async () => {
@@ -365,6 +377,7 @@ export async function createComment(
             url: commentUrl,
           },
           postAuthorId,
+          postTeamId,
         );
       } catch (e) {
         console.error("[push] 게시글 댓글 알림 실패", e);
@@ -384,6 +397,7 @@ export async function createComment(
             url: commentUrl,
           },
           parentAuthorId,
+          postTeamId,
         );
       } catch (e) {
         console.error("[push] 게시판 답글 알림 실패", e);

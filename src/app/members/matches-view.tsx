@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { yearRange } from "@/lib/stats/helpers";
+import { getCurrentTeam, DEFAULT_TEAM_ID } from "@/lib/teams/context";
 import MatchesList, {
   type MatchListEntry,
   type MatchMember,
@@ -42,11 +43,14 @@ export default async function MatchesView({
   const myId = user?.id ?? null;
   const { from, to } = yearRange(year);
 
+  const teamId = (await getCurrentTeam())?.id ?? DEFAULT_TEAM_ID;
+
   const { data: matchesRaw } = await supabase
     .from("matches")
     .select(
       "id, match_date, opponent, our_score, opponent_score, intra_winner",
     )
+    .eq("team_id", teamId)
     .eq("status", "done")
     .gte("match_date", from)
     .lt("match_date", to)
@@ -69,7 +73,9 @@ export default async function MatchesView({
           .is("archived_at", null),
     supabase
       .from("profiles")
-      .select("id, name, jersey_number")
+      .select("id, name, jersey_number, team_members!inner(team_id)")
+      .eq("team_members.team_id", teamId)
+      .eq("team_members.status", "active")
       .is("deleted_at", null)
       .order("name", { ascending: true }),
     matchIds.length === 0 || !myId
