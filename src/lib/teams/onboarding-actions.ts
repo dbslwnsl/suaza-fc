@@ -9,9 +9,13 @@ import {
 } from "@/lib/push/triggers";
 import { getMyTeams } from "./context";
 
-type Result = { ok: false; error: string };
+type Result = { ok: boolean; error?: string };
 
-/** 팀 목록에서 선택해 가입 신청 (pending) → 승인 대기 화면으로 */
+/**
+ * 팀 가입 신청 (pending).
+ * - 다른 활성 소속이 없는 신규 회원 → 승인 대기 화면으로 리다이렉트
+ * - 이미 소속이 있는 회원(추가 가입) → { ok: true } 반환 (화면에서 접수 안내)
+ */
 export async function requestJoinTeam(teamId: string): Promise<Result | never> {
   const supabase = await createClient();
   const {
@@ -59,7 +63,10 @@ export async function requestJoinTeam(teamId: string): Promise<Result | never> {
     }
   });
 
-  redirect("/pending-approval");
+  // 다른 활성 소속이 없으면(신규) 승인 대기 화면으로, 있으면(추가 가입) 접수 안내.
+  const myTeams = await getMyTeams();
+  if (myTeams.length === 0) redirect("/pending-approval");
+  return { ok: true };
 }
 
 /** 초대코드로 팀을 찾아 가입 신청 */

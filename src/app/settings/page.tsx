@@ -46,6 +46,8 @@ export default async function SettingsPage() {
           },
         ]
       : []),
+    // 팀 가입 번호(초대코드)로 다른 팀에 추가 가입 신청 — 로그아웃 바로 위
+    { href: "/settings/join-team", label: "팀 추가 가입", color: "#F59E0B" },
   ];
 
   return (
