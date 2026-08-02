@@ -9,6 +9,7 @@ const HIDE_ON = [
   "/auth",
   "/onboarding",
   "/pending-approval",
+  "/admin/teams",
 ];
 
 type TabDef = {

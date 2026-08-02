@@ -38,8 +38,7 @@ export async function isPlatformAdmin(): Promise<boolean> {
 
 /**
  * 내가 속한(active) 팀 목록 — 승인된(active) 팀만.
- * 플랫폼 관리자는 모든 active 팀을 열람용으로 본다
- * (소속이 있으면 그 팀의 실제 role/title, 아니면 열람 전용 player).
+ * 플랫폼 관리자도 스위처에는 소속 팀만 표시 (타 팀 현황은 /admin/teams 에서).
  */
 export async function getMyTeams(): Promise<MyTeam[]> {
   const supabase = await createClient();
@@ -76,29 +75,6 @@ export async function getMyTeams(): Promise<MyTeam[]> {
       role: r.role,
       title: r.title,
     }));
-
-  // 플랫폼 관리자 — 모든 active 팀을 열람용으로 추가 (기존 소속 role 은 유지)
-  if (await isPlatformAdmin()) {
-    const { data: all } = await supabase
-      .from("teams")
-      .select("id, name, slug, emblem_url")
-      .eq("status", "active")
-      .order("name", { ascending: true });
-    const byId = new Map(mine.map((t) => [t.id, t]));
-    return ((all ?? []) as {
-      id: string;
-      name: string;
-      slug: string;
-      emblem_url: string | null;
-    }[]).map(
-      (t) =>
-        byId.get(t.id) ?? {
-          ...t,
-          role: "player",
-          title: "player",
-        },
-    );
-  }
 
   return mine;
 }

@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
   FOOT_LABEL,
@@ -23,6 +24,7 @@ import TeamSwitcher from "@/components/team-switcher";
 import {
   getMyTeams,
   getCurrentTeam,
+  isPlatformAdmin,
   DEFAULT_TEAM_ID,
 } from "@/lib/teams/context";
 import { type PostCategory } from "@/lib/board/helpers";
@@ -65,6 +67,10 @@ export default async function Home() {
 
   // 멀티팀 — 현재 팀 컨텍스트. 모든 리스트 쿼리를 이 팀으로 필터한다.
   const myTeams = await getMyTeams();
+  // 팀 소속이 없는 플랫폼 관리자 계정 — 팀 홈 대신 관리자 화면으로.
+  if (myTeams.length === 0 && (await isPlatformAdmin())) {
+    redirect("/admin/teams");
+  }
   const currentTeam = (await getCurrentTeam()) ?? {
     id: DEFAULT_TEAM_ID,
     name: "수아자FC",

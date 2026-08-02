@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isPlatformAdmin } from "@/lib/teams/context";
+import { logout } from "@/lib/auth/actions";
 import TeamsAdminList, { type AdminTeam } from "./teams-list";
 
 // 플랫폼 관리자 — 전체 팀 현황 + 팀 생성 신청 승인/거절.
@@ -61,6 +62,17 @@ export default async function PlatformTeamsPage() {
         </header>
 
         <TeamsAdminList teams={list} />
+
+        {/* 로그아웃 — 관리자 계정은 하단 탭이 없어 여기서 나간다 */}
+        <div aria-hidden className="h-px bg-suaza-border" />
+        <form action={logout} className="self-center">
+          <button
+            type="submit"
+            className="text-sm border border-suaza-border rounded-lg px-4 py-2 text-suaza-ink hover:bg-gray-50 transition"
+          >
+            로그아웃
+          </button>
+        </form>
       </div>
     </main>
   );
