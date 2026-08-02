@@ -177,7 +177,8 @@ export default function OnboardingForm({ teams }: { teams: TeamOption[] }) {
         </section>
       )}
 
-      <div aria-hidden className="h-px bg-suaza-border" />
+      {/* 목록 섹션이 보일 때만 구분선 (목록 숨김 시 초대코드만 노출) */}
+      {teams.length > 0 && <div aria-hidden className="h-px bg-suaza-border" />}
 
       {/* ── 초대코드로 가입 ── */}
       <section className="flex flex-col gap-3">

@@ -4,7 +4,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logout } from "@/lib/auth/actions";
 import OnboardingForm, { type TeamOption } from "./onboarding-form";
 
-// 가입 온보딩 — 팀 선택(목록/초대코드) 또는 새 팀 만들기.
+// "팀 목록에서 선택"은 우선 숨김 — 초대코드로만 가입. (되살리려면 true)
+const SHOW_TEAM_LIST = false;
+
+// 가입 온보딩 — 팀 선택(초대코드) 또는 새 팀 만들기.
 // 신규 가입자(소속 없음)는 미들웨어가 이 페이지로 보낸다.
 // 이미 소속이 있는 회원도 접근 가능 (다른 팀 추가 가입/팀 생성).
 export default async function TeamOnboardingPage() {
@@ -14,35 +17,38 @@ export default async function TeamOnboardingPage() {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: teams } = await supabase
-    .from("teams")
-    .select("id, name, emblem_url, region, description")
-    .eq("status", "active") // 승인 대기 팀은 목록에서 숨김
-    .order("name", { ascending: true });
+  let list: TeamOption[] = [];
+  if (SHOW_TEAM_LIST) {
+    const { data: teams } = await supabase
+      .from("teams")
+      .select("id, name, emblem_url, region, description")
+      .eq("status", "active") // 승인 대기 팀은 목록에서 숨김
+      .order("name", { ascending: true });
 
-  // 팀별 활성 멤버 수 — 신규 가입자는 RLS 로 타 팀 멤버를 못 읽으므로 서버(admin)에서 집계.
-  const admin = createAdminClient();
-  const { data: memberRows } = await admin
-    .from("team_members")
-    .select("team_id")
-    .eq("status", "active");
-  const counts = new Map<string, number>();
-  for (const r of (memberRows ?? []) as { team_id: string }[]) {
-    counts.set(r.team_id, (counts.get(r.team_id) ?? 0) + 1);
+    // 팀별 활성 멤버 수 — 신규 가입자는 RLS 로 타 팀 멤버를 못 읽으므로 서버(admin)에서 집계.
+    const admin = createAdminClient();
+    const { data: memberRows } = await admin
+      .from("team_members")
+      .select("team_id")
+      .eq("status", "active");
+    const counts = new Map<string, number>();
+    for (const r of (memberRows ?? []) as { team_id: string }[]) {
+      counts.set(r.team_id, (counts.get(r.team_id) ?? 0) + 1);
+    }
+
+    list = (
+      (teams ?? []) as {
+        id: string;
+        name: string;
+        emblem_url: string | null;
+        region: string | null;
+        description: string | null;
+      }[]
+    ).map((t) => ({
+      ...t,
+      memberCount: counts.get(t.id) ?? 0,
+    }));
   }
-
-  const list: TeamOption[] = (
-    (teams ?? []) as {
-      id: string;
-      name: string;
-      emblem_url: string | null;
-      region: string | null;
-      description: string | null;
-    }[]
-  ).map((t) => ({
-    ...t,
-    memberCount: counts.get(t.id) ?? 0,
-  }));
 
   return (
     <main className="flex-1 bg-white sm:bg-suaza-bg px-6 sm:px-8 py-8 sm:py-12">
@@ -52,7 +58,7 @@ export default async function TeamOnboardingPage() {
             팀 선택
           </h1>
           <p className="text-sm text-suaza-ink-muted leading-relaxed">
-            활동할 팀에 가입을 신청하거나, 새 팀을 만들어 시작하세요.
+            초대코드로 팀에 가입을 신청하거나, 새 팀을 만들어 시작하세요.
             <br />
             가입 신청은 그 팀 회장의 승인 후 완료됩니다.
           </p>
