@@ -140,7 +140,9 @@ begin
   update public.profiles
      set is_platform_admin = p_admin,
          -- 관리자 지정 시 가입 승인 대기도 함께 해제
-         approved_at = coalesce(approved_at, now())
+         approved_at = coalesce(approved_at, now()),
+         -- 관리자 계정 이름은 무조건 "관리자" 로 표기 (아바타 폴백 = "관")
+         name = case when p_admin then '관리자' else name end
    where id = v_id;
 
   return (case when p_admin
