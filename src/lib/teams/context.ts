@@ -93,12 +93,38 @@ export async function getMyTeamRole(): Promise<{
 
 /**
  * 현재 팀 — 쿠키가 가리키는 팀(소속 확인됨) 또는 첫 소속 팀.
- * 소속 팀이 없으면 null (Phase 3 온보딩에서 팀 선택/가입 유도).
+ * 플랫폼 관리자는 소속이 없어도 쿠키의 팀을 "열람 전용(player)"으로 해석한다.
+ * 어느 쪽도 아니면 null (온보딩/관리자 화면으로 유도).
  */
 export async function getCurrentTeam(): Promise<MyTeam | null> {
   const teams = await getMyTeams();
-  if (teams.length === 0) return null;
   const store = await cookies();
   const saved = store.get(CURRENT_TEAM_COOKIE)?.value;
-  return teams.find((t) => t.id === saved) ?? teams[0];
+
+  const mine = teams.find((t) => t.id === saved) ?? teams[0] ?? null;
+  if (mine) return mine;
+
+  // 소속 없음 — 플랫폼 관리자의 열람 컨텍스트(쿠키) 해석
+  if (saved && (await isPlatformAdmin())) {
+    const supabase = await createClient();
+    const { data: team } = await supabase
+      .from("teams")
+      .select("id, name, slug, emblem_url")
+      .eq("id", saved)
+      .eq("status", "active")
+      .maybeSingle();
+    if (team) {
+      return {
+        ...(team as {
+          id: string;
+          name: string;
+          slug: string;
+          emblem_url: string | null;
+        }),
+        role: "player",
+        title: "player",
+      };
+    }
+  }
+  return null;
 }

@@ -67,11 +67,12 @@ export default async function Home() {
 
   // 멀티팀 — 현재 팀 컨텍스트. 모든 리스트 쿼리를 이 팀으로 필터한다.
   const myTeams = await getMyTeams();
-  // 팀 소속이 없는 플랫폼 관리자 계정 — 팀 홈 대신 관리자 화면으로.
-  if (myTeams.length === 0 && (await isPlatformAdmin())) {
+  const resolvedTeam = await getCurrentTeam();
+  // 팀 소속이 없고 열람 중인 팀도 없는 플랫폼 관리자 — 관리자 화면이 홈.
+  if (!resolvedTeam && (await isPlatformAdmin())) {
     redirect("/admin/teams");
   }
-  const currentTeam = (await getCurrentTeam()) ?? {
+  const currentTeam = resolvedTeam ?? {
     id: DEFAULT_TEAM_ID,
     name: "수아자FC",
     slug: "suaza-fc",

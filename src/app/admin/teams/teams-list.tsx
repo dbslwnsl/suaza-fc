@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { approveTeam, rejectTeam } from "@/lib/teams/platform-actions";
+import { setCurrentTeam } from "@/lib/teams/actions";
 
 export type AdminTeam = {
   id: string;
@@ -41,6 +42,17 @@ export default function TeamsAdminList({ teams }: { teams: AdminTeam[] }) {
 
   const pending = teams.filter((t) => t.status === "pending");
   const active = teams.filter((t) => t.status === "active");
+
+  // 팀 열람 — 열람 컨텍스트(쿠키)를 그 팀으로 바꾸고 팀 홈으로 이동.
+  // 돌아올 때는 설정 > "팀 관리 (플랫폼)" 메뉴 사용.
+  const view = (teamId: string) => {
+    setError(null);
+    startTransition(async () => {
+      const res = await setCurrentTeam(teamId);
+      if (!res.ok) return setError(res.error ?? "열람에 실패했습니다");
+      router.push("/");
+    });
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -119,20 +131,40 @@ export default function TeamsAdminList({ teams }: { teams: AdminTeam[] }) {
             {active.length}
           </span>
         </h2>
+        <p className="text-xs text-suaza-ink-muted -mt-1">
+          팀을 누르면 그 팀 화면을 열람합니다 (읽기 전용). 돌아올 땐 설정 →
+          팀 관리.
+        </p>
         <ul className="flex flex-col divide-y divide-suaza-border">
           {active.map((t) => (
-            <li
-              key={t.id}
-              className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="font-bold text-suaza-ink truncate">{t.name}</p>
-                <p className="text-xs text-suaza-ink-muted mt-0.5">
-                  멤버 {t.memberCount}명
-                  {t.region && <span> · {t.region}</span>}
-                  <span> · {dateLabel(t.createdAt)} 생성</span>
-                </p>
-              </div>
+            <li key={t.id}>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => view(t.id)}
+                className="flex w-full items-center gap-3 py-3 first:pt-0 last:pb-0 text-left transition hover:opacity-70 disabled:opacity-40"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-suaza-ink truncate">{t.name}</p>
+                  <p className="text-xs text-suaza-ink-muted mt-0.5">
+                    멤버 {t.memberCount}명
+                    {t.region && <span> · {t.region}</span>}
+                    <span> · {dateLabel(t.createdAt)} 생성</span>
+                  </p>
+                </div>
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4 shrink-0 text-suaza-ink-faint"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </button>
             </li>
           ))}
         </ul>
