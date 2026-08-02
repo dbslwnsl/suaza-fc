@@ -170,16 +170,14 @@ export async function signup(formData: FormData) {
       );
     }
 
-    // 회장 전원에게 승인 대기 알림 발송 (RLS 우회 함수 호출)
-    await supabase.rpc("notify_signup_pending", {
-      p_new_user_id: data.user.id,
-      p_new_user_name: name,
-    });
+    // 멀티팀 — 계정 생성만으로는 아무에게도 알림을 보내지 않는다.
+    // 실제 알림은 이후 단계에서 발송된다:
+    //   팀 가입 신청 → 그 팀 회장에게 / 팀 생성 신청 → 플랫폼 관리자에게
 
     revalidatePath("/", "layout");
-    redirect(
-      `/pending-approval?message=${encodeURIComponent("가입 신청이 접수되었습니다. 회장 승인 후 이용 가능합니다.")}`,
-    );
+    // cold start — 계정 생성 완료 후에는 반드시 팀 선택/생성 화면으로.
+    // (팀 가입 신청 또는 팀 생성 신청 후에 승인 대기 화면으로 이동한다)
+    redirect("/onboarding/team");
   }
 
   // 이메일 확인이 필요한 경우(기본 설정 아님) — 메일 발송 안내 화면으로.

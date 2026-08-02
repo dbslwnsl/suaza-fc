@@ -158,7 +158,7 @@ export async function notifyCoachCommentLike(
   return sendPushToUsers([targetUserId], payload);
 }
 
-/** 팀 가입 신청 — 그 팀 매니저(회장·감독)들에게 */
+/** 팀 가입 신청 — 그 팀 회장(president)에게만 */
 export async function notifyTeamJoinRequest(
   payload: PushPayload,
   teamId: string,
@@ -169,9 +169,9 @@ export async function notifyTeamJoinRequest(
     .select("user_id")
     .eq("team_id", teamId)
     .eq("status", "active")
-    .eq("role", "manager");
+    .eq("title", "president");
   if (error) {
-    console.error("[notif] 팀 매니저 조회 실패", error.message);
+    console.error("[notif] 팀 회장 조회 실패", error.message);
     return;
   }
   const ids = (data ?? []).map((r) => r.user_id as string);

@@ -58,6 +58,7 @@ export default function TeamSwitcher({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  // 팀이 2개 이상일 때만 전환 시트 — 팀 만들기/참여 진입은 설정 메뉴에서.
   const switchable = teams.length > 1;
 
   useEffect(() => {
@@ -175,6 +176,7 @@ export default function TeamSwitcher({
                   );
                 })}
               </div>
+
             </div>
           </div>,
           document.body,
