@@ -40,16 +40,20 @@ export async function updateSession(request: NextRequest) {
   // 신규 가입자는 approved_at = null → 승인 대기 페이지로 격리.
   let isDeleted = false;
   let isPending = false;
+  let isAdmin = false;
   if (user) {
     const { data: prof } = await supabase
       .from("profiles")
-      .select("deleted_at, approved_at")
+      .select("deleted_at, approved_at, is_platform_admin")
       .eq("id", user.id)
       .maybeSingle();
     isDeleted = !!prof?.deleted_at;
     // approved_at 컬럼이 없는 환경(마이그레이션 0044 미적용)에선 prof.approved_at === undefined.
     // 이 경우 차단하지 않는다. 명시적으로 null 인 경우만 승인 대기로 본다.
     isPending = prof != null && prof.approved_at === null;
+    isAdmin =
+      (prof as { is_platform_admin?: boolean } | null)?.is_platform_admin ===
+      true;
   }
   const activeUser = user && !isDeleted ? user : null;
 
@@ -94,6 +98,30 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = hasMembership ? "/pending-approval" : "/onboarding/team";
     return NextResponse.redirect(url);
+  }
+
+  // 무소속 승인 회원(팀 탈퇴·팀 삭제 등) → 팀 선택 온보딩으로.
+  // 플랫폼 관리자는 무소속이 정상이므로 제외.
+  if (
+    activeUser &&
+    !isPending &&
+    !isAdmin &&
+    !pathname.startsWith("/onboarding") &&
+    !pathname.startsWith("/pending-approval")
+  ) {
+    const { data: memberships, error: mErr } = await supabase
+      .from("team_members")
+      .select("team_id")
+      .eq("user_id", activeUser.id)
+      .eq("status", "active")
+      .limit(1);
+    // 조회 실패(마이그레이션 미적용 등) 시엔 차단하지 않는다.
+    const hasTeam = mErr ? true : (memberships?.length ?? 0) > 0;
+    if (!hasTeam) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/onboarding/team";
+      return NextResponse.redirect(url);
+    }
   }
 
   // 승인 완료된 사용자가 pending 페이지에 접근하면 홈으로

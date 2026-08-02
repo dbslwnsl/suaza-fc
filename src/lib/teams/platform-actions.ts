@@ -68,6 +68,78 @@ export async function approveTeam(teamId: string): Promise<Result> {
   return { ok: true };
 }
 
+/** 팀에서 특정 회원 탈퇴 — 회장은 탈퇴 불가(팀 삭제로만 정리). */
+export async function removeTeamMember(
+  teamId: string,
+  userId: string,
+): Promise<Result> {
+  if (!(await isPlatformAdmin()))
+    return { ok: false, error: "플랫폼 관리자만 처리할 수 있습니다" };
+
+  const admin = createAdminClient();
+  const { data: membership } = await admin
+    .from("team_members")
+    .select("title")
+    .eq("team_id", teamId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!membership) return { ok: false, error: "해당 팀의 멤버가 아닙니다" };
+  if (membership.title === "president")
+    return {
+      ok: false,
+      error: "회장은 탈퇴시킬 수 없습니다. 팀 삭제를 사용하세요.",
+    };
+
+  const { error } = await admin
+    .from("team_members")
+    .delete()
+    .eq("team_id", teamId)
+    .eq("user_id", userId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath("/admin/teams");
+  return { ok: true };
+}
+
+/**
+ * 팀 삭제 — 팀의 모든 데이터(경기·글·사진·알림·기록항목·멤버십)를 영구 삭제.
+ * 자식 테이블(출석·기록·댓글·좋아요·포메이션)은 FK cascade 로 함께 삭제된다.
+ */
+export async function deleteTeam(teamId: string): Promise<Result> {
+  if (!(await isPlatformAdmin()))
+    return { ok: false, error: "플랫폼 관리자만 처리할 수 있습니다" };
+
+  const admin = createAdminClient();
+  const { data: team } = await admin
+    .from("teams")
+    .select("name")
+    .eq("id", teamId)
+    .maybeSingle();
+  if (!team) return { ok: false, error: "팀을 찾을 수 없습니다" };
+
+  // teams 를 참조하는 루트 테이블부터 정리 (FK 가 cascade 아님)
+  for (const table of [
+    "notifications",
+    "coach_comments",
+    "posts",
+    "photos",
+    "matches",
+    "stat_definitions",
+  ] as const) {
+    const { error } = await admin.from(table).delete().eq("team_id", teamId);
+    if (error)
+      return { ok: false, error: `${table} 정리 실패: ${error.message}` };
+  }
+
+  // 팀 삭제 — team_members 는 teams FK cascade 로 함께 삭제
+  const { error } = await admin.from("teams").delete().eq("id", teamId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin/teams");
+  return { ok: true };
+}
+
 export async function rejectTeam(teamId: string): Promise<Result> {
   if (!(await isPlatformAdmin()))
     return { ok: false, error: "플랫폼 관리자만 처리할 수 있습니다" };
