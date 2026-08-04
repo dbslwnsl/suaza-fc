@@ -1,3 +1,12 @@
+# SUAZA FC
+
+축구 동호회 **SUAZA FC** 회원용 웹사이트입니다. 일정과 결과 확인, 사진과 글 공유, 선수별 기록과 포메이션 관리를 지원합니다.
+
+- **프레임워크**: Next.js (App Router) + TypeScript
+- **스타일링**: Tailwind CSS
+- **백엔드/DB/인증**: Supabase
+- **배포**: Vercel
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
