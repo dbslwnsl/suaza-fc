@@ -7,6 +7,16 @@
 - **백엔드/DB/인증**: Supabase
 - **배포**: Vercel
 
+## 주요 기능
+
+- 회원 명단 및 프로필
+- 경기 일정 / 결과
+- 사진 갤러리
+- 게시판
+- 선수별 경기 기록
+- 포메이션 설정
+- 로그인 (감독용 / 선수용 권한 분리)
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
