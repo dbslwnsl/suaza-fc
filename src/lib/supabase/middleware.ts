@@ -75,7 +75,12 @@ export async function updateSession(request: NextRequest) {
 
   if (activeUser && (pathname === "/login" || pathname === "/signup")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    // 팀 생성 의도가 담긴 링크(공유/북마크)로 온 로그인 회원은 곧장 생성 화면으로.
+    url.pathname =
+      request.nextUrl.searchParams.get("intent") === "create-team"
+        ? "/onboarding/team/create"
+        : "/";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 

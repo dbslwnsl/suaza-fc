@@ -11,9 +11,19 @@ import {
 } from "@/lib/members/positions";
 import { isValidEmail, validatePassword } from "./validation";
 
+/**
+ * 로그인/가입 폼의 intent(hidden input) — 인증 완료 후 이어갈 목적지.
+ * 허용된 값만 인정한다 (임의 값으로 리다이렉트되는 것 방지).
+ */
+function readIntent(formData: FormData): "create-team" | null {
+  return formData.get("intent") === "create-team" ? "create-team" : null;
+}
+
 export async function login(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
+  const intent = readIntent(formData);
+  const intentQS = intent ? `&intent=${intent}` : "";
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -22,7 +32,7 @@ export async function login(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+    redirect(`/login?error=${encodeURIComponent(error.message)}${intentQS}`);
   }
 
   const userId = data.user?.id;
@@ -42,6 +52,7 @@ export async function login(formData: FormData) {
       );
     }
     // 프로필 미완성 시 본인 프로필 수정 페이지로 강제 이동
+    // (드문 복구 경로 — 팀 생성 intent 는 여기서 잇지 않는다)
     if (!profile?.profile_completed) {
       revalidatePath("/", "layout");
       redirect(
@@ -53,7 +64,8 @@ export async function login(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/");
+  // 팀 생성 의도로 온 로그인 → 곧장 팀 생성 화면으로
+  redirect(intent === "create-team" ? "/onboarding/team/create" : "/");
 }
 
 export async function signup(formData: FormData) {
@@ -64,6 +76,8 @@ export async function signup(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const terms = formData.get("terms") === "on";
   const privacy = formData.get("privacy") === "on";
+  const intent = readIntent(formData);
+  const intentQS = intent ? `&intent=${intent}` : "";
 
   // 2단계: 프로필 (등번호·생년월일·포지션·주발·별명)
   const validPos = new Set<string>(POSITIONS);
@@ -83,42 +97,49 @@ export async function signup(formData: FormData) {
 
   // 1단계 검증
   if (!name) {
-    redirect(`/signup?error=${encodeURIComponent("이름을 입력해 주세요")}`);
+    redirect(`/signup?error=${encodeURIComponent("이름을 입력해 주세요")}${intentQS}`);
   }
   if (!validatePassword(password).valid) {
     redirect(
       `/signup?error=${encodeURIComponent(
         "비밀번호는 영문·숫자·특수문자 조합 8자 이상이어야 합니다",
-      )}`,
+      )}${intentQS}`,
     );
   }
   if (password !== passwordConfirm) {
-    redirect(`/signup?error=${encodeURIComponent("비밀번호가 일치하지 않습니다")}`);
+    redirect(`/signup?error=${encodeURIComponent("비밀번호가 일치하지 않습니다")}${intentQS}`);
   }
   if (!terms || !privacy) {
-    redirect(`/signup?error=${encodeURIComponent("필수 약관에 동의해 주세요")}`);
+    redirect(`/signup?error=${encodeURIComponent("필수 약관에 동의해 주세요")}${intentQS}`);
   }
   // 2단계(프로필) 검증 — 모두 채워야 최종 가입
   if (!jerseyRaw) {
-    redirect(`/signup?error=${encodeURIComponent("등번호를 입력해 주세요")}`);
+    redirect(`/signup?error=${encodeURIComponent("등번호를 입력해 주세요")}${intentQS}`);
   }
   if (!birthRaw) {
-    redirect(`/signup?error=${encodeURIComponent("생년월일을 입력해 주세요")}`);
+    redirect(`/signup?error=${encodeURIComponent("생년월일을 입력해 주세요")}${intentQS}`);
   }
   if (positions.length === 0) {
-    redirect(`/signup?error=${encodeURIComponent("주포지션을 선택해 주세요")}`);
+    redirect(`/signup?error=${encodeURIComponent("주포지션을 선택해 주세요")}${intentQS}`);
   }
   if (!preferred_foot) {
-    redirect(`/signup?error=${encodeURIComponent("주발을 선택해 주세요")}`);
+    redirect(`/signup?error=${encodeURIComponent("주발을 선택해 주세요")}${intentQS}`);
   }
 
   const supabase = await createClient();
   const now = new Date().toISOString();
+  // 이메일 확인이 켜진 환경 대비 — 확인 링크 클릭 후 온보딩(의도가 있으면 팀 생성)으로 복귀.
+  const h = await headers();
+  const host = h.get("host") ?? "localhost:3000";
+  const protocol = host.startsWith("localhost") ? "http" : "https";
+  const confirmNext =
+    intent === "create-team" ? "/onboarding/team/create" : "/onboarding/team";
   // 모든 검증을 통과한 마지막 단계에서만 계정을 생성한다.
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
+      emailRedirectTo: `${protocol}://${host}/auth/confirm?next=${encodeURIComponent(confirmNext)}`,
       data: {
         name,
         terms_agreed_at: now,
@@ -131,17 +152,17 @@ export async function signup(formData: FormData) {
     const msg = error.message.toLowerCase();
     if (msg.includes("already") || msg.includes("registered")) {
       redirect(
-        `/signup?error=${encodeURIComponent("이미 가입된 이메일입니다")}`,
+        `/signup?error=${encodeURIComponent("이미 가입된 이메일입니다")}${intentQS}`,
       );
     }
-    redirect(`/signup?error=${encodeURIComponent(error.message)}`);
+    redirect(`/signup?error=${encodeURIComponent(error.message)}${intentQS}`);
   }
 
   // Supabase 는 보안상 중복 이메일이어도 성공으로 응답하지만
   // identities 배열이 비어있어서 식별 가능.
   if (data.user && (data.user.identities?.length ?? 0) === 0) {
     redirect(
-      `/signup?error=${encodeURIComponent("이미 가입된 이메일입니다")}`,
+      `/signup?error=${encodeURIComponent("이미 가입된 이메일입니다")}${intentQS}`,
     );
   }
 
@@ -177,7 +198,9 @@ export async function signup(formData: FormData) {
     revalidatePath("/", "layout");
     // cold start — 계정 생성 완료 후에는 반드시 팀 선택/생성 화면으로.
     // (팀 가입 신청 또는 팀 생성 신청 후에 승인 대기 화면으로 이동한다)
-    redirect("/onboarding/team");
+    redirect(
+      intent === "create-team" ? "/onboarding/team/create" : "/onboarding/team",
+    );
   }
 
   // 이메일 확인이 필요한 경우(기본 설정 아님) — 메일 발송 안내 화면으로.

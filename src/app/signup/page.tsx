@@ -9,10 +9,13 @@ export default async function SignupPage({
     message?: string;
     completed?: string;
     email?: string;
+    intent?: string;
   }>;
 }) {
-  const { error, message, completed, email } = await searchParams;
+  const { error, message, completed, email, intent } = await searchParams;
   const isCompleted = completed === "1";
+  // 팀 생성 의도로 온 가입 — 가입 완료 후 팀 생성 화면으로 이어진다.
+  const wantsCreateTeam = intent === "create-team";
 
   return (
     <main className="flex-1 flex items-center justify-center bg-white sm:bg-suaza-bg px-6 py-8 sm:py-[80px]">
@@ -28,6 +31,16 @@ export default async function SignupPage({
               </h1>
             </div>
 
+            {/* 팀 생성 의도 안내 */}
+            {wantsCreateTeam && (
+              <div className="-mt-2 p-4 bg-[#F0F4FF] rounded-xl text-sm leading-relaxed">
+                <p className="font-bold text-suaza-ink">⚽ 새 팀 만들기</p>
+                <p className="text-[#5B6478] mt-0.5">
+                  가입을 완료하면 팀 생성 신청으로 바로 이어집니다.
+                </p>
+              </div>
+            )}
+
             {/* Alerts */}
             {message && (
               <p className="-mt-2 p-3 bg-green-50 text-green-700 rounded-lg text-sm">
@@ -40,12 +53,15 @@ export default async function SignupPage({
               </p>
             )}
 
-            <SignupForm />
+            <SignupForm intent={wantsCreateTeam ? "create-team" : undefined} />
 
             {/* Footer */}
             <div className="flex items-center justify-center gap-1 text-[13px]">
               <span className="text-suaza-ink-muted">이미 회원이신가요?</span>
-              <Link href="/login" className="text-suaza-accent font-bold">
+              <Link
+                href={wantsCreateTeam ? "/login?intent=create-team" : "/login"}
+                className="text-suaza-accent font-bold"
+              >
                 로그인
               </Link>
             </div>

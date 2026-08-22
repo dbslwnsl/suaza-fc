@@ -14,7 +14,7 @@ import {
 import DatePicker from "../matches/new/date-picker";
 import Dropdown from "@/components/dot-dropdown";
 
-export default function SignupForm() {
+export default function SignupForm({ intent }: { intent?: string }) {
   // 1=계정 정보, 2=프로필 입력. "다음"은 화면 전환만(계정 생성 X),
   // 2단계의 "가입 완료"에서만 폼을 제출해 계정+프로필을 함께 생성한다.
   const [step, setStep] = useState<1 | 2>(1);
@@ -89,6 +89,8 @@ export default function SignupForm() {
 
   return (
     <form action={signup} className="flex flex-col gap-5">
+      {/* 가입 후 이어갈 의도(팀 생성 등) — 서버 액션이 검증 후 사용 */}
+      {intent && <input type="hidden" name="intent" value={intent} />}
       {/* ─────────── 1단계: 계정 정보 ─────────── */}
       <div className={step === 1 ? "flex flex-col gap-5" : "hidden"}>
         {/* 이름 */}

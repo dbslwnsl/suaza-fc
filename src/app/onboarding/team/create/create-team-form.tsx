@@ -1,9 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { createTeam } from "@/lib/teams/onboarding-actions";
 
-export default function CreateTeamForm() {
+export default function CreateTeamForm({
+  backHref,
+  backLabel,
+}: {
+  /** 하단 돌아가기 버튼 — 기존 회원은 홈, 무소속 신규 가입자는 팀 선택 */
+  backHref: string;
+  backLabel: string;
+}) {
   const [name, setName] = useState("");
   const [region, setRegion] = useState("");
   const [description, setDescription] = useState("");
@@ -85,14 +93,22 @@ export default function CreateTeamForm() {
         />
       </label>
 
-      <button
-        type="button"
-        disabled={!name.trim() || isPending}
-        onClick={submit}
-        className="self-end px-4 py-2 rounded-lg bg-suaza-accent text-white text-sm font-medium hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        팀 생성 신청
-      </button>
+      <div className="flex items-center justify-end gap-2">
+        <Link
+          href={backHref}
+          className="px-4 py-2 rounded-lg border border-suaza-border text-suaza-ink text-sm font-medium hover:bg-gray-50 transition"
+        >
+          {backLabel}
+        </Link>
+        <button
+          type="button"
+          disabled={!name.trim() || isPending}
+          onClick={submit}
+          className="px-4 py-2 rounded-lg bg-suaza-accent text-white text-sm font-medium hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          팀 생성 신청
+        </button>
+      </div>
     </div>
   );
 }

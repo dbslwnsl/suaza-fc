@@ -17,12 +17,14 @@ function ClearIcon() {
   );
 }
 
-export default function LoginForm() {
+export default function LoginForm({ intent }: { intent?: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   return (
     <form action={login} className="flex flex-col gap-5">
+      {/* 로그인 후 이어갈 의도(팀 생성 등) — 서버 액션이 검증 후 사용 */}
+      {intent && <input type="hidden" name="intent" value={intent} />}
       {/* 이메일 */}
       <div className="relative">
         <input
