@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "env:pull": "vercel env pull .env.local",
+    "env:check": "node --env-file-if-exists=.env.local scripts/check-env.mjs",
+    "seed:accounts": "node --env-file=.env.local scripts/seed-dev-accounts.mjs --yes",
+    "seed:accounts:clean": "node --env-file=.env.local scripts/seed-dev-accounts.mjs --delete --yes"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
