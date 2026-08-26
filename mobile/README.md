@@ -83,13 +83,40 @@ DB 의 CHECK 제약이 반쪽짜리 행을 막는다. 잘못된 조합은 발송
 
 ### 동작시키려면
 
-1. `npx eas init` — `app.json` 의 `extra.eas.projectId` 가 채워진다. 이게 없으면 토큰을 못 받는다
-2. **개발 빌드가 필요하다.** Expo Go 는 SDK 53 부터 원격 푸시를 지원하지 않는다
-   (`npx eas build --profile development --platform android`)
-3. 실기기에서 실행 — 에뮬레이터는 토큰을 받지 못한다
+아래 **빌드** 절차를 따르면 된다. 푸시는 개발 빌드에서만 동작한다 —
+Expo Go 는 SDK 53 부터 원격 푸시를 지원하지 않고, 에뮬레이터는 토큰을 받지 못한다.
 
 iOS 를 추가할 때는 EAS 에 Apple Push Key(.p8)를 등록하는 것으로 끝난다.
 이 저장소의 코드 변경은 없다.
+
+## 빌드 (EAS)
+
+빌드는 Expo 클라우드에서 돈다. 맥 없이 iOS 빌드도 가능하다.
+
+```bash
+npm i -g eas-cli
+eas login          # Expo 계정 (무료). 브라우저 인증
+eas init           # Expo 프로젝트 생성 → app.json 에 extra.eas.projectId 기록
+npm run build:dev  # 안드로이드 개발 빌드 (APK)
+```
+
+빌드가 끝나면 QR 코드와 APK 링크가 나온다. 안드로이드 폰에서 설치한 뒤,
+`npx expo start --dev-client --tunnel` 로 개발 서버에 붙는다.
+
+| 프로필 | 산출물 | 용도 |
+| --- | --- | --- |
+| `development` | APK + dev client | 개발 중 실기기 테스트. **푸시 확인은 이걸로** |
+| `preview` | APK | 내부 배포용 (설치 파일 직접 전달) |
+| `production` | AAB | Play Store 업로드 |
+
+> `eas init` 은 Expo 서버에 프로젝트를 만들고 `app.json` 을 수정한다.
+> 커밋 전에 `extra.eas.projectId` 가 들어갔는지 확인할 것.
+
+### 네이티브 폴더를 커밋하지 않는 이유 (CNG)
+
+`android/` `ios/` 는 `.gitignore` 에 있고 `npx expo prebuild` 로 생성한다.
+이걸 커밋하고 손으로 고치기 시작하면 iOS 추가 비용이 급격히 올라간다.
+네이티브 설정이 필요하면 `app.json` 의 config plugin 으로 표현할 것.
 
 ## 아직 안 된 것
 

@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "ourmatch",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "kr.ourmatch.app",
       "supportsTablet": false,
