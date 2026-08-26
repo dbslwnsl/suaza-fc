@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 모바일 앱(Expo)은 별도 툴체인 — mobile/ 안에서 lint 한다.
+    "mobile/**",
   ]),
 ]);
 

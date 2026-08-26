@@ -66,9 +66,33 @@ NativeWind 4 로 Tailwind 클래스를 그대로 쓴다. 웹의 SUAZA 디자인 
 쓰기 중 `service_role` 이 필요한 것들(웹의 Server Actions 90개)은 API 레이어로 빼야 하며,
 그건 별도 작업이다.
 
+## 푸시
+
+플랫폼 중립 구조다. 서버는 **Expo Push Service** 한 곳에만 보내고, Expo 가 토큰을 보고
+APNs(iOS) / FCM(Android) 으로 분배한다. **iOS 를 나중에 추가해도 서버 코드는 바뀌지 않는다.**
+
+저장은 웹과 같은 `push_subscriptions` 테이블이며 `platform` 으로 구분한다
+(마이그레이션 `0055_push_platform.sql`).
+
+| platform | 채워지는 컬럼 | 전송 |
+| --- | --- | --- |
+| `web` | `endpoint` + `p256dh` + `auth` | web-push (VAPID) |
+| `ios` / `android` | `expo_push_token` | Expo Push Service |
+
+DB 의 CHECK 제약이 반쪽짜리 행을 막는다. 잘못된 조합은 발송 시점이 아니라 등록 시점에 실패한다.
+
+### 동작시키려면
+
+1. `npx eas init` — `app.json` 의 `extra.eas.projectId` 가 채워진다. 이게 없으면 토큰을 못 받는다
+2. **개발 빌드가 필요하다.** Expo Go 는 SDK 53 부터 원격 푸시를 지원하지 않는다
+   (`npx eas build --profile development --platform android`)
+3. 실기기에서 실행 — 에뮬레이터는 토큰을 받지 못한다
+
+iOS 를 추가할 때는 EAS 에 Apple Push Key(.p8)를 등록하는 것으로 끝난다.
+이 저장소의 코드 변경은 없다.
+
 ## 아직 안 된 것
 
-- 푸시 — 웹은 `web-push`(VAPID)를 쓰는데 네이티브는 APNs/FCM 이라 서버까지 다시 짜야 한다
 - 팀 전환 (현재는 소속 첫 번째 팀 고정)
 - 경기 상세 / 출석 / 명단 / 포메이션
 - EAS 빌드 설정 (`eas.json`), TestFlight

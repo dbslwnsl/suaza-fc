@@ -31,6 +31,9 @@ export async function subscribeUser(
   const { error } = await supabase.from("push_subscriptions").upsert(
     {
       user_id: user.id,
+      // 0055 이후 한 테이블에 웹/네이티브 구독이 함께 들어간다.
+      // 네이티브(iOS/Android)는 앱에서 RLS 로 직접 등록하므로 여기 오지 않는다.
+      platform: "web",
       endpoint: sub.endpoint,
       p256dh: sub.keys.p256dh,
       auth: sub.keys.auth,
@@ -54,7 +57,7 @@ export async function subscribeUser(
   return { success: true };
 }
 
-/** 현재 회원의 해당 endpoint 구독을 삭제(알림 끄기). */
+/** 현재 회원의 해당 endpoint 구독을 삭제(알림 끄기). 웹 전용. */
 export async function unsubscribeUser(endpoint: string): Promise<Result> {
   const supabase = await createClient();
   const {
